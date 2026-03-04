@@ -504,7 +504,7 @@ struct SoundIoOutStream {
 
     /// Sample rate is the number of frames per second.
     /// Defaults to 48000 (and then clamped into range).
-    int sample_rate;
+    unsigned long sample_rate;
 
     /// Defaults to Stereo, if available, followed by the first layout
     /// supported.
@@ -1043,6 +1043,8 @@ SOUNDIO_EXPORT int soundio_outstream_clear_buffer(struct SoundIoOutStream *outst
 ///   pausing/unpausing.
 /// * #SoundIoErrorInvalid - outstream not opened and started
 SOUNDIO_EXPORT int soundio_outstream_pause(struct SoundIoOutStream *outstream, bool pause);
+
+SOUNDIO_EXPORT int soundio_outstream_get_time(struct SoundIoOutStream *outstream,double* out_time);
 
 /// Obtain the total number of seconds that the next frame written after the
 /// last frame written with ::soundio_outstream_end_write will take to become

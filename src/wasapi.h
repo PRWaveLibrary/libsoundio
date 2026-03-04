@@ -57,6 +57,7 @@ struct SoundIoOutStreamWasapi {
     IAudioRenderClient *audio_render_client;
     IAudioSessionControl *audio_session_control;
     ISimpleAudioVolume *audio_volume_control;
+    IAudioClock *audio_clock;
     LPWSTR stream_name;
     bool need_resample;
     struct SoundIoOsThread *thread;

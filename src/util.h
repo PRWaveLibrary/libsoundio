@@ -48,6 +48,19 @@ static inline int soundio_int_clamp(int min_value, int value, int max_value) {
     return soundio_int_max(soundio_int_min(value, max_value), min_value);
 }
 
+
+static inline unsigned int soundio_uint_min(unsigned int a, unsigned int b) {
+    return (a <= b) ? a : b;
+}
+
+static inline unsigned int soundio_uint_max(unsigned int a, unsigned int b) {
+    return (a >= b) ? a : b;
+}
+
+static inline unsigned int soundio_uint_clamp(unsigned int min_value, unsigned int value, unsigned int max_value) {
+    return soundio_uint_max(soundio_uint_min(value, max_value), min_value);
+}
+
 static inline double soundio_double_min(double a, double b) {
     return (a <= b) ? a : b;
 }

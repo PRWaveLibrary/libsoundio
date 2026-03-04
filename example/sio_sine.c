@@ -93,8 +93,9 @@ static void write_callback(struct SoundIoOutStream *outstream, int frame_count_m
         }
 
         frames_left -= frame_count;
-        if (frames_left <= 0)
+        if (frames_left <= 0) {
             break;
+        }
     }
 
     soundio_outstream_pause(outstream, want_pause);
@@ -111,7 +112,7 @@ int main(int argc, char **argv) {
     char *device_id = NULL;
     bool raw = false;
     char *stream_name = NULL;
-    double latency = 0.0;
+    double latency = 0; // 多久采样一次
     int sample_rate = 0;
     for (int i = 1; i < argc; i += 1) {
         char *arg = argv[i];

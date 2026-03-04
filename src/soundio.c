@@ -547,6 +547,13 @@ int soundio_outstream_pause(struct SoundIoOutStream *outstream, bool pause) {
     return si->outstream_pause(si, os, pause);
 }
 
+int soundio_outstream_get_time(struct SoundIoOutStream *outstream,double* out_time) {
+    struct SoundIo *soundio = outstream->device->soundio;
+    struct SoundIoPrivate *si = (struct SoundIoPrivate *)soundio;
+    struct SoundIoOutStreamPrivate *os = (struct SoundIoOutStreamPrivate *)outstream;
+    return si->outstream_get_time(si,os,out_time);
+}
+
 int soundio_outstream_clear_buffer(struct SoundIoOutStream *outstream) {
     struct SoundIo *soundio = outstream->device->soundio;
     struct SoundIoPrivate *si = (struct SoundIoPrivate *)soundio;

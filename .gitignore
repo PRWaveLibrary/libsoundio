@@ -1,3 +1,4 @@
 build/
 build-win32/
 build-win64/
+.idea/*
