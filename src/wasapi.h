@@ -25,14 +25,17 @@
 #include <audiopolicy.h>
 
 struct SoundIoPrivate;
+
 int soundio_wasapi_init(struct SoundIoPrivate *si);
 
-struct SoundIoDeviceWasapi {
+struct SoundIoDeviceWasapi
+{
     double period_duration;
     IMMDevice *mm_device;
 };
 
-struct SoundIoWasapi {
+struct SoundIoWasapi
+{
     struct SoundIoOsMutex *mutex;
     struct SoundIoOsCond *cond;
     struct SoundIoOsCond *scan_devices_cond;
@@ -46,12 +49,13 @@ struct SoundIoWasapi {
     int shutdown_err;
     bool emitted_shutdown_cb;
 
-    IMMDeviceEnumerator* device_enumerator;
+    IMMDeviceEnumerator *device_enumerator;
     IMMNotificationClient device_events;
     LONG device_events_refs;
 };
 
-struct SoundIoOutStreamWasapi {
+struct SoundIoOutStreamWasapi
+{
     IAudioClient *audio_client;
     IAudioClockAdjustment *audio_clock_adjustment;
     IAudioRenderClient *audio_render_client;
@@ -67,7 +71,7 @@ struct SoundIoOutStreamWasapi {
     struct SoundIoAtomicFlag thread_exit_flag;
     bool is_raw;
     int writable_frame_count;
-    UINT32 buffer_frame_count;
+    int buffer_frame_count;
     int write_frame_count;
     HANDLE h_event;
     struct SoundIoAtomicBool desired_pause_state;
@@ -77,12 +81,13 @@ struct SoundIoOutStreamWasapi {
     bool open_complete;
     int open_err;
     bool started;
-    UINT32 min_padding_frames;
+    int min_padding_frames;
     float volume;
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };
 
-struct SoundIoInStreamWasapi {
+struct SoundIoInStreamWasapi
+{
     IAudioClient *audio_client;
     IAudioCaptureClient *audio_capture_client;
     IAudioSessionControl *audio_session_control;
@@ -103,7 +108,7 @@ struct SoundIoInStreamWasapi {
     bool started;
     char *read_buf;
     int read_buf_frames_left;
-	int opened_buf_frames;
+    int opened_buf_frames;
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };
 
