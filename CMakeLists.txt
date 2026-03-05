@@ -96,7 +96,7 @@ else()
 endif()
 
 if(SOUNDIO_ENABLE_COREAUDIO)
-    find_package(CoreAudio)
+    find_package(COREAUDIO)
     if(COREAUDIO_FOUND)
         set(STATUS_COREAUDIO "OK")
         set(SOUNDIO_HAVE_COREAUDIO true)
