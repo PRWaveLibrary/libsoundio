@@ -67,7 +67,7 @@ int soundio_ring_buffer_fill_count(struct SoundIoRingBuffer *rb) {
     // the read_offset first.
     unsigned long read_offset = SOUNDIO_ATOMIC_LOAD(rb->read_offset);
     unsigned long write_offset = SOUNDIO_ATOMIC_LOAD(rb->write_offset);
-    int count = write_offset - read_offset;
+    int count = (int)(write_offset - read_offset);
     assert(count >= 0);
     assert(count <= rb->capacity);
     return count;
@@ -88,7 +88,7 @@ int soundio_ring_buffer_init(struct SoundIoRingBuffer *rb, int requested_capacit
         return err;
     SOUNDIO_ATOMIC_STORE(rb->write_offset, 0);
     SOUNDIO_ATOMIC_STORE(rb->read_offset, 0);
-    rb->capacity = rb->mem.capacity;
+    rb->capacity = (int)rb->mem.capacity;
 
     return 0;
 }

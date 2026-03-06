@@ -28,6 +28,10 @@
 #include "coreaudio.h"
 #endif
 
+#ifdef SOUNDIO_HAVE_COREAUDIO_IOS
+#include "coreaudio_ios.h"
+#endif
+
 #ifdef SOUNDIO_HAVE_WASAPI
 #include "wasapi.h"
 #endif
@@ -46,6 +50,9 @@ union SoundIoBackendData {
 #endif
 #ifdef SOUNDIO_HAVE_COREAUDIO
     struct SoundIoCoreAudio coreaudio;
+#endif
+#ifdef SOUNDIO_HAVE_COREAUDIO_IOS
+    struct SoundIoCoreAudioIOS coreaudio_ios;
 #endif
 #ifdef SOUNDIO_HAVE_WASAPI
     struct SoundIoWasapi wasapi;
@@ -66,6 +73,9 @@ union SoundIoDeviceBackendData {
 #ifdef SOUNDIO_HAVE_COREAUDIO
     struct SoundIoDeviceCoreAudio coreaudio;
 #endif
+#ifdef SOUNDIO_HAVE_COREAUDIO_IOS
+    struct SoundIoDeviceCoreAudioIOS coreaudio_ios;
+#endif
 #ifdef SOUNDIO_HAVE_WASAPI
     struct SoundIoDeviceWasapi wasapi;
 #endif
@@ -85,6 +95,9 @@ union SoundIoOutStreamBackendData {
 #ifdef SOUNDIO_HAVE_COREAUDIO
     struct SoundIoOutStreamCoreAudio coreaudio;
 #endif
+#ifdef SOUNDIO_HAVE_COREAUDIO_IOS
+    struct SoundIoOutStreamCoreAudioIOS coreaudio_ios;
+#endif
 #ifdef SOUNDIO_HAVE_WASAPI
     struct SoundIoOutStreamWasapi wasapi;
 #endif
@@ -103,6 +116,9 @@ union SoundIoInStreamBackendData {
 #endif
 #ifdef SOUNDIO_HAVE_COREAUDIO
     struct SoundIoInStreamCoreAudio coreaudio;
+#endif
+#ifdef SOUNDIO_HAVE_COREAUDIO_IOS
+    struct SoundIoInStreamCoreAudioIOS coreaudio_ios;
 #endif
 #ifdef SOUNDIO_HAVE_WASAPI
     struct SoundIoInStreamWasapi wasapi;

@@ -565,7 +565,7 @@ static int internal_init(void) {
     GetSystemInfo(&win32_system_info);
     page_size = win32_system_info.dwAllocationGranularity;
 #else
-    page_size = sysconf(_SC_PAGESIZE);
+    page_size = (int)sysconf(_SC_PAGESIZE);
 #if defined(__MACH__)
     host_get_clock_service(mach_host_self(), SYSTEM_CLOCK, &cclock);
 #endif

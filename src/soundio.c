@@ -27,6 +27,9 @@ static const enum SoundIoBackend available_backends[] = {
 #ifdef SOUNDIO_HAVE_COREAUDIO
     SoundIoBackendCoreAudio,
 #endif
+#ifdef SOUNDIO_HAVE_COREAUDIO_IOS
+    SoundIoBackendCoreAudioIOS,
+#endif
 #ifdef SOUNDIO_HAVE_WASAPI
     SoundIoBackendWasapi,
 #endif
@@ -56,6 +59,12 @@ static backend_init_t backend_init_fns[] = {
 #endif
 
 #ifdef SOUNDIO_HAVE_COREAUDIO
+    &soundio_coreaudio_init,
+#else
+    NULL,
+#endif
+
+#ifdef SOUNDIO_HAVE_COREAUDIO_IOS
     &soundio_coreaudio_init,
 #else
     NULL,
@@ -156,6 +165,7 @@ const char *soundio_backend_name(enum SoundIoBackend backend) {
         case SoundIoBackendPulseAudio: return "PulseAudio";
         case SoundIoBackendAlsa: return "ALSA";
         case SoundIoBackendCoreAudio: return "CoreAudio";
+        case SoundIoBackendCoreAudioIOS: return "CoreAudioIOS";
         case SoundIoBackendWasapi: return "WASAPI";
         case SoundIoBackendDummy: return "Dummy";
     }

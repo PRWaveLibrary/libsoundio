@@ -17,6 +17,8 @@
 #cmakedefine SOUNDIO_HAVE_PULSEAUDIO
 #cmakedefine SOUNDIO_HAVE_ALSA
 #cmakedefine SOUNDIO_HAVE_COREAUDIO
+#cmakedefine SOUNDIO_HAVE_COREAUDIO_IOS
 #cmakedefine SOUNDIO_HAVE_WASAPI
+
 
 #endif

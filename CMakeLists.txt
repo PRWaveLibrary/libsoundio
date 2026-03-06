@@ -125,28 +125,13 @@ else()
     set(AUDIOUNIT_LIBRARY "")
 endif()
 
-if(SOUNDIO_ENABLE_COREAUDIO_IOS)
-    find_package(COREAUDIO_IOS)
-    if(COREAUDIO_IOS_FOUND)
-        set(STATUS_COREAUDIO_IOS "OK")
-        set(SOUNDIO_HAVE_COREAUDIO_IOS true)
-        set(COREAUDIO_LIBRARY ${COREAUDIO_IOS_LIBRARY})
-        include_directories(${COREAUDIO_IOS_INCLUDE_DIR})
+if(SOUNDIO_ENABLE_COREAUDIO_IOS AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(STATUS_COREAUDIO_IOS "OK")
+    set(SOUNDIO_HAVE_COREAUDIO_IOS true)
 
-        find_path(COREFOUNDATION_INCLUDE_DIR NAMES CoreFoundation.h)
-        find_library(COREFOUNDATION_LIBRARY NAMES CoreFoundation)
-        include_directories(${COREFOUNDATION_INCLUDE_DIR})
-
-        find_path(AUDIOUNIT_INCLUDE_DIR NAMES AudioUnit.h)
-        find_library(AUDIOUNIT_LIBRARY NAMES AudioUnit)
-        include_directories(${AUDIOUNIT_INCLUDE_DIR})
-    else()
-        set(STATUS_COREAUDIO_IOS "not found")
-        set(SOUNDIO_HAVE_COREAUDIO false)
-        set(COREAUDIO_LIBRARY "")
-        set(COREFOUNDATION_LIBRARY "")
-        set(AUDIOUNIT_LIBRARY "")
-    endif()
+    find_path(AUDIOUNIT_INCLUDE_DIR NAMES AudioUnit.h)
+    find_library(AUDIOUNIT_LIBRARY NAMES AudioUnit)
+    include_directories(${AUDIOUNIT_INCLUDE_DIR})
 else()
     set(STATUS_COREAUDIO_IOS "disabled")
     set(SOUNDIO_HAVE_COREAUDIO_IOS false)
@@ -179,6 +164,8 @@ set(LIBSOUNDIO_SOURCES
         "${libsoundio_SOURCE_DIR}/src/ring_buffer.c"
 )
 
+set(LIBSOUNDIO_EXTEN_INCLUDE_LIB "")
+
 set(CONFIGURE_OUT_FILE "${libsoundio_BINARY_DIR}/config.h")
 set(LIBSOUNDIO_HEADERS
         "${libsoundio_SOURCE_DIR}/soundio/soundio.h"
@@ -206,9 +193,20 @@ if(SOUNDIO_HAVE_COREAUDIO)
     )
 endif()
 if(SOUNDIO_HAVE_COREAUDIO_IOS)
-    set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES}
+    set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES} ${LIBSOUNDIO_HEADERS} ${CONFIGURE_OUT_FILE}
+            "${libsoundio_SOURCE_DIR}/src/coreaudio_ios.h"
             "${libsoundio_SOURCE_DIR}/src/coreaudio_ios.m"
     )
+
+    find_library(AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
+    find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox REQUIRED)
+    find_library(COREAUDIO_FRAMEWORK CoreAudio REQUIRED)
+    set(LIBSOUNDIO_EXTEN_INCLUDE_LIB ${LIBSOUNDIO_EXTEN_INCLUDE_LIB}
+            ${AVFOUNDATION_FRAMEWORK}
+            ${AUDIOTOOLBOX_FRAMEWORK}
+            ${COREAUDIO_FRAMEWORK}
+        )
+
 endif()
 
 
@@ -270,7 +268,8 @@ if(SOUNDIO_BUILD_DYNAMIC_LIBS)
             COMPILE_FLAGS ${LIB_CFLAGS}
             LINKER_LANGUAGE C
     )
-    target_link_libraries(libsoundio_shared LINK_PUBLIC ${LIBSOUNDIO_LIBS})
+    target_link_libraries(libsoundio_shared PUBLIC ${LIBSOUNDIO_LIBS})
+    target_link_libraries(libsoundio_shared PRIVATE ${LIBSOUNDIO_EXTEN_INCLUDE_LIB})
     install(TARGETS libsoundio_shared DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif()
 
@@ -281,6 +280,7 @@ if(SOUNDIO_BUILD_STATIC_LIBS)
             COMPILE_FLAGS ${LIB_CFLAGS}
             LINKER_LANGUAGE C
     )
+    target_link_libraries(libsoundio_static PRIVATE ${LIBSOUNDIO_EXTEN_INCLUDE_LIB})
     install(TARGETS libsoundio_static DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif()
 

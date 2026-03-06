@@ -225,6 +225,7 @@ enum SoundIoBackend
     SoundIoBackendPulseAudio,
     SoundIoBackendAlsa,
     SoundIoBackendCoreAudio,
+    SoundIoBackendCoreAudioIOS,
     SoundIoBackendWasapi,
     SoundIoBackendDummy,
 };

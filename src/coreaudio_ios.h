@@ -13,20 +13,17 @@
 #include "list.h"
 #include "atomics.h"
 
-#include <CoreAudio/CoreAudio.h>
 #include <AudioUnit/AudioUnit.h>
+#include <AVFoundation/AVFoundation.h>
 
 struct SoundIoPrivate;
 int soundio_coreaudio_init(struct SoundIoPrivate *si);
 
-struct SoundIoDeviceCoreAudio {
-    AudioDeviceID device_id;
+struct SoundIoDeviceCoreAudioIOS {
     UInt32 latency_frames;
 };
 
-SOUNDIO_MAKE_LIST_STRUCT(AudioDeviceID, SoundIoListAudioDeviceID, SOUNDIO_LIST_STATIC)
-
-struct SoundIoCoreAudio {
+struct SoundIoCoreAudioIOS {
     struct SoundIoOsMutex *mutex;
     struct SoundIoOsCond *cond;
     struct SoundIoOsThread *thread;
@@ -37,7 +34,6 @@ struct SoundIoCoreAudio {
     struct SoundIoAtomicBool have_devices_flag;
     struct SoundIoOsCond *have_devices_cond;
     struct SoundIoOsCond *scan_devices_cond;
-    struct SoundIoListAudioDeviceID registered_listeners;
 
     struct SoundIoAtomicBool device_scan_queued;
     struct SoundIoAtomicBool service_restarted;
@@ -45,7 +41,7 @@ struct SoundIoCoreAudio {
     bool emitted_shutdown_cb;
 };
 
-struct SoundIoOutStreamCoreAudio {
+struct SoundIoOutStreamCoreAudioIOS {
     AudioComponentInstance instance;
     AudioBufferList *io_data;
     int buffer_index;
@@ -56,7 +52,7 @@ struct SoundIoOutStreamCoreAudio {
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };
 
-struct SoundIoInStreamCoreAudio {
+struct SoundIoInStreamCoreAudioIOS {
     AudioComponentInstance instance;
     AudioBufferList *buffer_list;
     int frames_left;
