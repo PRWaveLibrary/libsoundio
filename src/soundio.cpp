@@ -30,6 +30,9 @@ static const enum SoundIoBackend available_backends[] = {
 #ifdef SOUNDIO_HAVE_COREAUDIO_IOS
     SoundIoBackendCoreAudioIOS,
 #endif
+#ifdef SOUNDIO_HAVE_OBOE
+    SoundIoBackendAndroid,
+#endif
 #ifdef SOUNDIO_HAVE_WASAPI
     SoundIoBackendWasapi,
 #endif
