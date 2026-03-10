@@ -203,16 +203,16 @@ if (SOUNDIO_HAVE_ALSA)
 endif ()
 if (SOUNDIO_HAVE_COREAUDIO)
     set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES}
-            "${libsoundio_SOURCE_DIR}/src/coreaudio.c"
+            "${libsoundio_SOURCE_DIR}/src/coreaudio.cpp"
     )
 endif ()
 if (SOUNDIO_HAVE_COREAUDIO_IOS)
     set(LIBSOUNDIO_HEADERS ${LIBSOUNDIO_HEADERS}
             "${libsoundio_SOURCE_DIR}/src/soundio_internal.h"
             "${libsoundio_SOURCE_DIR}/src/soundio_private.h"
+            "${libsoundio_SOURCE_DIR}/src/coreaudio_ios.h"
     )
     set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES} ${LIBSOUNDIO_HEADERS} ${CONFIGURE_OUT_FILE}
-            "${libsoundio_SOURCE_DIR}/src/coreaudio_ios.h"
             "${libsoundio_SOURCE_DIR}/src/coreaudio_ios.m"
     )
 

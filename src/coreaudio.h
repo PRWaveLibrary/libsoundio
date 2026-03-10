@@ -15,7 +15,10 @@
 
 #include <CoreAudio/CoreAudio.h>
 #include <AudioUnit/AudioUnit.h>
-
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 struct SoundIoPrivate;
 int soundio_coreaudio_init(struct SoundIoPrivate *si);
 
@@ -63,5 +66,7 @@ struct SoundIoInStreamCoreAudio {
     double hardware_latency;
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };
-
+#ifdef __cplusplus
+}
+#endif
 #endif
