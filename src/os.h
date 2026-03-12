@@ -10,12 +10,10 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <memory>
 #ifdef __cplusplus
 extern "C"
 {
-
-
-
 #endif
 // safe to call from any thread(s) multiple times, but
 // must be called at least once before calling any other os functions
@@ -26,12 +24,9 @@ double soundio_os_get_time(void);
 
 struct SoundIoOsThread;
 
-int soundio_os_thread_create(
-    void (*run)(void* arg), void* arg,
-    void (*emit_rtprio_warning)(void),
-    struct SoundIoOsThread** out_thread);
+int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared_ptr<void> arg, void (*emit_rtprio_warning)(void), std::shared_ptr<SoundIoOsThread>* out_thread);
 
-void soundio_os_thread_destroy(struct SoundIoOsThread* thread);
+void soundio_os_thread_destroy(std::shared_ptr<SoundIoOsThread> thread);
 
 
 struct SoundIoOsMutex;

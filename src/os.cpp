@@ -22,6 +22,7 @@
 #include <string.h>
 #include <errno.h>
 
+
 #if defined(_WIN32)
 #define SOUNDIO_OS_WINDOWS
 
@@ -80,6 +81,30 @@
 
 struct SoundIoOsThread
 {
+    ~SoundIoOsThread()
+    {
+#if defined(SOUNDIO_OS_WINDOWS)
+        if (handle)
+        {
+            DWORD err = WaitForSingleObject(handle, INFINITE);
+            assert(err != WAIT_FAILED);
+            BOOL ok = CloseHandle(handle);
+            assert(ok);
+        }
+#else
+
+        if (running)
+        {
+            assert_no_err(pthread_join(id, NULL));
+        }
+
+        if (thread->attr_init)
+        {
+            assert_no_err(pthread_attr_destroy(&attr));
+        }
+#endif
+    }
+
 #if defined(SOUNDIO_OS_WINDOWS)
     HANDLE handle;
     DWORD id;
@@ -90,9 +115,9 @@ struct SoundIoOsThread
     pthread_t id;
     bool running;
 #endif
-    void* arg;
+    std::shared_ptr<void> arg;
 
-    void (*run)(void* arg);
+    void (*run)(std::shared_ptr<void> arg);
 };
 
 struct SoundIoOsMutex
@@ -194,14 +219,15 @@ static void* run_pthread(void* userdata)
 }
 #endif
 
-int soundio_os_thread_create(void (*run)(void* arg), void* arg, void (*emit_rtprio_warning)(void), struct SoundIoOsThread** out_thread)
+int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared_ptr<void> arg, void (*emit_rtprio_warning)(void), std::shared_ptr<SoundIoOsThread>* out_thread)
 {
     *out_thread = NULL;
 
-    struct SoundIoOsThread* thread = ALLOCATE(struct SoundIoOsThread, 1);
+    std::shared_ptr<SoundIoOsThread> thread = std::make_shared<SoundIoOsThread>();
     if (!thread)
     {
-        soundio_os_thread_destroy(thread);
+        thread = nullptr;
+        // soundio_os_thread_destroy(thread);
         return SoundIoErrorNoMem;
     }
 
@@ -209,10 +235,11 @@ int soundio_os_thread_create(void (*run)(void* arg), void* arg, void (*emit_rtpr
     thread->arg = arg;
 
 #if defined(SOUNDIO_OS_WINDOWS)
-    thread->handle = CreateThread(NULL, 0, run_win32_thread, thread, 0, &thread->id);
+    thread->handle = CreateThread(NULL, 0, run_win32_thread, thread.get(), 0, &thread->id);
     if (!thread->handle)
     {
-        soundio_os_thread_destroy(thread);
+        thread = nullptr;
+        // soundio_os_thread_destroy(thread);
         return SoundIoErrorSystemResources;
     }
     if (emit_rtprio_warning)
@@ -275,34 +302,34 @@ int soundio_os_thread_create(void (*run)(void* arg), void* arg, void (*emit_rtpr
     return 0;
 }
 
-void soundio_os_thread_destroy(struct SoundIoOsThread* thread)
-{
-    if (!thread)
-        return;
-
-#if defined(SOUNDIO_OS_WINDOWS)
-    if (thread->handle)
-    {
-        DWORD err = WaitForSingleObject(thread->handle, INFINITE);
-        assert(err != WAIT_FAILED);
-        BOOL ok = CloseHandle(thread->handle);
-        assert(ok);
-    }
-#else
-
-    if (thread->running)
-    {
-        assert_no_err(pthread_join(thread->id, NULL));
-    }
-
-    if (thread->attr_init)
-    {
-        assert_no_err(pthread_attr_destroy(&thread->attr));
-    }
-#endif
-
-    free(thread);
-}
+// void soundio_os_thread_destroy(struct SoundIoOsThread* thread)
+// {
+//     if (!thread)
+//         return;
+//
+// #if defined(SOUNDIO_OS_WINDOWS)
+//     if (thread->handle)
+//     {
+//         DWORD err = WaitForSingleObject(thread->handle, INFINITE);
+//         assert(err != WAIT_FAILED);
+//         BOOL ok = CloseHandle(thread->handle);
+//         assert(ok);
+//     }
+// #else
+//
+//     if (thread->running)
+//     {
+//         assert_no_err(pthread_join(thread->id, NULL));
+//     }
+//
+//     if (thread->attr_init)
+//     {
+//         assert_no_err(pthread_attr_destroy(&thread->attr));
+//     }
+// #endif
+//
+//     free(thread);
+// }
 
 struct SoundIoOsMutex* soundio_os_mutex_create(void)
 {

@@ -12,21 +12,28 @@
 #include "os.h"
 #include "ring_buffer.h"
 #include "atomics.h"
+#include <memory>
 
 struct SoundIoPrivate;
-int soundio_dummy_init(struct SoundIoPrivate *si);
 
-struct SoundIoDummy {
-    struct SoundIoOsMutex *mutex;
-    struct SoundIoOsCond *cond;
+int soundio_dummy_init(std::shared_ptr<SoundIoPrivate> si);
+
+struct SoundIoDummy
+{
+    struct SoundIoOsMutex* mutex;
+    struct SoundIoOsCond* cond;
     bool devices_emitted;
 };
 
-struct SoundIoDeviceDummy { int make_the_struct_not_empty; };
+struct SoundIoDeviceDummy
+{
+    int make_the_struct_not_empty;
+};
 
-struct SoundIoOutStreamDummy {
-    struct SoundIoOsThread *thread;
-    struct SoundIoOsCond *cond;
+struct SoundIoOutStreamDummy
+{
+    std::shared_ptr<SoundIoOsThread> thread;
+    struct SoundIoOsCond* cond;
     struct SoundIoAtomicFlag abort_flag;
     double period_duration;
     int buffer_frame_count;
@@ -39,9 +46,10 @@ struct SoundIoOutStreamDummy {
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };
 
-struct SoundIoInStreamDummy {
-    struct SoundIoOsThread *thread;
-    struct SoundIoOsCond *cond;
+struct SoundIoInStreamDummy
+{
+    std::shared_ptr<SoundIoOsThread> thread;
+    struct SoundIoOsCond* cond;
     struct SoundIoAtomicFlag abort_flag;
     double period_duration;
     int frames_left;

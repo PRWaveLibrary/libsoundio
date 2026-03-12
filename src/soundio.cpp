@@ -39,7 +39,7 @@ static const enum SoundIoBackend available_backends[] = {
     SoundIoBackendDummy,
 };
 
-typedef int (*backend_init_t)(struct SoundIoPrivate*);
+typedef int (*backend_init_t)(std::shared_ptr<SoundIoPrivate>);
 
 static backend_init_t backend_init_fns[] = {
     NULL, // None backend
@@ -88,8 +88,8 @@ static backend_init_t backend_init_fns[] = {
     &soundio_dummy_init,
 };
 
-SOUNDIO_MAKE_LIST_DEF(struct SoundIoDevice*, SoundIoListDevicePtr, SOUNDIO_LIST_NOT_STATIC)
-SOUNDIO_MAKE_LIST_DEF(struct SoundIoSampleRateRange, SoundIoListSampleRateRange, SOUNDIO_LIST_NOT_STATIC)
+// SOUNDIO_MAKE_LIST_DEF(struct SoundIoDevice*, SoundIoListDevicePtr, SOUNDIO_LIST_NOT_STATIC)
+// SOUNDIO_MAKE_LIST_DEF(struct SoundIoSampleRateRange, SoundIoListSampleRateRange, SOUNDIO_LIST_NOT_STATIC)
 
 const char* soundio_strerror(int error)
 {
@@ -252,16 +252,12 @@ const char* soundio_backend_name(enum SoundIoBackend backend)
     return "(invalid backend)";
 }
 
-void soundio_destroy(struct SoundIo* soundio)
+void soundio_destroy(std::shared_ptr<SoundIo> soundio)
 {
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-
     soundio_disconnect(soundio);
-
-    free(si);
 }
 
-static void do_nothing_cb(struct SoundIo* soundio)
+static void do_nothing_cb(std::shared_ptr<SoundIo> soundio)
 {
 }
 
@@ -269,7 +265,7 @@ static void default_msg_callback(const char* msg)
 {
 }
 
-static void default_backend_disconnect_cb(struct SoundIo* soundio, int err)
+static void default_backend_disconnect_cb(std::shared_ptr<SoundIo> soundio, int err)
 {
     soundio_panic("libsoundio: backend disconnected: %s", soundio_strerror(err));
 }
@@ -280,21 +276,24 @@ static void default_emit_rtprio_warning(void)
 {
     if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(rtprio_seen))
     {
-        fprintf(stderr, "warning: unable to set high priority thread: Operation not permitted\n");
-        fprintf(stderr, "See "
-                "https://github.com/andrewrk/genesis/wiki/warning:-unable-to-set-high-priority-thread:-Operation-not-permitted\n");
+        wprintf(L"warning: unable to set high priority thread: Operation not permitted\n");
+        wprintf(L"See https://github.com/andrewrk/genesis/wiki/warning:-unable-to-set-high-priority-thread:-Operation-not-permitted\n");
     }
 }
 
-struct SoundIo* soundio_create(void)
+std::shared_ptr<SoundIo> soundio_create(void)
 {
     int err;
     if ((err = soundio_os_init()))
+    {
         return NULL;
-    struct SoundIoPrivate* si = ALLOCATE(struct SoundIoPrivate, 1);
+    }
+    std::shared_ptr<SoundIoPrivate> si = std::make_shared<SoundIoPrivate>();
     if (!si)
+    {
         return NULL;
-    struct SoundIo* soundio = &si->pub;
+    }
+    std::shared_ptr<SoundIo> soundio = si;
     soundio->on_devices_change = do_nothing_cb;
     soundio->on_backend_disconnect = default_backend_disconnect_cb;
     soundio->on_events_signal = do_nothing_cb;
@@ -305,11 +304,11 @@ struct SoundIo* soundio_create(void)
     return soundio;
 }
 
-int soundio_connect(struct SoundIo* soundio)
+int soundio_connect(std::shared_ptr<SoundIo> soundio)
 {
     int err = 0;
 
-    for (auto i = 0; i < ARRAY_LENGTH(available_backends); i += 1)
+    for (auto i = 0; i < std::size(available_backends); i += 1)
     {
         enum SoundIoBackend backend = available_backends[i];
         err = soundio_connect_backend(soundio, backend);
@@ -322,9 +321,9 @@ int soundio_connect(struct SoundIo* soundio)
     return err;
 }
 
-int soundio_connect_backend(struct SoundIo* soundio, enum SoundIoBackend backend)
+int soundio_connect_backend(std::shared_ptr<SoundIo> soundio, enum SoundIoBackend backend)
 {
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
 
     if (soundio->current_backend)
         return SoundIoErrorInvalid;
@@ -332,7 +331,7 @@ int soundio_connect_backend(struct SoundIo* soundio, enum SoundIoBackend backend
     if (backend <= 0 || backend > SoundIoBackendDummy)
         return SoundIoErrorInvalid;
 
-    int (*fn)(struct SoundIoPrivate*) = backend_init_fns[backend];
+    int (*fn)(std::shared_ptr<SoundIoPrivate>) = backend_init_fns[backend];
 
     if (!fn)
         return SoundIoErrorBackendUnavailable;
@@ -348,20 +347,22 @@ int soundio_connect_backend(struct SoundIo* soundio, enum SoundIoBackend backend
     return 0;
 }
 
-void soundio_disconnect(struct SoundIo* soundio)
+void soundio_disconnect(std::shared_ptr<SoundIo> soundio)
 {
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
 
     if (!si)
         return;
 
     if (si->destroy)
+    {
         si->destroy(si);
-    memset(&si->backend_data, 0, sizeof(union SoundIoBackendData));
+    }
+    si->backend_data = {};
 
     soundio->current_backend = SoundIoBackendNone;
 
-    soundio_destroy_devices_info(si->safe_devices_info);
+    // soundio_destroy_devices_info(si->safe_devices_info);
     si->safe_devices_info = NULL;
 
     si->destroy = NULL;
@@ -389,225 +390,228 @@ void soundio_disconnect(struct SoundIo* soundio)
     si->instream_get_latency = NULL;
 }
 
-void soundio_flush_events(struct SoundIo* soundio)
+void soundio_flush_events(std::shared_ptr<SoundIo> soundio)
 {
     assert(soundio->current_backend != SoundIoBackendNone);
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
     si->flush_events(si);
 }
 
-int soundio_input_device_count(struct SoundIo* soundio)
+int soundio_input_device_count(std::shared_ptr<SoundIo> soundio)
 {
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
 
     assert(si->safe_devices_info);
-    if (!si->safe_devices_info)
-        return -1;
+    // if (!si->safe_devices_info)
+    //     return -1;
 
     assert(soundio->current_backend != SoundIoBackendNone);
-    if (soundio->current_backend == SoundIoBackendNone)
-        return -1;
+    // if (soundio->current_backend == SoundIoBackendNone)
+    //     return -1;
 
-    return si->safe_devices_info->input_devices.length;
+    return si->safe_devices_info->input_devices.size();
 }
 
-int soundio_output_device_count(struct SoundIo* soundio)
+int soundio_output_device_count(std::shared_ptr<SoundIo> soundio)
 {
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
 
     assert(si->safe_devices_info);
-    if (!si->safe_devices_info)
-        return -1;
+    // if (!si->safe_devices_info)
+    //     return -1;
 
     assert(soundio->current_backend != SoundIoBackendNone);
-    if (soundio->current_backend == SoundIoBackendNone)
-        return -1;
+    // if (soundio->current_backend == SoundIoBackendNone)
+    //     return -1;
 
-    return si->safe_devices_info->output_devices.length;
+    return si->safe_devices_info->output_devices.size();
 }
 
-int soundio_default_input_device_index(struct SoundIo* soundio)
+int soundio_default_input_device_index(std::shared_ptr<SoundIo> soundio)
 {
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
 
     assert(si->safe_devices_info);
-    if (!si->safe_devices_info)
-        return -1;
+    // if (!si->safe_devices_info)
+    //     return -1;
 
     assert(soundio->current_backend != SoundIoBackendNone);
-    if (soundio->current_backend == SoundIoBackendNone)
-        return -1;
+    // if (soundio->current_backend == SoundIoBackendNone)
+    //     return -1;
 
     return si->safe_devices_info->default_input_index;
 }
 
-int soundio_default_output_device_index(struct SoundIo* soundio)
+int soundio_default_output_device_index(std::shared_ptr<SoundIo> soundio)
 {
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
 
     assert(si->safe_devices_info);
-    if (!si->safe_devices_info)
-        return -1;
+    // if (!si->safe_devices_info)
+    //     return -1;
 
     assert(soundio->current_backend != SoundIoBackendNone);
-    if (soundio->current_backend == SoundIoBackendNone)
-        return -1;
+    // if (soundio->current_backend == SoundIoBackendNone)
+    //     return -1;
 
     return si->safe_devices_info->default_output_index;
 }
 
-struct SoundIoDevice* soundio_get_input_device(struct SoundIo* soundio, int index)
+struct std::shared_ptr<SoundIoDevice> soundio_get_input_device(std::shared_ptr<SoundIo> soundio, int index)
 {
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
 
     assert(soundio->current_backend != SoundIoBackendNone);
-    if (soundio->current_backend == SoundIoBackendNone)
-        return NULL;
+    // if (soundio->current_backend == SoundIoBackendNone)
+    //     return NULL;
 
     assert(si->safe_devices_info);
-    if (!si->safe_devices_info)
-        return NULL;
+    // if (!si->safe_devices_info)
+    //     return NULL;
 
     assert(index >= 0);
-    assert(index < si->safe_devices_info->input_devices.length);
-    if (index < 0 || index >= si->safe_devices_info->input_devices.length)
-        return NULL;
+    assert(index < si->safe_devices_info->input_devices.size());
+    // if (index < 0 || index >= si->safe_devices_info->input_devices.size())
+    //     return NULL;
 
-    struct SoundIoDevice* device = SoundIoListDevicePtr_val_at(&si->safe_devices_info->input_devices, index);
-    soundio_device_ref(device);
+
+    // struct SoundIoDevice* device = SoundIoListDevicePtr_val_at(&si->safe_devices_info->input_devices, index);
+    // soundio_device_ref(device);
+    return si->safe_devices_info->input_devices.at(index);
+}
+
+struct std::shared_ptr<SoundIoDevice> soundio_get_output_device(std::shared_ptr<SoundIo> soundio, int index)
+{
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+
+    assert(soundio->current_backend != SoundIoBackendNone);
+    // if (soundio->current_backend == SoundIoBackendNone)
+    //     return NULL;
+
+    assert(si->safe_devices_info);
+    // if (!si->safe_devices_info)
+    //     return NULL;
+
+    assert(index >= 0);
+    assert(index < si->safe_devices_info->output_devices.size());
+    // if (index >= si->safe_devices_info->output_devices.size())
+    //     return NULL;
+    std::shared_ptr<SoundIoDevice> device = si->safe_devices_info->output_devices.at(index);
+    // soundio_device_ref(device);
     return device;
 }
 
-struct SoundIoDevice* soundio_get_output_device(struct SoundIo* soundio, int index)
+// void soundio_device_unref(struct SoundIoDevice* device)
+// {
+//     if (!device)
+//         return;
+//
+//     device->ref_count -= 1;
+//     assert(device->ref_count >= 0);
+//
+//     if (device->ref_count == 0)
+//     {
+//         struct SoundIoDevicePrivate* dev = reinterpret_cast<struct SoundIoDevicePrivate*>(device);
+//         if (dev->destruct)
+//         {
+//             dev->destruct(dev);
+//         }
+//
+//         free(device->id);
+//         free(device->name);
+//
+//         if (device->sample_rates != &dev->prealloc_sample_rate_range &&
+//             device->sample_rates != dev->sample_rates.items)
+//         {
+//             free(device->sample_rates);
+//         }
+//         SoundIoListSampleRateRange_deinit(&dev->sample_rates);
+//
+//         if (device->formats != &dev->prealloc_format)
+//             free(device->formats);
+//
+//         if (device->layouts != &device->current_layout)
+//             free(device->layouts);
+//
+//         free(dev);
+//     }
+// }
+
+// void soundio_device_ref(struct SoundIoDevice* device)
+// {
+//     assert(device);
+//     device->ref_count += 1;
+// }
+
+void soundio_wait_events(std::shared_ptr<SoundIo> soundio)
 {
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-
-    assert(soundio->current_backend != SoundIoBackendNone);
-    if (soundio->current_backend == SoundIoBackendNone)
-        return NULL;
-
-    assert(si->safe_devices_info);
-    if (!si->safe_devices_info)
-        return NULL;
-
-    assert(index >= 0);
-    assert(index < si->safe_devices_info->output_devices.length);
-    if (index < 0 || index >= si->safe_devices_info->output_devices.length)
-        return NULL;
-
-    struct SoundIoDevice* device = SoundIoListDevicePtr_val_at(&si->safe_devices_info->output_devices, index);
-    soundio_device_ref(device);
-    return device;
-}
-
-void soundio_device_unref(struct SoundIoDevice* device)
-{
-    if (!device)
-        return;
-
-    device->ref_count -= 1;
-    assert(device->ref_count >= 0);
-
-    if (device->ref_count == 0)
-    {
-        struct SoundIoDevicePrivate* dev = (struct SoundIoDevicePrivate*) device;
-        if (dev->destruct)
-            dev->destruct(dev);
-
-        free(device->id);
-        free(device->name);
-
-        if (device->sample_rates != &dev->prealloc_sample_rate_range &&
-            device->sample_rates != dev->sample_rates.items)
-        {
-            free(device->sample_rates);
-        }
-        SoundIoListSampleRateRange_deinit(&dev->sample_rates);
-
-        if (device->formats != &dev->prealloc_format)
-            free(device->formats);
-
-        if (device->layouts != &device->current_layout)
-            free(device->layouts);
-
-        free(dev);
-    }
-}
-
-void soundio_device_ref(struct SoundIoDevice* device)
-{
-    assert(device);
-    device->ref_count += 1;
-}
-
-void soundio_wait_events(struct SoundIo* soundio)
-{
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
     si->wait_events(si);
 }
 
-void soundio_wakeup(struct SoundIo* soundio)
+void soundio_wakeup(std::shared_ptr<SoundIo> soundio)
 {
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
     si->wakeup(si);
 }
 
-void soundio_force_device_scan(struct SoundIo* soundio)
+void soundio_force_device_scan(std::shared_ptr<SoundIo> soundio)
 {
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
     si->force_device_scan(si);
 }
 
-int soundio_outstream_begin_write(struct SoundIoOutStream* outstream,
-                                  struct SoundIoChannelArea** areas, int* frame_count)
+int soundio_outstream_begin_write(std::shared_ptr<SoundIoOutStream> outstream, struct SoundIoChannelArea** areas, int* frame_count)
 {
-    struct SoundIo* soundio = outstream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoOutStreamPrivate* os = (struct SoundIoOutStreamPrivate*) outstream;
+    std::shared_ptr<SoundIo> soundio = outstream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoOutStreamPrivate> os = std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(outstream);
     if (*frame_count <= 0)
         return SoundIoErrorInvalid;
     return si->outstream_begin_write(si, os, areas, frame_count);
 }
 
-int soundio_outstream_end_write(struct SoundIoOutStream* outstream)
+int soundio_outstream_end_write(std::shared_ptr<SoundIoOutStream> outstream)
 {
-    struct SoundIo* soundio = outstream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoOutStreamPrivate* os = (struct SoundIoOutStreamPrivate*) outstream;
+    std::shared_ptr<SoundIo> soundio = outstream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoOutStreamPrivate> os = std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(outstream);
     return si->outstream_end_write(si, os);
 }
 
-static void default_outstream_error_callback(struct SoundIoOutStream* os, int err)
+static void default_outstream_error_callback(std::shared_ptr<SoundIoOutStream> os, int err)
 {
     soundio_panic("libsoundio: %s", soundio_strerror(err));
 }
 
-static void default_underflow_callback(struct SoundIoOutStream* outstream)
+static void default_underflow_callback(std::shared_ptr<SoundIoOutStream> outstream)
 {
 }
 
-struct SoundIoOutStream* soundio_outstream_create(struct SoundIoDevice* device)
+std::shared_ptr<SoundIoOutStream> soundio_outstream_create(std::shared_ptr<SoundIoDevice> device)
 {
-    struct SoundIoOutStreamPrivate* os = ALLOCATE(struct SoundIoOutStreamPrivate, 1);
-    struct SoundIoOutStream* outstream = &os->pub;
+    std::shared_ptr<SoundIoOutStreamPrivate> os = std::make_shared<SoundIoOutStreamPrivate>();
+    std::shared_ptr<SoundIoOutStream> outstream = os;
 
     if (!os)
+    {
         return NULL;
+    }
     if (!device)
+    {
         return NULL;
+    }
 
     outstream->device = device;
-    soundio_device_ref(device);
-
     outstream->error_callback = default_outstream_error_callback;
     outstream->underflow_callback = default_underflow_callback;
 
     return outstream;
 }
 
-int soundio_outstream_open(struct SoundIoOutStream* outstream)
+int soundio_outstream_open(std::shared_ptr<SoundIoOutStream> outstream)
 {
-    struct SoundIoDevice* device = outstream->device;
+    std::shared_ptr<SoundIoDevice> device = outstream->device;
 
     if (device->aim != SoundIoDeviceAimOutput)
         return SoundIoErrorInvalid;
@@ -635,100 +639,103 @@ int soundio_outstream_open(struct SoundIoOutStream* outstream)
     if (!outstream->sample_rate)
         outstream->sample_rate = soundio_device_nearest_sample_rate(device, 48000);
 
-    struct SoundIoOutStreamPrivate* os = (struct SoundIoOutStreamPrivate*) outstream;
+    std::shared_ptr<SoundIoOutStreamPrivate> os = std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(outstream);
     outstream->bytes_per_frame = soundio_get_bytes_per_frame(outstream->format, outstream->layout.channel_count);
     outstream->bytes_per_sample = soundio_get_bytes_per_sample(outstream->format);
 
-    struct SoundIo* soundio = device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(device->soundio.lock());
     return si->outstream_open(si, os);
 }
 
-void soundio_outstream_destroy(struct SoundIoOutStream* outstream)
+void soundio_outstream_destroy(std::shared_ptr<SoundIoOutStream> outstream)
 {
     if (!outstream)
+    {
         return;
+    }
 
-    struct SoundIoOutStreamPrivate* os = (struct SoundIoOutStreamPrivate*) outstream;
-    struct SoundIo* soundio = outstream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoOutStreamPrivate> os = std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(outstream);
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(os->device->soundio.lock());
 
     if (si->outstream_destroy)
+    {
         si->outstream_destroy(si, os);
-
-    soundio_device_unref(outstream->device);
-    free(os);
+    }
 }
 
-int soundio_outstream_start(struct SoundIoOutStream* outstream)
+int soundio_outstream_start(std::shared_ptr<SoundIoOutStream> outstream)
 {
-    struct SoundIo* soundio = outstream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoOutStreamPrivate* os = (struct SoundIoOutStreamPrivate*) outstream;
+    std::shared_ptr<SoundIo> soundio = outstream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoOutStreamPrivate> os = std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(outstream);
     return si->outstream_start(si, os);
 }
 
-int soundio_outstream_pause(struct SoundIoOutStream* outstream, bool pause)
+int soundio_outstream_pause(std::shared_ptr<SoundIoOutStream> outstream, bool pause)
 {
-    struct SoundIo* soundio = outstream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoOutStreamPrivate* os = (struct SoundIoOutStreamPrivate*) outstream;
+    std::shared_ptr<SoundIo> soundio = outstream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoOutStreamPrivate> os = std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(outstream);
     return si->outstream_pause(si, os, pause);
 }
 
-int soundio_outstream_get_time(struct SoundIoOutStream* outstream, double* out_time)
+int soundio_outstream_get_time(std::shared_ptr<SoundIoOutStream> outstream, double* out_time)
 {
-    struct SoundIo* soundio = outstream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoOutStreamPrivate* os = (struct SoundIoOutStreamPrivate*) outstream;
+    std::shared_ptr<SoundIo> soundio = outstream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoOutStreamPrivate> os = std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(outstream);
     return si->outstream_get_time(si, os, out_time);
 }
 
-int soundio_outstream_clear_buffer(struct SoundIoOutStream* outstream)
+int soundio_outstream_clear_buffer(std::shared_ptr<SoundIoOutStream> outstream)
 {
-    struct SoundIo* soundio = outstream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoOutStreamPrivate* os = (struct SoundIoOutStreamPrivate*) outstream;
+    std::shared_ptr<SoundIo> soundio = outstream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoOutStreamPrivate> os = std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(outstream);
     return si->outstream_clear_buffer(si, os);
 }
 
-int soundio_outstream_get_latency(struct SoundIoOutStream* outstream, double* out_latency)
+int soundio_outstream_get_latency(std::shared_ptr<SoundIoOutStream> outstream, double* out_latency)
 {
-    struct SoundIo* soundio = outstream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoOutStreamPrivate* os = (struct SoundIoOutStreamPrivate*) outstream;
+    std::shared_ptr<SoundIo> soundio = outstream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoOutStreamPrivate> os = std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(outstream);
     return si->outstream_get_latency(si, os, out_latency);
 }
 
-int soundio_outstream_set_volume(struct SoundIoOutStream* outstream, double volume)
+int soundio_outstream_set_volume(std::shared_ptr<SoundIoOutStream> outstream, double volume)
 {
-    struct SoundIo* soundio = outstream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoOutStreamPrivate* os = (struct SoundIoOutStreamPrivate*) outstream;
+    std::shared_ptr<SoundIo> soundio = outstream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoOutStreamPrivate> os = std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(outstream);
     return si->outstream_set_volume(si, os, volume);
 }
 
-static void default_instream_error_callback(struct SoundIoInStream* is, int err)
+static void default_instream_error_callback(std::shared_ptr<SoundIoInStream> is, int err)
 {
     soundio_panic("libsoundio: %s", soundio_strerror(err));
 }
 
-static void default_overflow_callback(struct SoundIoInStream* instream)
+static void default_overflow_callback(std::shared_ptr<SoundIoInStream> instream)
 {
 }
 
-struct SoundIoInStream* soundio_instream_create(struct SoundIoDevice* device)
+std::shared_ptr<SoundIoInStream> soundio_instream_create(std::shared_ptr<SoundIoDevice> device)
 {
-    struct SoundIoInStreamPrivate* is = ALLOCATE(struct SoundIoInStreamPrivate, 1);
-    struct SoundIoInStream* instream = &is->pub;
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::make_shared<SoundIoInStreamPrivate>();
+    std::shared_ptr<SoundIoInStream> instream = is;
 
     if (!is)
+    {
         return NULL;
+    }
     if (!device)
+    {
         return NULL;
+    }
 
     instream->device = device;
-    soundio_device_ref(device);
+    // soundio_device_ref(device);
 
     instream->error_callback = default_instream_error_callback;
     instream->overflow_callback = default_overflow_callback;
@@ -736,9 +743,9 @@ struct SoundIoInStream* soundio_instream_create(struct SoundIoDevice* device)
     return instream;
 }
 
-int soundio_instream_open(struct SoundIoInStream* instream)
+int soundio_instream_open(std::shared_ptr<SoundIoInStream> instream)
 {
-    struct SoundIoDevice* device = instream->device;
+    std::shared_ptr<SoundIoDevice> device = instream->device;
     if (device->aim != SoundIoDeviceAimInput)
         return SoundIoErrorInvalid;
 
@@ -749,7 +756,9 @@ int soundio_instream_open(struct SoundIoInStream* instream)
         return SoundIoErrorInvalid;
 
     if (device->probe_error)
+    {
         return device->probe_error;
+    }
 
     if (instream->format == SoundIoFormatInvalid)
     {
@@ -768,84 +777,85 @@ int soundio_instream_open(struct SoundIoInStream* instream)
 
     instream->bytes_per_frame = soundio_get_bytes_per_frame(instream->format, instream->layout.channel_count);
     instream->bytes_per_sample = soundio_get_bytes_per_sample(instream->format);
-    struct SoundIo* soundio = device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoInStreamPrivate* is = (struct SoundIoInStreamPrivate*) instream;
+    std::shared_ptr<SoundIo> soundio = device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
     return si->instream_open(si, is);
 }
 
-int soundio_instream_start(struct SoundIoInStream* instream)
+int soundio_instream_start(std::shared_ptr<SoundIoInStream> instream)
 {
-    struct SoundIo* soundio = instream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoInStreamPrivate* is = (struct SoundIoInStreamPrivate*) instream;
+    std::shared_ptr<SoundIo> soundio = instream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
     return si->instream_start(si, is);
 }
 
-void soundio_instream_destroy(struct SoundIoInStream* instream)
+
+// void soundio_instream_destroy(std::shared_ptr<SoundIoInStream> instream)
+// {
+//     if (!instream)
+//         return;
+//
+//     std::shared_ptr<SoundIoInStreamPrivate> is =std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
+//     std::shared_ptr<SoundIo> soundio = instream->device->soundio;
+//     std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+//
+//     if (si->instream_destroy)
+//         si->instream_destroy(si, is);
+//
+//     // soundio_device_unref(instream->device);
+//     free(is);
+// }
+
+int soundio_instream_pause(std::shared_ptr<SoundIoInStream> instream, bool pause)
 {
-    if (!instream)
-        return;
-
-    struct SoundIoInStreamPrivate* is = (struct SoundIoInStreamPrivate*) instream;
-    struct SoundIo* soundio = instream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-
-    if (si->instream_destroy)
-        si->instream_destroy(si, is);
-
-    soundio_device_unref(instream->device);
-    free(is);
-}
-
-int soundio_instream_pause(struct SoundIoInStream* instream, bool pause)
-{
-    struct SoundIo* soundio = instream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoInStreamPrivate* is = (struct SoundIoInStreamPrivate*) instream;
+    std::shared_ptr<SoundIo> soundio = instream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
     return si->instream_pause(si, is, pause);
 }
 
-int soundio_instream_begin_read(struct SoundIoInStream* instream,
+int soundio_instream_begin_read(std::shared_ptr<SoundIoInStream> instream,
                                 struct SoundIoChannelArea** areas, int* frame_count)
 {
-    struct SoundIo* soundio = instream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoInStreamPrivate* is = (struct SoundIoInStreamPrivate*) instream;
+    std::shared_ptr<SoundIo> soundio = instream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
     return si->instream_begin_read(si, is, areas, frame_count);
 }
 
-int soundio_instream_end_read(struct SoundIoInStream* instream)
+int soundio_instream_end_read(std::shared_ptr<SoundIoInStream> instream)
 {
-    struct SoundIo* soundio = instream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoInStreamPrivate* is = (struct SoundIoInStreamPrivate*) instream;
+    std::shared_ptr<SoundIo> soundio = instream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
     return si->instream_end_read(si, is);
 }
 
-int soundio_instream_get_latency(struct SoundIoInStream* instream, double* out_latency)
+int soundio_instream_get_latency(std::shared_ptr<SoundIoInStream> instream, double* out_latency)
 {
-    struct SoundIo* soundio = instream->device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
-    struct SoundIoInStreamPrivate* is = (struct SoundIoInStreamPrivate*) instream;
+    std::shared_ptr<SoundIo> soundio = instream->device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
     return si->instream_get_latency(si, is, out_latency);
 }
 
-void soundio_destroy_devices_info(struct SoundIoDevicesInfo* devices_info)
-{
-    if (!devices_info)
-        return;
-
-    for (int i = 0; i < devices_info->input_devices.length; i += 1)
-        soundio_device_unref(SoundIoListDevicePtr_val_at(&devices_info->input_devices, i));
-    for (int i = 0; i < devices_info->output_devices.length; i += 1)
-        soundio_device_unref(SoundIoListDevicePtr_val_at(&devices_info->output_devices, i));
-
-    SoundIoListDevicePtr_deinit(&devices_info->input_devices);
-    SoundIoListDevicePtr_deinit(&devices_info->output_devices);
-
-    free(devices_info);
-}
+// void soundio_destroy_devices_info(struct SoundIoDevicesInfo* devices_info)
+// {
+//     if (!devices_info)
+//         return;
+//
+//     for (int i = 0; i < devices_info->input_devices.size(); i += 1)
+//         soundio_device_unref(SoundIoListDevicePtr_val_at(&devices_info->input_devices, i));
+//     for (int i = 0; i < devices_info->output_devices.length; i += 1)
+//         soundio_device_unref(SoundIoListDevicePtr_val_at(&devices_info->output_devices, i));
+//
+//     SoundIoListDevicePtr_deinit(&devices_info->input_devices);
+//     SoundIoListDevicePtr_deinit(&devices_info->output_devices);
+//
+//     free(devices_info);
+// }
 
 bool soundio_have_backend(enum SoundIoBackend backend)
 {
@@ -854,12 +864,12 @@ bool soundio_have_backend(enum SoundIoBackend backend)
     return backend_init_fns[backend];
 }
 
-int soundio_backend_count(struct SoundIo* soundio)
+int soundio_backend_count(std::shared_ptr<SoundIo> soundio)
 {
     return ARRAY_LENGTH(available_backends);
 }
 
-enum SoundIoBackend soundio_get_backend(struct SoundIo* soundio, int index)
+enum SoundIoBackend soundio_get_backend(std::shared_ptr<SoundIo> soundio, int index)
 {
     return available_backends[index];
 }
@@ -909,14 +919,14 @@ void soundio_sort_channel_layouts(struct SoundIoChannelLayout* layouts, int layo
     qsort(layouts, layouts_count, sizeof(struct SoundIoChannelLayout), compare_layouts);
 }
 
-void soundio_device_sort_channel_layouts(struct SoundIoDevice* device)
+void soundio_device_sort_channel_layouts(std::shared_ptr<SoundIoDevice> device)
 {
     soundio_sort_channel_layouts(device->layouts, device->layout_count);
 }
 
-bool soundio_device_supports_format(struct SoundIoDevice* device, enum SoundIoFormat format)
+bool soundio_device_supports_format(std::shared_ptr<SoundIoDevice> device, enum SoundIoFormat format)
 {
-    for (int i = 0; i < device->format_count; i += 1)
+    for (int i = 0; i < device->format_count; ++i)
     {
         if (device->formats[i] == format)
             return true;
@@ -924,10 +934,9 @@ bool soundio_device_supports_format(struct SoundIoDevice* device, enum SoundIoFo
     return false;
 }
 
-bool soundio_device_supports_layout(struct SoundIoDevice* device,
-                                    const struct SoundIoChannelLayout* layout)
+bool soundio_device_supports_layout(std::shared_ptr<SoundIoDevice> device, const struct SoundIoChannelLayout* layout)
 {
-    for (int i = 0; i < device->layout_count; i += 1)
+    for (int i = 0; i < device->layout_count; ++i)
     {
         if (soundio_channel_layout_equal(&device->layouts[i], layout))
             return true;
@@ -935,9 +944,9 @@ bool soundio_device_supports_layout(struct SoundIoDevice* device,
     return false;
 }
 
-bool soundio_device_supports_sample_rate(struct SoundIoDevice* device, int sample_rate)
+bool soundio_device_supports_sample_rate(std::shared_ptr<SoundIoDevice> device, int sample_rate)
 {
-    for (int i = 0; i < device->sample_rate_count; i += 1)
+    for (int i = 0; i < device->sample_rates.size(); ++i)
     {
         struct SoundIoSampleRateRange* range = &device->sample_rates[i];
         if (sample_rate >= range->min && sample_rate <= range->max)
@@ -952,11 +961,11 @@ static int abs_diff_int(int a, int b)
     return (x >= 0) ? x : -x;
 }
 
-int soundio_device_nearest_sample_rate(struct SoundIoDevice* device, int sample_rate)
+int soundio_device_nearest_sample_rate(std::shared_ptr<SoundIoDevice> device, int sample_rate)
 {
     int best_rate = -1;
     int best_delta = -1;
-    for (int i = 0; i < device->sample_rate_count; i += 1)
+    for (int i = 0; i < device->sample_rates.size(); ++i)
     {
         struct SoundIoSampleRateRange* range = &device->sample_rates[i];
         int candidate_rate = soundio_int_clamp(range->min, sample_rate, range->max);

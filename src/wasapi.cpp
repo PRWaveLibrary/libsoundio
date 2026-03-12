@@ -11,7 +11,7 @@
 #endif
 
 #define INITGUID
-#define CINTERFACE
+// #define CINTERFACE
 #define COBJMACROS
 #define CONST_VTABLE
 
@@ -519,13 +519,6 @@ static REFERENCE_TIME to_reference_time(double seconds)
     return (REFERENCE_TIME) (seconds * 10000000.0 + 0.5);
 }
 
-static void destruct_device(struct SoundIoDevicePrivate* dev)
-{
-    struct SoundIoDeviceWasapi* dw = &dev->backend_data.wasapi;
-    if (dw->mm_device)
-        IMMDevice_Release(dw->mm_device);
-}
-
 struct RefreshDevices
 {
     IMMDeviceCollection* collection;
@@ -539,64 +532,84 @@ struct RefreshDevices
     PROPVARIANT prop_variant_value;
     WAVEFORMATEXTENSIBLE* wave_format;
     bool prop_variant_value_inited;
-    struct SoundIoDevicesInfo* devices_info;
-    struct SoundIoDevice* device_shared;
-    struct SoundIoDevice* device_raw;
+    std::shared_ptr<SoundIoDevicesInfo> devices_info;
+    std::shared_ptr<SoundIoDevice> device_shared;
+    std::shared_ptr<SoundIoDevice> device_raw;
     char* default_render_id;
     int default_render_id_len;
     char* default_capture_id;
     int default_capture_id_len;
 };
 
-static void deinit_refresh_devices(struct RefreshDevices* rd)
+static void deinit_refresh_devices(std::shared_ptr<RefreshDevices> rd)
 {
-    soundio_destroy_devices_info(rd->devices_info);
-    soundio_device_unref(rd->device_shared);
-    soundio_device_unref(rd->device_raw);
+    // soundio_destroy_devices_info(rd->devices_info);
     if (rd->mm_device)
-        IMMDevice_Release(rd->mm_device);
+    {
+        rd->mm_device->Release();
+    }
     if (rd->default_render_device)
-        IMMDevice_Release(rd->default_render_device);
+    {
+        rd->default_render_device->Release();
+    }
     if (rd->default_capture_device)
-        IMMDevice_Release(rd->default_capture_device);
+    {
+        rd->default_capture_device->Release();
+    }
     if (rd->collection)
-        IMMDeviceCollection_Release(rd->collection);
+    {
+        rd->collection->Release();
+    }
     if (rd->lpwstr)
+    {
         CoTaskMemFree(rd->lpwstr);
+    }
     if (rd->endpoint)
-        IMMEndpoint_Release(rd->endpoint);
+    {
+        rd->endpoint->Release();
+    }
     if (rd->prop_store)
-        IPropertyStore_Release(rd->prop_store);
+    {
+        rd->prop_store->Release();
+    }
     if (rd->prop_variant_value_inited)
+    {
         PropVariantClear(&rd->prop_variant_value);
+    }
     if (rd->wave_format)
+    {
         CoTaskMemFree(rd->wave_format);
+    }
     if (rd->audio_client)
-        IUnknown_Release(rd->audio_client);
+    {
+        rd->audio_client->Release();
+    }
 }
 
-static int detect_valid_layouts(struct RefreshDevices* rd, WAVEFORMATEXTENSIBLE* wave_format,
-                                struct SoundIoDevicePrivate* dev, AUDCLNT_SHAREMODE share_mode)
+static int detect_valid_layouts(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEXTENSIBLE* wave_format,
+                                std::shared_ptr<SoundIoDevicePrivate> dev, AUDCLNT_SHAREMODE share_mode)
 {
-    struct SoundIoDevice* device = &dev->pub;
+    std::shared_ptr<SoundIoDevice> device = dev;
     HRESULT hr;
 
     device->layout_count = 0;
     device->layouts = ALLOCATE(struct SoundIoChannelLayout, ARRAY_LENGTH(test_layouts));
     if (!device->layouts)
+    {
         return SoundIoErrorNoMem;
+    }
 
     WAVEFORMATEX* closest_match = NULL;
     WAVEFORMATEXTENSIBLE orig_wave_format = *wave_format;
 
-    for (size_t i = 0; i < ARRAY_LENGTH(test_formats); i += 1)
+    for (size_t i = 0; i < std::size(test_formats); i += 1)
     {
         enum SoundIoChannelLayoutId test_layout_id = test_layouts[i];
         const struct SoundIoChannelLayout* test_layout = soundio_channel_layout_get_builtin(test_layout_id);
         to_wave_format_layout(test_layout, wave_format);
         complete_wave_format_data(wave_format);
 
-        hr = IAudioClient_IsFormatSupported(rd->audio_client, share_mode, (WAVEFORMATEX *) wave_format, &closest_match);
+        hr = rd->audio_client->IsFormatSupported(share_mode, reinterpret_cast<WAVEFORMATEX*>(wave_format), &closest_match);
         if (closest_match)
         {
             CoTaskMemFree(closest_match);
@@ -621,10 +634,10 @@ static int detect_valid_layouts(struct RefreshDevices* rd, WAVEFORMATEXTENSIBLE*
     return 0;
 }
 
-static int detect_valid_formats(struct RefreshDevices* rd, WAVEFORMATEXTENSIBLE* wave_format,
-                                struct SoundIoDevicePrivate* dev, AUDCLNT_SHAREMODE share_mode)
+static int detect_valid_formats(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEXTENSIBLE* wave_format,
+                                std::shared_ptr<SoundIoDevicePrivate> dev, AUDCLNT_SHAREMODE share_mode)
 {
-    struct SoundIoDevice* device = &dev->pub;
+    std::shared_ptr<SoundIoDevice> device = dev;
     HRESULT hr;
 
     device->format_count = 0;
@@ -641,7 +654,7 @@ static int detect_valid_formats(struct RefreshDevices* rd, WAVEFORMATEXTENSIBLE*
         to_wave_format_format(test_format, wave_format);
         complete_wave_format_data(wave_format);
 
-        hr = IAudioClient_IsFormatSupported(rd->audio_client, share_mode, (WAVEFORMATEX *) wave_format, &closest_match);
+        hr = rd->audio_client->IsFormatSupported(share_mode, (WAVEFORMATEX*) wave_format, &closest_match);
         if (closest_match)
         {
             CoTaskMemFree(closest_match);
@@ -666,19 +679,16 @@ static int detect_valid_formats(struct RefreshDevices* rd, WAVEFORMATEXTENSIBLE*
     return 0;
 }
 
-static int add_sample_rate(struct SoundIoListSampleRateRange* sample_rates, int* current_min, int the_max)
+static void add_sample_rate(std::vector<SoundIoSampleRateRange>& sample_rates, int current_min, int the_max)
 {
-    int err;
-    if ((err = SoundIoListSampleRateRange_add_one(sample_rates)))
-        return err;
+    SoundIoSampleRateRange range = {};
+    range.min = current_min;
+    range.max = the_max;
 
-    struct SoundIoSampleRateRange* last_range = SoundIoListSampleRateRange_last_ptr(sample_rates);
-    last_range->min = *current_min;
-    last_range->max = the_max;
-    return 0;
+    sample_rates.push_back(range);
 }
 
-static int do_sample_rate_test(struct RefreshDevices* rd, struct SoundIoDevicePrivate* dev,
+static int do_sample_rate_test(std::shared_ptr<RefreshDevices> rd, std::shared_ptr<SoundIoDevicePrivate> dev,
                                WAVEFORMATEXTENSIBLE* wave_format, int test_sample_rate, AUDCLNT_SHAREMODE share_mode,
                                int* current_min, int* last_success_rate)
 {
@@ -686,8 +696,7 @@ static int do_sample_rate_test(struct RefreshDevices* rd, struct SoundIoDevicePr
     int err;
 
     wave_format->Format.nSamplesPerSec = test_sample_rate;
-    HRESULT hr =
-            IAudioClient_IsFormatSupported(rd->audio_client, share_mode, (WAVEFORMATEX *) wave_format, &closest_match);
+    HRESULT hr = rd->audio_client->IsFormatSupported(share_mode, (WAVEFORMATEX*) wave_format, &closest_match);
     if (closest_match)
     {
         CoTaskMemFree(closest_match);
@@ -705,8 +714,7 @@ static int do_sample_rate_test(struct RefreshDevices* rd, struct SoundIoDevicePr
     {
         if (*current_min != -1)
         {
-            if ((err = add_sample_rate(&dev->sample_rates, current_min, *last_success_rate)))
-                return err;
+            add_sample_rate(dev->sample_rates, *current_min, *last_success_rate);
             *current_min = -1;
         }
     }
@@ -718,18 +726,18 @@ static int do_sample_rate_test(struct RefreshDevices* rd, struct SoundIoDevicePr
     return 0;
 }
 
-static int detect_valid_sample_rates(struct RefreshDevices* rd, WAVEFORMATEXTENSIBLE* wave_format,
-                                     struct SoundIoDevicePrivate* dev, AUDCLNT_SHAREMODE share_mode)
+static int detect_valid_sample_rates(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEXTENSIBLE* wave_format,
+                                     std::shared_ptr<SoundIoDevicePrivate> dev, AUDCLNT_SHAREMODE share_mode)
 {
     int err;
 
     DWORD orig_sample_rate = wave_format->Format.nSamplesPerSec;
 
-    assert(dev->sample_rates.length == 0);
+    assert(dev->sample_rates.size() == 0);
 
     int current_min = -1;
     int last_success_rate = -1;
-    for (size_t i = 0; i < ARRAY_LENGTH(test_sample_rates); i += 1)
+    for (size_t i = 0; i < std::size(test_sample_rates); i += 1)
     {
         for (int offset = -1; offset <= 1; offset += 1)
         {
@@ -745,37 +753,27 @@ static int detect_valid_sample_rates(struct RefreshDevices* rd, WAVEFORMATEXTENS
 
     if (current_min != -1)
     {
-        if ((err = add_sample_rate(&dev->sample_rates, &current_min, last_success_rate)))
-        {
-            wave_format->Format.nSamplesPerSec = orig_sample_rate;
-            return err;
-        }
+        add_sample_rate(dev->sample_rates, current_min, last_success_rate);
     }
-
-    struct SoundIoDevice* device = &dev->pub;
-
-    device->sample_rate_count = dev->sample_rates.length;
-    device->sample_rates = dev->sample_rates.items;
 
     wave_format->Format.nSamplesPerSec = orig_sample_rate;
     return 0;
 }
 
 
-static int refresh_devices(struct SoundIoPrivate* si)
+static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 {
-    struct SoundIo* soundio = &si->pub;
+    std::shared_ptr<SoundIo> soundio = si;
     struct SoundIoWasapi* siw = &si->backend_data.wasapi;
-    struct RefreshDevices rd = {0};
+    std::shared_ptr<RefreshDevices> rd = std::make_shared<RefreshDevices>();
     int err;
     HRESULT hr;
 
-    if (FAILED(hr = IMMDeviceEnumerator_GetDefaultAudioEndpoint(siw->device_enumerator, eRender, eMultimedia,
-        &rd.default_render_device)))
+    if (FAILED(hr = siw->device_enumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, &rd->default_render_device)))
     {
         if (hr != E_NOTFOUND)
         {
-            deinit_refresh_devices(&rd);
+            deinit_refresh_devices(rd);
             if (hr == E_OUTOFMEMORY)
             {
                 return SoundIoErrorNoMem;
@@ -783,34 +781,34 @@ static int refresh_devices(struct SoundIoPrivate* si)
             return SoundIoErrorOpeningDevice;
         }
     }
-    if (rd.default_render_device)
+    if (rd->default_render_device)
     {
-        if (rd.lpwstr)
+        if (rd->lpwstr)
         {
-            CoTaskMemFree(rd.lpwstr);
-            rd.lpwstr = NULL;
+            CoTaskMemFree(rd->lpwstr);
+            rd->lpwstr = NULL;
         }
-        if (FAILED(hr = IMMDevice_GetId(rd.default_render_device, &rd.lpwstr)))
+
+        if (FAILED(hr = rd->default_render_device->GetId(&rd->lpwstr)))
         {
-            deinit_refresh_devices(&rd);
+            deinit_refresh_devices(rd);
             // MSDN states the IMMDevice_GetId can fail if the device is NULL, or if we're out of memory
             // We know the device point isn't NULL so we're necessarily out of memory
             return SoundIoErrorNoMem;
         }
-        if ((err = from_lpwstr(rd.lpwstr, &rd.default_render_id, &rd.default_render_id_len)))
+        if ((err = from_lpwstr(rd->lpwstr, &rd->default_render_id, &rd->default_render_id_len)))
         {
-            deinit_refresh_devices(&rd);
+            deinit_refresh_devices(rd);
             return err;
         }
     }
 
 
-    if (FAILED(hr = IMMDeviceEnumerator_GetDefaultAudioEndpoint(siw->device_enumerator, eCapture, eMultimedia,
-        &rd.default_capture_device)))
+    if (FAILED(hr = siw->device_enumerator->GetDefaultAudioEndpoint(eCapture, eMultimedia, &rd->default_capture_device)))
     {
         if (hr != E_NOTFOUND)
         {
-            deinit_refresh_devices(&rd);
+            deinit_refresh_devices(rd);
             if (hr == E_OUTOFMEMORY)
             {
                 return SoundIoErrorNoMem;
@@ -818,34 +816,33 @@ static int refresh_devices(struct SoundIoPrivate* si)
             return SoundIoErrorOpeningDevice;
         }
     }
-    if (rd.default_capture_device)
+    if (rd->default_capture_device)
     {
-        if (rd.lpwstr)
+        if (rd->lpwstr)
         {
-            CoTaskMemFree(rd.lpwstr);
-            rd.lpwstr = NULL;
+            CoTaskMemFree(rd->lpwstr);
+            rd->lpwstr = NULL;
         }
-        if (FAILED(hr = IMMDevice_GetId(rd.default_capture_device, &rd.lpwstr)))
+        if (FAILED(hr = rd->default_capture_device->GetId( &rd->lpwstr)))
         {
-            deinit_refresh_devices(&rd);
+            deinit_refresh_devices(rd);
             if (hr == E_OUTOFMEMORY)
             {
                 return SoundIoErrorNoMem;
             }
             return SoundIoErrorOpeningDevice;
         }
-        if ((err = from_lpwstr(rd.lpwstr, &rd.default_capture_id, &rd.default_capture_id_len)))
+        if ((err = from_lpwstr(rd->lpwstr, &rd->default_capture_id, &rd->default_capture_id_len)))
         {
-            deinit_refresh_devices(&rd);
+            deinit_refresh_devices(rd);
             return err;
         }
     }
 
 
-    if (FAILED(hr = IMMDeviceEnumerator_EnumAudioEndpoints(siw->device_enumerator, eAll, DEVICE_STATE_ACTIVE,
-        &rd.collection)))
+    if (FAILED(hr = siw->device_enumerator->EnumAudioEndpoints(eAll, DEVICE_STATE_ACTIVE, &rd->collection)))
     {
-        deinit_refresh_devices(&rd);
+        deinit_refresh_devices(rd);
         if (hr == E_OUTOFMEMORY)
         {
             return SoundIoErrorNoMem;
@@ -854,364 +851,356 @@ static int refresh_devices(struct SoundIoPrivate* si)
     }
 
     UINT unsigned_count;
-    if (FAILED(hr = IMMDeviceCollection_GetCount(rd.collection, &unsigned_count)))
+    if (FAILED(hr = rd->collection->GetCount(&unsigned_count)))
     {
         // In theory this shouldn't happen since the only documented failure case is that
         // rd.collection is NULL, but then EnumAudioEndpoints should have failed.
-        deinit_refresh_devices(&rd);
+        deinit_refresh_devices(rd);
         return SoundIoErrorOpeningDevice;
     }
 
     if (unsigned_count > (UINT) INT_MAX)
     {
-        deinit_refresh_devices(&rd);
+        deinit_refresh_devices(rd);
         return SoundIoErrorIncompatibleDevice;
     }
 
     int device_count = unsigned_count;
 
-    if (!(rd.devices_info = ALLOCATE(struct SoundIoDevicesInfo, 1)))
+    if (!(rd->devices_info = std::make_shared<SoundIoDevicesInfo>()))
     {
-        deinit_refresh_devices(&rd);
+        deinit_refresh_devices(rd);
         return SoundIoErrorNoMem;
     }
-    rd.devices_info->default_input_index = -1;
-    rd.devices_info->default_output_index = -1;
+    rd->devices_info->default_input_index = -1;
+    rd->devices_info->default_output_index = -1;
 
     for (int device_i = 0; device_i < device_count; device_i += 1)
     {
-        if (rd.mm_device)
+        if (rd->mm_device)
         {
-            IMMDevice_Release(rd.mm_device);
-            rd.mm_device = NULL;
+            rd->mm_device->Release();
+            rd->mm_device = NULL;
         }
-        if (FAILED(hr = IMMDeviceCollection_Item(rd.collection, device_i, &rd.mm_device)))
+
+        if (FAILED(hr = rd->collection->Item(device_i, &rd->mm_device)))
         {
             continue;
         }
-        if (rd.lpwstr)
+        if (rd->lpwstr)
         {
-            CoTaskMemFree(rd.lpwstr);
-            rd.lpwstr = NULL;
+            CoTaskMemFree(rd->lpwstr);
+            rd->lpwstr = NULL;
         }
-        if (FAILED(hr = IMMDevice_GetId(rd.mm_device, &rd.lpwstr)))
+        if (FAILED(hr = rd->mm_device->GetId(&rd->lpwstr)))
         {
             continue;
         }
 
 
-        struct SoundIoDevicePrivate* dev_shared = ALLOCATE(struct SoundIoDevicePrivate, 1);
+        std::shared_ptr<SoundIoDevicePrivate> dev_shared = std::make_shared<SoundIoDevicePrivate>();
         if (!dev_shared)
         {
-            deinit_refresh_devices(&rd);
+            deinit_refresh_devices(rd);
             return SoundIoErrorNoMem;
         }
         struct SoundIoDeviceWasapi* dev_w_shared = &dev_shared->backend_data.wasapi;
-        dev_shared->destruct = destruct_device;
-        assert(!rd.device_shared);
-        rd.device_shared = &dev_shared->pub;
-        rd.device_shared->ref_count = 1;
-        rd.device_shared->soundio = soundio;
-        rd.device_shared->is_raw = false;
-        rd.device_shared->software_latency_max = 2.0;
+        assert(!rd->device_shared);
+        rd->device_shared = dev_shared;
+        rd->device_shared->ref_count = 1;
+        rd->device_shared->soundio = soundio;
+        rd->device_shared->is_raw = false;
+        rd->device_shared->software_latency_max = 2.0;
 
-        struct SoundIoDevicePrivate* dev_raw = ALLOCATE(struct SoundIoDevicePrivate, 1);
+        std::shared_ptr<SoundIoDevicePrivate> dev_raw = std::make_shared<SoundIoDevicePrivate>();
         if (!dev_raw)
         {
-            deinit_refresh_devices(&rd);
+            deinit_refresh_devices(rd);
             return SoundIoErrorNoMem;
         }
-        struct SoundIoDeviceWasapi* dev_w_raw = &dev_raw->backend_data.wasapi;
-        dev_raw->destruct = destruct_device;
-        assert(!rd.device_raw);
-        rd.device_raw = &dev_raw->pub;
-        rd.device_raw->ref_count = 1;
-        rd.device_raw->soundio = soundio;
-        rd.device_raw->is_raw = true;
-        rd.device_raw->software_latency_max = 0.5;
+        SoundIoDeviceWasapi* dev_w_raw = &dev_raw->backend_data.wasapi;
+        assert(!rd->device_raw);
+        rd->device_raw = dev_raw;
+        rd->device_raw->ref_count = 1;
+        rd->device_raw->soundio = soundio;
+        rd->device_raw->is_raw = true;
+        rd->device_raw->software_latency_max = 0.5;
 
         int device_id_len;
-        if ((err = from_lpwstr(rd.lpwstr, &rd.device_shared->id, &device_id_len)))
+        if ((err = from_lpwstr(rd->lpwstr, &rd->device_shared->id, &device_id_len)))
         {
-            deinit_refresh_devices(&rd);
+            deinit_refresh_devices(rd);
             return err;
         }
 
-        rd.device_raw->id = soundio_str_dupe(rd.device_shared->id, device_id_len);
-        if (!rd.device_raw->id)
+        rd->device_raw->id = soundio_str_dupe(rd->device_shared->id, device_id_len);
+        if (!rd->device_raw->id)
         {
-            deinit_refresh_devices(&rd);
+            deinit_refresh_devices(rd);
             return SoundIoErrorNoMem;
         }
 
-        if (rd.endpoint)
+        if (rd->endpoint)
         {
-            IMMEndpoint_Release(rd.endpoint);
-            rd.endpoint = NULL;
+            rd->endpoint->Release();
+            rd->endpoint = NULL;
         }
-        if (FAILED(hr = IMMDevice_QueryInterface(rd.mm_device, IID_IMMENDPOINT, (void **) &rd.endpoint)))
+
+        if (FAILED(hr = rd->mm_device->QueryInterface(IID_IMMENDPOINT, reinterpret_cast<void**>(&rd->endpoint))))
         {
-            rd.device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_raw->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_shared = NULL;
-            rd.device_raw = NULL;
+            rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_raw->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_shared = NULL;
+            rd->device_raw = NULL;
             continue;
         }
 
         EDataFlow data_flow;
-        if (FAILED(hr = IMMEndpoint_GetDataFlow(rd.endpoint, &data_flow)))
+        if (FAILED(hr = rd->endpoint->GetDataFlow( &data_flow)))
         {
-            rd.device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_raw->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_shared = NULL;
-            rd.device_raw = NULL;
+            rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_raw->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_shared = NULL;
+            rd->device_raw = NULL;
             continue;
         }
 
-        rd.device_shared->aim = data_flow_to_aim(data_flow);
-        rd.device_raw->aim = rd.device_shared->aim;
+        rd->device_shared->aim = data_flow_to_aim(data_flow);
+        rd->device_raw->aim = rd->device_shared->aim;
 
-        struct SoundIoListDevicePtr* device_list;
-        if (rd.device_shared->aim == SoundIoDeviceAimOutput)
+        std::vector<std::shared_ptr<SoundIoDevice> >* device_list;
+        if (rd->device_shared->aim == SoundIoDeviceAimOutput)
         {
-            device_list = &rd.devices_info->output_devices;
-            if (soundio_streql(rd.device_shared->id, device_id_len, rd.default_render_id, rd.default_render_id_len))
+            device_list = &rd->devices_info->output_devices;
+            if (soundio_streql(rd->device_shared->id, device_id_len, rd->default_render_id, rd->default_render_id_len))
             {
-                rd.devices_info->default_output_index = device_list->length;
+                rd->devices_info->default_output_index = device_list->size();
             }
         }
         else
         {
-            assert(rd.device_shared->aim == SoundIoDeviceAimInput);
-            device_list = &rd.devices_info->input_devices;
-            if (soundio_streql(rd.device_shared->id, device_id_len, rd.default_capture_id, rd.default_capture_id_len))
+            assert(rd->device_shared->aim == SoundIoDeviceAimInput);
+            device_list = &rd->devices_info->input_devices;
+            if (soundio_streql(rd->device_shared->id, device_id_len, rd->default_capture_id, rd->default_capture_id_len))
             {
-                rd.devices_info->default_input_index = device_list->length;
+                rd->devices_info->default_input_index = device_list->size();
             }
         }
 
-        if ((err = SoundIoListDevicePtr_append(device_list, rd.device_shared)))
-        {
-            deinit_refresh_devices(&rd);
-            return err;
-        }
-        if ((err = SoundIoListDevicePtr_append(device_list, rd.device_raw)))
-        {
-            deinit_refresh_devices(&rd);
-            return err;
-        }
+        device_list->push_back(rd->device_shared);
+        device_list->push_back(rd->device_raw);
 
-        if (rd.audio_client)
+        if (rd->audio_client)
         {
-            IUnknown_Release(rd.audio_client);
-            rd.audio_client = NULL;
+            rd->audio_client->Release();
+            rd->audio_client = NULL;
         }
-        if (FAILED(hr = IMMDevice_Activate(rd.mm_device, IID_IAUDIOCLIENT, CLSCTX_ALL, NULL,
-            (void **) &rd.audio_client)))
+        if (FAILED(hr = rd->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, (void **) &rd->audio_client)))
         {
-            rd.device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_raw->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_shared = NULL;
-            rd.device_raw = NULL;
+            rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_raw->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_shared = NULL;
+            rd->device_raw = NULL;
             continue;
         }
 
         REFERENCE_TIME default_device_period;
         REFERENCE_TIME min_device_period;
-        if (FAILED(hr = IAudioClient_GetDevicePeriod(rd.audio_client, &default_device_period, &min_device_period)))
+        if (FAILED(hr = rd->audio_client->GetDevicePeriod(&default_device_period, &min_device_period)))
         {
-            rd.device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_raw->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_shared = NULL;
-            rd.device_raw = NULL;
+            rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_raw->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_shared = NULL;
+            rd->device_raw = NULL;
             continue;
         }
         dev_w_shared->period_duration = from_reference_time(default_device_period);
-        rd.device_shared->software_latency_current = dev_w_shared->period_duration;
+        rd->device_shared->software_latency_current = dev_w_shared->period_duration;
 
         dev_w_raw->period_duration = from_reference_time(min_device_period);
-        rd.device_raw->software_latency_min = dev_w_raw->period_duration * 2;
+        rd->device_raw->software_latency_min = dev_w_raw->period_duration * 2;
 
-        if (rd.prop_store)
+        if (rd->prop_store)
         {
-            IPropertyStore_Release(rd.prop_store);
-            rd.prop_store = NULL;
+            rd->prop_store->Release();
+            rd->prop_store = NULL;
         }
-        if (FAILED(hr = IMMDevice_OpenPropertyStore(rd.mm_device, STGM_READ, &rd.prop_store)))
+        if (FAILED(hr = rd->mm_device->OpenPropertyStore(STGM_READ, &rd->prop_store)))
         {
-            rd.device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_raw->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_shared = NULL;
-            rd.device_raw = NULL;
+            rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_raw->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_shared = NULL;
+            rd->device_raw = NULL;
             continue;
         }
 
-        if (rd.prop_variant_value_inited)
+        if (rd->prop_variant_value_inited)
         {
-            PropVariantClear(&rd.prop_variant_value);
-            rd.prop_variant_value_inited = false;
+            PropVariantClear(&rd->prop_variant_value);
+            rd->prop_variant_value_inited = false;
         }
-        PropVariantInit(&rd.prop_variant_value);
-        rd.prop_variant_value_inited = true;
-        if (FAILED(hr = IPropertyStore_GetValue(rd.prop_store, PKEY_DEVICE_FRIENDLYNAME, &rd.prop_variant_value)))
+        PropVariantInit(&rd->prop_variant_value);
+        rd->prop_variant_value_inited = true;
+        if (FAILED(hr = rd->prop_store->GetValue(PKEY_DEVICE_FRIENDLYNAME, &rd->prop_variant_value)))
         {
-            rd.device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_raw->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_shared = NULL;
-            rd.device_raw = NULL;
+            rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_raw->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_shared = NULL;
+            rd->device_raw = NULL;
             continue;
         }
-        if (!rd.prop_variant_value.pwszVal)
+        if (!rd->prop_variant_value.pwszVal)
         {
-            rd.device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_raw->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_shared = NULL;
-            rd.device_raw = NULL;
+            rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_raw->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_shared = NULL;
+            rd->device_raw = NULL;
             continue;
         }
         int device_name_len;
-        if ((err = from_lpwstr(rd.prop_variant_value.pwszVal, &rd.device_shared->name, &device_name_len)))
+        if ((err = from_lpwstr(rd->prop_variant_value.pwszVal, &rd->device_shared->name, &device_name_len)))
         {
-            rd.device_shared->probe_error = err;
-            rd.device_raw->probe_error = err;
-            rd.device_shared = NULL;
-            rd.device_raw = NULL;
+            rd->device_shared->probe_error = err;
+            rd->device_raw->probe_error = err;
+            rd->device_shared = NULL;
+            rd->device_raw = NULL;
             continue;
         }
 
-        rd.device_raw->name = soundio_str_dupe(rd.device_shared->name, device_name_len);
-        if (!rd.device_raw->name)
+        rd->device_raw->name = soundio_str_dupe(rd->device_shared->name, device_name_len);
+        if (!rd->device_raw->name)
         {
-            deinit_refresh_devices(&rd);
+            deinit_refresh_devices(rd);
             return SoundIoErrorNoMem;
         }
 
         // Get the format that WASAPI opens the device with for shared streams.
         // This is guaranteed to work, so we use this to modulate the sample
         // rate while holding the format constant and vice versa.
-        if (rd.prop_variant_value_inited)
+        if (rd->prop_variant_value_inited)
         {
-            PropVariantClear(&rd.prop_variant_value);
-            rd.prop_variant_value_inited = false;
+            PropVariantClear(&rd->prop_variant_value);
+            rd->prop_variant_value_inited = false;
         }
-        PropVariantInit(&rd.prop_variant_value);
-        rd.prop_variant_value_inited = true;
-        if (FAILED(hr = IPropertyStore_GetValue(rd.prop_store, PKEY_AUDIOENGINE_DEVICEFORMAT, &rd.prop_variant_value)))
+        PropVariantInit(&rd->prop_variant_value);
+        rd->prop_variant_value_inited = true;
+        if (FAILED(hr = rd->prop_store->GetValue(PKEY_AUDIOENGINE_DEVICEFORMAT, &rd->prop_variant_value)))
         {
-            rd.device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_raw->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_shared = NULL;
-            rd.device_raw = NULL;
+            rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_raw->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_shared = NULL;
+            rd->device_raw = NULL;
             continue;
         }
-        WAVEFORMATEXTENSIBLE* valid_wave_format = (WAVEFORMATEXTENSIBLE*) rd.prop_variant_value.blob.pBlobData;
+        WAVEFORMATEXTENSIBLE* valid_wave_format = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(rd->prop_variant_value.blob.pBlobData);
         if (valid_wave_format->Format.wFormatTag != WAVE_FORMAT_EXTENSIBLE)
         {
-            rd.device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_raw->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_shared = NULL;
-            rd.device_raw = NULL;
+            rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_raw->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_shared = NULL;
+            rd->device_raw = NULL;
             continue;
         }
-        if ((err = detect_valid_sample_rates(&rd, valid_wave_format, dev_raw, AUDCLNT_SHAREMODE_EXCLUSIVE)))
+        if ((err = detect_valid_sample_rates(rd, valid_wave_format, dev_raw, AUDCLNT_SHAREMODE_EXCLUSIVE)))
         {
-            rd.device_raw->probe_error = err;
-            rd.device_raw = NULL;
+            rd->device_raw->probe_error = err;
+            rd->device_raw = NULL;
         }
-        if (rd.device_raw && (err = detect_valid_formats(&rd, valid_wave_format, dev_raw, AUDCLNT_SHAREMODE_EXCLUSIVE)))
+        if (rd->device_raw && (err = detect_valid_formats(rd, valid_wave_format, dev_raw, AUDCLNT_SHAREMODE_EXCLUSIVE)))
         {
-            rd.device_raw->probe_error = err;
-            rd.device_raw = NULL;
+            rd->device_raw->probe_error = err;
+            rd->device_raw = NULL;
         }
-        if (rd.device_raw && (err = detect_valid_layouts(&rd, valid_wave_format, dev_raw, AUDCLNT_SHAREMODE_EXCLUSIVE)))
+        if (rd->device_raw && (err = detect_valid_layouts(rd, valid_wave_format, dev_raw, AUDCLNT_SHAREMODE_EXCLUSIVE)))
         {
-            rd.device_raw->probe_error = err;
-            rd.device_raw = NULL;
+            rd->device_raw->probe_error = err;
+            rd->device_raw = NULL;
         }
 
-        if (rd.wave_format)
+        if (rd->wave_format)
         {
-            CoTaskMemFree(rd.wave_format);
-            rd.wave_format = NULL;
+            CoTaskMemFree(rd->wave_format);
+            rd->wave_format = NULL;
         }
-        if (FAILED(hr = IAudioClient_GetMixFormat(rd.audio_client, (WAVEFORMATEX **) &rd.wave_format)))
+        if (FAILED(hr = rd->audio_client->GetMixFormat(reinterpret_cast<WAVEFORMATEX**>(&rd->wave_format))))
         {
             // According to MSDN GetMixFormat only applies to shared-mode devices.
-            rd.device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_shared = NULL;
+            rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_shared = NULL;
         }
-        else if (rd.wave_format && (rd.wave_format->Format.wFormatTag != WAVE_FORMAT_EXTENSIBLE))
+        else if (rd->wave_format && (rd->wave_format->Format.wFormatTag != WAVE_FORMAT_EXTENSIBLE))
         {
-            rd.device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd.device_shared = NULL;
+            rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
+            rd->device_shared = NULL;
         }
 
-        if (rd.device_shared)
+        if (rd->device_shared)
         {
-            rd.device_shared->sample_rate_current = rd.wave_format->Format.nSamplesPerSec;
-            rd.device_shared->current_format = from_wave_format_format(rd.wave_format);
+            rd->device_shared->sample_rate_current = rd->wave_format->Format.nSamplesPerSec;
+            rd->device_shared->current_format = from_wave_format_format(rd->wave_format);
 
-            if (rd.device_shared->aim == SoundIoDeviceAimOutput)
+            if (rd->device_shared->aim == SoundIoDeviceAimOutput)
             {
                 // For output streams in shared mode,
                 // WASAPI performs resampling, so any value is valid.
                 // Let's pick some reasonable min and max values.
-                rd.device_shared->sample_rate_count = 1;
-                rd.device_shared->sample_rates = &dev_shared->prealloc_sample_rate_range;
-                rd.device_shared->sample_rates[0].min =
-                        soundio_int_min(SOUNDIO_MIN_SAMPLE_RATE, rd.device_shared->sample_rate_current);
-                rd.device_shared->sample_rates[0].max =
-                        soundio_int_max(SOUNDIO_MAX_SAMPLE_RATE, rd.device_shared->sample_rate_current);
+                // rd->device_shared->sample_rate_count = 1;
+                SoundIoSampleRateRange range{};
+                range.min = soundio_int_min(SOUNDIO_MIN_SAMPLE_RATE, rd->device_shared->sample_rate_current);
+                range.max = soundio_int_max(SOUNDIO_MAX_SAMPLE_RATE, rd->device_shared->sample_rate_current);
+                rd->device_shared->sample_rates.push_back(range);
             }
             else
             {
                 // Shared mode input stream: mix format is all we can do.
-                rd.device_shared->sample_rate_count = 1;
-                rd.device_shared->sample_rates = &dev_shared->prealloc_sample_rate_range;
-                rd.device_shared->sample_rates[0].min = rd.device_shared->sample_rate_current;
-                rd.device_shared->sample_rates[0].max = rd.device_shared->sample_rate_current;
+                // rd->device_shared->sample_rate_count = 1;
+
+                SoundIoSampleRateRange range{};
+                range.min = rd->device_shared->sample_rate_current;
+                range.max = rd->device_shared->sample_rate_current;
+                rd->device_shared->sample_rates.push_back(range);
             }
 
-            if ((err = detect_valid_formats(&rd, rd.wave_format, dev_shared, AUDCLNT_SHAREMODE_SHARED)))
+            if ((err = detect_valid_formats(rd, rd->wave_format, dev_shared, AUDCLNT_SHAREMODE_SHARED)))
             {
-                rd.device_shared->probe_error = err;
-                rd.device_shared = NULL;
+                rd->device_shared->probe_error = err;
+                rd->device_shared = NULL;
             }
             else
             {
-                from_wave_format_layout(rd.wave_format, &rd.device_shared->current_layout);
-                rd.device_shared->layout_count = 1;
-                rd.device_shared->layouts = &rd.device_shared->current_layout;
+                from_wave_format_layout(rd->wave_format, &rd->device_shared->current_layout);
+                rd->device_shared->layout_count = 1;
+                rd->device_shared->layouts = &rd->device_shared->current_layout;
             }
         }
 
-        IMMDevice_AddRef(rd.mm_device);
-        dev_w_shared->mm_device = rd.mm_device;
-        dev_w_raw->mm_device = rd.mm_device;
-        rd.mm_device = NULL;
+        rd->mm_device->AddRef();
+        dev_w_shared->mm_device = rd->mm_device;
+        dev_w_raw->mm_device = rd->mm_device;
+        rd->mm_device = NULL;
 
-        rd.device_shared = NULL;
-        rd.device_raw = NULL;
+        rd->device_shared = NULL;
+        rd->device_raw = NULL;
     }
 
     soundio_os_mutex_lock(siw->mutex);
-    soundio_destroy_devices_info(siw->ready_devices_info);
-    siw->ready_devices_info = rd.devices_info;
+    // soundio_destroy_devices_info(siw->ready_devices_info);
+    siw->ready_devices_info = rd->devices_info;
     siw->have_devices_flag = true;
     soundio_os_cond_signal(siw->cond, siw->mutex);
     soundio->on_events_signal(soundio);
     soundio_os_mutex_unlock(siw->mutex);
 
-    rd.devices_info = NULL;
-    deinit_refresh_devices(&rd);
+    rd->devices_info = NULL;
+    deinit_refresh_devices(rd);
 
     return 0;
 }
 
 
-static void shutdown_backend(struct SoundIoPrivate* si, int err)
+static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
 {
-    struct SoundIo* soundio = &si->pub;
+    std::shared_ptr<SoundIo> soundio = si;
     struct SoundIoWasapi* siw = &si->backend_data.wasapi;
     soundio_os_mutex_lock(siw->mutex);
     siw->shutdown_err = err;
@@ -1220,61 +1209,15 @@ static void shutdown_backend(struct SoundIoPrivate* si, int err)
     soundio_os_mutex_unlock(siw->mutex);
 }
 
-static void device_thread_run(void* arg)
+
+static void my_flush_events(std::shared_ptr<SoundIoPrivate> si, bool wait)
 {
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) arg;
-    struct SoundIoWasapi* siw = &si->backend_data.wasapi;
-    int err;
-
-    HRESULT hr = CoCreateInstance(CLSID_MMDEVICEENUMERATOR, NULL, CLSCTX_ALL, IID_IMMDEVICEENUMERATOR,
-                                  (void**) &siw->device_enumerator);
-    if (FAILED(hr))
-    {
-        shutdown_backend(si, SoundIoErrorSystemResources);
-        return;
-    }
-
-    if (FAILED(hr = IMMDeviceEnumerator_RegisterEndpointNotificationCallback(siw->device_enumerator, siw->device_events)))
-    {
-        shutdown_backend(si, SoundIoErrorSystemResources);
-        return;
-    }
-
-    soundio_os_mutex_lock(siw->scan_devices_mutex);
-    for (;;)
-    {
-        if (siw->abort_flag)
-            break;
-        if (siw->device_scan_queued)
-        {
-            siw->device_scan_queued = false;
-            soundio_os_mutex_unlock(siw->scan_devices_mutex);
-            err = refresh_devices(si);
-            if (err)
-            {
-                shutdown_backend(si, err);
-                return;
-            }
-            soundio_os_mutex_lock(siw->scan_devices_mutex);
-            continue;
-        }
-        soundio_os_cond_wait(siw->scan_devices_cond, siw->scan_devices_mutex);
-    }
-    soundio_os_mutex_unlock(siw->scan_devices_mutex);
-
-    IMMDeviceEnumerator_UnregisterEndpointNotificationCallback(siw->device_enumerator, siw->device_events);
-    IMMDeviceEnumerator_Release(siw->device_enumerator);
-    siw->device_enumerator = NULL;
-}
-
-static void my_flush_events(struct SoundIoPrivate* si, bool wait)
-{
-    struct SoundIo* soundio = &si->pub;
+    std::shared_ptr<SoundIo> soundio = si;
     struct SoundIoWasapi* siw = &si->backend_data.wasapi;
 
     bool change = false;
     bool cb_shutdown = false;
-    struct SoundIoDevicesInfo* old_devices_info = NULL;
+    std::shared_ptr<SoundIoDevicesInfo> old_devices_info = NULL;
 
     soundio_os_mutex_lock(siw->mutex);
 
@@ -1305,27 +1248,75 @@ static void my_flush_events(struct SoundIoPrivate* si, bool wait)
     else if (change)
         soundio->on_devices_change(soundio);
 
-    soundio_destroy_devices_info(old_devices_info);
+    // soundio_destroy_devices_info(old_devices_info);
 }
 
-static void flush_events_wasapi(struct SoundIoPrivate* si)
+static void flush_events_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     my_flush_events(si, false);
 }
 
-static void wait_events_wasapi(struct SoundIoPrivate* si)
+static void wait_events_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
-    my_flush_events(si, false);
     my_flush_events(si, true);
 }
 
-static void wakeup_wasapi(struct SoundIoPrivate* si)
+
+static void device_thread_run(std::shared_ptr<void> arg)
+{
+    std::shared_ptr<SoundIoPrivate> si = std::static_pointer_cast<SoundIoPrivate>(arg);
+    struct SoundIoWasapi* siw = &si->backend_data.wasapi;
+    int err;
+
+    HRESULT hr = CoCreateInstance(CLSID_MMDEVICEENUMERATOR, NULL, CLSCTX_ALL, IID_IMMDEVICEENUMERATOR, reinterpret_cast<void**>(&siw->device_enumerator));
+    if (FAILED(hr))
+    {
+        shutdown_backend(si, SoundIoErrorSystemResources);
+        return;
+    }
+
+    if (FAILED(hr = siw->device_enumerator->RegisterEndpointNotificationCallback(siw->device_events.get())))
+    {
+        shutdown_backend(si, SoundIoErrorSystemResources);
+        return;
+    }
+
+    soundio_os_mutex_lock(siw->scan_devices_mutex);
+    for (;;)
+    {
+        if (siw->abort_flag)
+        {
+            break;
+        }
+        if (siw->device_scan_queued)
+        {
+            siw->device_scan_queued = false;
+            soundio_os_mutex_unlock(siw->scan_devices_mutex);
+            err = refresh_devices(si);
+            if (err)
+            {
+                shutdown_backend(si, err);
+                return;
+            }
+            soundio_os_mutex_lock(siw->scan_devices_mutex);
+            continue;
+        }
+        soundio_os_cond_wait(siw->scan_devices_cond, siw->scan_devices_mutex);
+    }
+    soundio_os_mutex_unlock(siw->scan_devices_mutex);
+
+    siw->device_enumerator->UnregisterEndpointNotificationCallback(siw->device_events.get());
+    siw->device_enumerator->Release();
+    siw->device_enumerator = NULL;
+}
+
+static void wakeup_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     struct SoundIoWasapi* siw = &si->backend_data.wasapi;
     soundio_os_cond_signal(siw->cond, siw->mutex);
 }
 
-static void force_device_scan_wasapi(struct SoundIoPrivate* si)
+static void force_device_scan_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     struct SoundIoWasapi* siw = &si->backend_data.wasapi;
     soundio_os_mutex_lock(siw->scan_devices_mutex);
@@ -1334,25 +1325,43 @@ static void force_device_scan_wasapi(struct SoundIoPrivate* si)
     soundio_os_mutex_unlock(siw->scan_devices_mutex);
 }
 
-static void outstream_thread_deinit(struct SoundIoPrivate* si, struct SoundIoOutStreamPrivate* os)
+static void outstream_thread_deinit(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
 
     if (osw->audio_volume_control)
-        IUnknown_Release(osw->audio_volume_control);
+    {
+        osw->audio_volume_control->Release();
+        osw->audio_volume_control = nullptr;
+    }
     if (osw->audio_render_client)
-        IUnknown_Release(osw->audio_render_client);
+    {
+        osw->audio_render_client->Release();
+        osw->audio_render_client = nullptr;
+    }
     if (osw->audio_session_control)
-        IUnknown_Release(osw->audio_session_control);
+    {
+        osw->audio_session_control->Release();
+        osw->audio_session_control = nullptr;
+    }
     if (osw->audio_clock_adjustment)
-        IUnknown_Release(osw->audio_clock_adjustment);
+    {
+        osw->audio_clock_adjustment->Release();
+        osw->audio_clock_adjustment = nullptr;
+    }
     if (osw->audio_clock)
-        IUnknown_Release(osw->audio_clock);
+    {
+        osw->audio_clock->Release();
+        osw->audio_clock = nullptr;
+    }
     if (osw->audio_client)
-        IUnknown_Release(osw->audio_client);
+    {
+        osw->audio_client->Release();
+        osw->audio_client = nullptr;
+    }
 }
 
-static void outstream_destroy_wasapi(struct SoundIoPrivate* si, struct SoundIoOutStreamPrivate* os)
+static void outstream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
 
@@ -1369,7 +1378,7 @@ static void outstream_destroy_wasapi(struct SoundIoPrivate* si, struct SoundIoOu
         soundio_os_cond_signal(osw->start_cond, osw->mutex);
         soundio_os_mutex_unlock(osw->mutex);
 
-        soundio_os_thread_destroy(osw->thread);
+        // soundio_os_thread_destroy(osw->thread);
 
         osw->thread = NULL;
     }
@@ -1392,29 +1401,42 @@ static void outstream_destroy_wasapi(struct SoundIoPrivate* si, struct SoundIoOu
     soundio_os_mutex_destroy(osw->mutex);
     osw->mutex = NULL;
 }
+#ifdef DEBUG
+static std::wstring GetDeviceName(IMMDevice* device)
+{
+    IPropertyStore* pProps = nullptr;
+    device->OpenPropertyStore(STGM_READ, &pProps);
 
-static IAudioClient3* open_audio_client3(struct SoundIoOutStreamPrivate* os, WAVEFORMATEXTENSIBLE* wave_format)
+    PROPVARIANT varName;
+    PropVariantInit(&varName);
+
+    pProps->GetValue(PKEY_Device_FriendlyName, &varName);
+    return varName.pwszVal;
+}
+#endif
+
+static IAudioClient3* open_audio_client3(std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format)
 {
     IAudioClient3* audio_client3 = NULL;
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
-    struct SoundIoOutStream* outstream = &os->pub;
-    struct SoundIoDevice* device = outstream->device;
-    struct SoundIoDevicePrivate* dev = (struct SoundIoDevicePrivate*) device;
+    std::shared_ptr<SoundIoOutStream> outstream = os;
+    std::shared_ptr<SoundIoDevice> device = outstream->device;
+    std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(device);
     struct SoundIoDeviceWasapi* dw = &dev->backend_data.wasapi;
+
     WAVEFORMATEXTENSIBLE* mix_format;
     HRESULT hr;
-    if (!osw->is_raw &&
-        FAILED(hr = IMMDevice_Activate(dw->mm_device, IID_IAUDIOCLIENT3, CLSCTX_ALL, NULL, (void **) &audio_client3)))
+    if (!osw->is_raw && FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT3, CLSCTX_ALL, NULL, reinterpret_cast<void**>(&audio_client3))))
     {
-        IUnknown_Release(audio_client3);
+        audio_client3->Release();
         return NULL;
     }
 
     if (!osw->is_raw)
     {
-        if (FAILED(hr = IAudioClient_GetMixFormat(audio_client3, (WAVEFORMATEX **) &mix_format)))
+        if (FAILED(hr = audio_client3->GetMixFormat((WAVEFORMATEX **) &mix_format)))
         {
-            IUnknown_Release(audio_client3);
+            audio_client3->Release();
             return NULL;
         }
 
@@ -1423,7 +1445,7 @@ static IAudioClient3* open_audio_client3(struct SoundIoOutStreamPrivate* os, WAV
         {
             // we can't use resampling with this new interface, fallback to old method
             CoTaskMemFree(mix_format);
-            IUnknown_Release(audio_client3);
+            audio_client3->Release();
             return NULL;
         }
 
@@ -1434,28 +1456,28 @@ static IAudioClient3* open_audio_client3(struct SoundIoOutStreamPrivate* os, WAV
     return audio_client3;
 }
 
-static IAudioClient* open_audio_client(struct SoundIoOutStreamPrivate* os, WAVEFORMATEXTENSIBLE* wave_format)
+static IAudioClient* open_audio_client(std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format)
 {
     IAudioClient* audio_client = NULL;
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
-    struct SoundIoOutStream* outstream = &os->pub;
-    struct SoundIoDevice* device = outstream->device;
-    struct SoundIoDevicePrivate* dev = (struct SoundIoDevicePrivate*) device;
+    std::shared_ptr<SoundIoOutStream> outstream = os;
+    std::shared_ptr<SoundIoDevice> device = outstream->device;
+    std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(device);
     struct SoundIoDeviceWasapi* dw = &dev->backend_data.wasapi;
     HRESULT hr;
 
     WAVEFORMATEXTENSIBLE* mix_format;
 
-    if (FAILED(hr = IMMDevice_Activate(dw->mm_device, IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, (void **) &audio_client)))
+    if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, reinterpret_cast<void**>(&audio_client))))
     {
         return NULL;
     }
 
     if (!osw->is_raw)
     {
-        if (FAILED(hr = IAudioClient_GetMixFormat(audio_client, (WAVEFORMATEX **) &mix_format)))
+        if (FAILED(hr = audio_client->GetMixFormat(reinterpret_cast<WAVEFORMATEX**>(&mix_format))))
         {
-            IUnknown_Release(audio_client);
+            audio_client->Release();
             return NULL;
         }
         // wave_format->Format.nSamplesPerSec = mix_format->Format.nSamplesPerSec;
@@ -1476,25 +1498,25 @@ static void deinit_mix_format(WAVEFORMATEXTENSIBLE** mix_format)
     }
 }
 
-static void deinit_client3_and_callback(IAudioClient3** client3, IAudioClient** client, struct SoundIoOutStreamPrivate* os, WAVEFORMATEXTENSIBLE* wave_format)
+static void deinit_client3_and_callback(IAudioClient3** client3, IAudioClient** client, std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format)
 {
     if (*client3 != NULL)
     {
-        IUnknown_Release(*client3);
+        (*client3)->Release();
         *client3 = NULL;
     }
     *client = open_audio_client(os, wave_format);
 }
 
 
-static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3, struct SoundIoOutStreamPrivate* os,
+static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3, std::shared_ptr<SoundIoOutStreamPrivate> os,
                       WAVEFORMATEXTENSIBLE* wave_format, DWORD flags, AUDCLNT_SHAREMODE share_mode,
                       REFERENCE_TIME buffer_duration, REFERENCE_TIME periodicity)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
-    struct SoundIoOutStream* outstream = &os->pub;
-    struct SoundIoDevice* device = outstream->device;
-    struct SoundIoDevicePrivate* dev = reinterpret_cast<struct SoundIoDevicePrivate*>(device);
+    std::shared_ptr<SoundIoOutStream> outstream = os;
+    std::shared_ptr<SoundIoDevice> device = outstream->device;
+    std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(device);
     struct SoundIoDeviceWasapi* dw = &dev->backend_data.wasapi;
     HRESULT hr;
 
@@ -1507,7 +1529,7 @@ static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3
         }
 
         WAVEFORMATEXTENSIBLE* mix_format;
-        if (FAILED(hr = IAudioClient_GetMixFormat(*audio_client3, (WAVEFORMATEX **) &mix_format)))
+        if (FAILED(hr = (*audio_client3)->GetMixFormat(reinterpret_cast<WAVEFORMATEX**>(&mix_format))))
         {
             deinit_mix_format(&mix_format);
             deinit_client3_and_callback(audio_client3, audio_client, os, wave_format);
@@ -1519,7 +1541,7 @@ static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3
         UINT32 min_period;
         UINT32 max_period;
 
-        if (FAILED(hr = IAudioClient3_GetSharedModeEnginePeriod(*audio_client3, &mix_format->Format, &default_period, &fundamental_period, &min_period, &max_period)))
+        if (FAILED(hr = (*audio_client3)->GetSharedModeEnginePeriod(&mix_format->Format, &default_period, &fundamental_period, &min_period, &max_period)))
         {
             deinit_mix_format(&mix_format);
         }
@@ -1531,7 +1553,7 @@ static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3
             periodicity_in_frames = soundio_uint_clamp(min_period, periodicity_in_frames, max_period);
         }
 
-        if (!osw->need_resample && SUCCEEDED(hr = IAudioClient3_InitializeSharedAudioStream(*audio_client3, flags, periodicity_in_frames, (WAVEFORMATEX *) wave_format, NULL)))
+        if (!osw->need_resample && SUCCEEDED(hr = (*audio_client3)->InitializeSharedAudioStream(flags, periodicity_in_frames, reinterpret_cast<WAVEFORMATEX*>(wave_format), NULL)))
         {
             deinit_mix_format(&mix_format);
             return SoundIoErrorNone;
@@ -1539,33 +1561,33 @@ static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3
     }
 
 NEXT:
-    if (FAILED(hr = IAudioClient_Initialize(*audio_client, share_mode, flags, buffer_duration, periodicity, (WAVEFORMATEX *) wave_format, NULL)))
+    if (FAILED(hr = (*audio_client)->Initialize(share_mode, flags, buffer_duration, periodicity, reinterpret_cast<WAVEFORMATEX*>(wave_format), NULL)))
     {
         if (hr == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED)
         {
             UINT32 buffer_size;
 
-            if (FAILED(hr = IAudioClient_GetBufferSize(*audio_client, &buffer_size)))
+            if (FAILED(hr = (*audio_client)->GetBufferSize(&buffer_size)))
             {
-                IUnknown_Release(*audio_client);
+                (*audio_client)->Release();
                 *audio_client = NULL;
                 return SoundIoErrorOpeningDevice;
             }
 
             osw->buffer_frame_count = (int) buffer_size;
 
-            IUnknown_Release(*audio_client);
+            (*audio_client)->Release();
             *audio_client = NULL;
 
 
-            if (FAILED(hr = IMMDevice_Activate(dw->mm_device, IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, (void **) audio_client)))
+            if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, reinterpret_cast<void**>(audio_client))))
             {
                 return SoundIoErrorOpeningDevice;
             }
             if (!osw->is_raw)
             {
                 WAVEFORMATEXTENSIBLE* mix_format;
-                if (FAILED(hr = IAudioClient_GetMixFormat(*audio_client, (WAVEFORMATEX **) &mix_format)))
+                if (FAILED(hr = (*audio_client)->GetMixFormat(reinterpret_cast<WAVEFORMATEX**>(&mix_format))))
                 {
                     return SoundIoErrorOpeningDevice;
                 }
@@ -1581,10 +1603,10 @@ NEXT:
                 complete_wave_format_data(wave_format);
             }
 
-            buffer_duration = to_reference_time(osw->buffer_frame_count / (double) outstream->sample_rate);
+            buffer_duration = to_reference_time(osw->buffer_frame_count / static_cast<double>(outstream->sample_rate));
             if (osw->is_raw)
                 periodicity = buffer_duration;
-            if (FAILED(hr = IAudioClient_Initialize(*audio_client, share_mode, flags, buffer_duration, periodicity, (WAVEFORMATEX *) wave_format, NULL)))
+            if (FAILED(hr = (*audio_client)->Initialize(share_mode, flags, buffer_duration, periodicity, reinterpret_cast<WAVEFORMATEX*>(wave_format), NULL)))
             {
                 if (hr == AUDCLNT_E_UNSUPPORTED_FORMAT)
                 {
@@ -1614,19 +1636,18 @@ NEXT:
 }
 
 
-static int outstream_do_open(struct SoundIoPrivate* si, struct SoundIoOutStreamPrivate* os)
+static int outstream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
-    struct SoundIoOutStream* outstream = &os->pub;
-    struct SoundIoDevice* device = outstream->device;
+    std::shared_ptr<SoundIoOutStream> outstream = os;
+    std::shared_ptr<SoundIoDevice> device = outstream->device;
 
     HRESULT hr;
     if (outstream->software_latency <= 0.0)
     {
         outstream->software_latency = 1.0;
     }
-    outstream->software_latency = soundio_double_clamp(device->software_latency_min, outstream->software_latency,
-                                                       device->software_latency_max);
+    outstream->software_latency = soundio_double_clamp(device->software_latency_min, outstream->software_latency, device->software_latency_max);
     AUDCLNT_SHAREMODE share_mode;
     DWORD flags;
     REFERENCE_TIME buffer_duration;
@@ -1649,9 +1670,9 @@ static int outstream_do_open(struct SoundIoPrivate* si, struct SoundIoOutStreamP
     }
     else
     {
-        if (FAILED(hr = IMMDevice_QueryInterface(audio_client3, IID_IAUDIOCLIENT, (void **) &audio_client)))
+        if (FAILED(hr = audio_client3->QueryInterface(IID_IAUDIOCLIENT, reinterpret_cast<void**>(&audio_client))))
         {
-            IUnknown_Release(audio_client3);
+            audio_client3->Release();
             audio_client3 = NULL;
             return SoundIoErrorOpeningDevice;
         }
@@ -1694,7 +1715,7 @@ static int outstream_do_open(struct SoundIoPrivate* si, struct SoundIoOutStreamP
     }
 
     REFERENCE_TIME max_latency_ref_time;
-    if (FAILED(hr = IAudioClient_GetStreamLatency(audio_client, &max_latency_ref_time)))
+    if (FAILED(hr = audio_client->GetStreamLatency(&max_latency_ref_time)))
     {
         return SoundIoErrorOpeningDevice;
     }
@@ -1704,22 +1725,22 @@ static int outstream_do_open(struct SoundIoPrivate* si, struct SoundIoOutStreamP
 
     UINT32 buffer_size;
 
-    if (FAILED(hr = IAudioClient_GetBufferSize(audio_client, &buffer_size)))
+    if (FAILED(hr = audio_client->GetBufferSize(&buffer_size)))
     {
         return SoundIoErrorOpeningDevice;
     }
 
-    osw->buffer_frame_count = (int) buffer_size;
-    outstream->software_latency = osw->buffer_frame_count / (double) outstream->sample_rate;
+    osw->buffer_frame_count = static_cast<int>(buffer_size);
+    outstream->software_latency = osw->buffer_frame_count / static_cast<double>(outstream->sample_rate);
 
-    if (FAILED(hr = IAudioClient_SetEventHandle(audio_client, osw->h_event)))
+    if (FAILED(hr = audio_client->SetEventHandle(osw->h_event)))
     {
         return SoundIoErrorOpeningDevice;
     }
 
     if (osw->need_resample)
     {
-        if (FAILED(hr = IAudioClient_GetService(audio_client, IID_IAUDIOCLOCKADJUSTMENT, (void **) &osw->audio_clock_adjustment)))
+        if (FAILED(hr = audio_client->GetService(IID_IAUDIOCLOCKADJUSTMENT, reinterpret_cast<void**>(&osw->audio_clock_adjustment))))
         {
             return SoundIoErrorOpeningDevice;
         }
@@ -1732,7 +1753,7 @@ static int outstream_do_open(struct SoundIoPrivate* si, struct SoundIoOutStreamP
 
     if (outstream->name)
     {
-        if (FAILED(hr = IAudioClient_GetService(audio_client, IID_IAUDIOSESSIONCONTROL, reinterpret_cast<void**>(&osw->audio_session_control))))
+        if (FAILED(hr = audio_client->GetService(IID_IAUDIOSESSIONCONTROL, reinterpret_cast<void**>(&osw->audio_session_control))))
         {
             return SoundIoErrorOpeningDevice;
         }
@@ -1742,29 +1763,28 @@ static int outstream_do_open(struct SoundIoPrivate* si, struct SoundIoOutStreamP
         {
             return err;
         }
-        if (FAILED(hr = IAudioSessionControl_SetDisplayName(osw->audio_session_control, osw->stream_name, NULL)))
+        if (FAILED(hr = osw->audio_session_control->SetDisplayName(osw->stream_name, NULL)))
         {
             return SoundIoErrorOpeningDevice;
         }
     }
 
-    if (FAILED(hr = IAudioClient_GetService(audio_client, IID_IAUDIORENDERCLIENT, (void **) &osw->audio_render_client)))
+    if (FAILED(hr = audio_client->GetService(IID_IAUDIORENDERCLIENT, reinterpret_cast<void**>(&osw->audio_render_client))))
     {
         return SoundIoErrorOpeningDevice;
     }
 
-    if (FAILED(hr = IAudioClient_GetService(audio_client, IID_IAUDIOCLOCK, (void **) &osw->audio_clock)))
+    if (FAILED(hr = audio_client->GetService(IID_IAUDIOCLOCK, reinterpret_cast<void**>(&osw->audio_clock))))
     {
         return SoundIoErrorOpeningDevice;
     }
 
-    if (FAILED(hr = IAudioClient_GetService(audio_client, IID_ISIMPLEAUDIOVOLUME,
-        (void **) &osw->audio_volume_control)))
+    if (FAILED(hr = audio_client->GetService(IID_ISIMPLEAUDIOVOLUME, reinterpret_cast<void**>(&osw->audio_volume_control))))
     {
         return SoundIoErrorOpeningDevice;
     }
 
-    if (FAILED(hr = osw->audio_volume_control->lpVtbl->GetMasterVolume(osw->audio_volume_control, &outstream->volume)))
+    if (FAILED(hr = osw->audio_volume_control->GetMasterVolume(&outstream->volume)))
     {
         return SoundIoErrorOpeningDevice;
     }
@@ -1773,15 +1793,15 @@ static int outstream_do_open(struct SoundIoPrivate* si, struct SoundIoOutStreamP
     return 0;
 }
 
-static void outstream_shared_run(struct SoundIoOutStreamPrivate* os)
+static void outstream_shared_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
-    struct SoundIoOutStream* outstream = &os->pub;
+    std::shared_ptr<SoundIoOutStream> outstream = os;
 
     HRESULT hr;
 
     UINT32 frames_used;
-    if (FAILED(hr = IAudioClient_GetCurrentPadding(osw->audio_client, &frames_used)))
+    if (FAILED(hr = osw->audio_client->GetCurrentPadding(&frames_used)))
     {
         outstream->error_callback(outstream, SoundIoErrorStreaming);
         return;
@@ -1795,7 +1815,7 @@ static void outstream_shared_run(struct SoundIoOutStreamPrivate* os)
     int frame_count_min = soundio_int_max(0, osw->min_padding_frames - (int) frames_used);
     outstream->write_callback(outstream, frame_count_min, osw->writable_frame_count);
 
-    if (FAILED(hr = IAudioClient_Start(osw->audio_client)))
+    if (FAILED(hr = osw->audio_client->Start()))
     {
         outstream->error_callback(outstream, SoundIoErrorStreaming);
         return;
@@ -1804,7 +1824,7 @@ static void outstream_shared_run(struct SoundIoOutStreamPrivate* os)
     for (;;)
     {
         WaitForSingleObject(osw->h_event, INFINITE);
-        if (FAILED(hr = IAudioClient_GetCurrentPadding(osw->audio_client, &frames_used)))
+        if (FAILED(hr = osw->audio_client->GetCurrentPadding(&frames_used)))
         {
             outstream->error_callback(outstream, SoundIoErrorStreaming);
             return;
@@ -1819,7 +1839,7 @@ static void outstream_shared_run(struct SoundIoOutStreamPrivate* os)
             bool pause = SOUNDIO_ATOMIC_LOAD(osw->desired_pause_state);
             if (pause && !osw->is_paused)
             {
-                if (FAILED(hr = IAudioClient_Stop(osw->audio_client)))
+                if (FAILED(hr = osw->audio_client->Stop()))
                 {
                     outstream->error_callback(outstream, SoundIoErrorStreaming);
                     return;
@@ -1828,7 +1848,7 @@ static void outstream_shared_run(struct SoundIoOutStreamPrivate* os)
             }
             else if (!pause && osw->is_paused)
             {
-                if (FAILED(hr = IAudioClient_Start(osw->audio_client)))
+                if (FAILED(hr = osw->audio_client->Start()))
                 {
                     outstream->error_callback(outstream, SoundIoErrorStreaming);
                     return;
@@ -1846,16 +1866,16 @@ static void outstream_shared_run(struct SoundIoOutStreamPrivate* os)
     }
 }
 
-static void outstream_raw_run(struct SoundIoOutStreamPrivate* os)
+static void outstream_raw_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
-    struct SoundIoOutStream* outstream = &os->pub;
+    std::shared_ptr<SoundIoOutStream> outstream = os;
 
     HRESULT hr;
 
     outstream->write_callback(outstream, osw->buffer_frame_count, osw->buffer_frame_count);
 
-    if (FAILED(hr = IAudioClient_Start(osw->audio_client)))
+    if (FAILED(hr = osw->audio_client->Start()))
     {
         outstream->error_callback(outstream, SoundIoErrorStreaming);
         return;
@@ -1871,7 +1891,7 @@ static void outstream_raw_run(struct SoundIoOutStreamPrivate* os)
             bool pause = SOUNDIO_ATOMIC_LOAD(osw->desired_pause_state);
             if (pause && !osw->is_paused)
             {
-                if (FAILED(hr = IAudioClient_Stop(osw->audio_client)))
+                if (FAILED(hr = osw->audio_client->Stop()))
                 {
                     outstream->error_callback(outstream, SoundIoErrorStreaming);
                     return;
@@ -1880,7 +1900,7 @@ static void outstream_raw_run(struct SoundIoOutStreamPrivate* os)
             }
             else if (!pause && osw->is_paused)
             {
-                if (FAILED(hr = IAudioClient_Start(osw->audio_client)))
+                if (FAILED(hr = osw->audio_client->Start()))
                 {
                     outstream->error_callback(outstream, SoundIoErrorStreaming);
                     return;
@@ -1893,14 +1913,14 @@ static void outstream_raw_run(struct SoundIoOutStreamPrivate* os)
     }
 }
 
-static void outstream_thread_run(void* arg)
+static void outstream_thread_run(std::shared_ptr<void> arg)
 {
-    struct SoundIoOutStreamPrivate* os = (struct SoundIoOutStreamPrivate*) arg;
+    std::shared_ptr<SoundIoOutStreamPrivate> os = std::static_pointer_cast<SoundIoOutStreamPrivate>(arg);
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
-    struct SoundIoOutStream* outstream = &os->pub;
-    struct SoundIoDevice* device = outstream->device;
-    struct SoundIo* soundio = device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoOutStream> outstream = os;
+    std::shared_ptr<SoundIoDevice> device = outstream->device;
+    std::shared_ptr<SoundIo> soundio = device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
 
     int err;
     if ((err = outstream_do_open(si, os)))
@@ -1934,19 +1954,23 @@ static void outstream_thread_run(void* arg)
     }
 
     if (osw->is_raw)
+    {
         outstream_raw_run(os);
+    }
     else
+    {
         outstream_shared_run(os);
+    }
 
     outstream_thread_deinit(si, os);
 }
 
-static int outstream_open_wasapi(struct SoundIoPrivate* si, struct SoundIoOutStreamPrivate* os)
+static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
-    struct SoundIoOutStream* outstream = &os->pub;
-    struct SoundIoDevice* device = outstream->device;
-    struct SoundIo* soundio = &si->pub;
+    std::shared_ptr<SoundIoOutStream> outstream = os;
+    std::shared_ptr<SoundIoDevice> device = outstream->device;
+    std::shared_ptr<SoundIo> soundio = si;
 
     SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osw->pause_resume_flag);
     SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osw->clear_buffer_flag);
@@ -2009,7 +2033,7 @@ static int outstream_open_wasapi(struct SoundIoPrivate* si, struct SoundIoOutStr
     return 0;
 }
 
-static int outstream_pause_wasapi(struct SoundIoPrivate* si, struct SoundIoOutStreamPrivate* os, bool pause)
+static int outstream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
 
@@ -2029,7 +2053,7 @@ static int outstream_pause_wasapi(struct SoundIoPrivate* si, struct SoundIoOutSt
     return 0;
 }
 
-static int outstream_start_wasapi(struct SoundIoPrivate* si, struct SoundIoOutStreamPrivate* os)
+static int outstream_start_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
 
@@ -2041,18 +2065,17 @@ static int outstream_start_wasapi(struct SoundIoPrivate* si, struct SoundIoOutSt
     return 0;
 }
 
-static int outstream_begin_write_wasapi(struct SoundIoPrivate* si, struct SoundIoOutStreamPrivate* os,
-                                        struct SoundIoChannelArea** out_areas, int* frame_count)
+static int outstream_begin_write_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, SoundIoChannelArea** out_areas, int* frame_count)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
-    struct SoundIoOutStream* outstream = &os->pub;
+    std::shared_ptr<SoundIoOutStream> outstream = os;
     HRESULT hr;
 
     osw->write_frame_count = *frame_count;
 
 
     char* data;
-    if (FAILED(hr = IAudioRenderClient_GetBuffer(osw->audio_render_client, osw->write_frame_count, (BYTE **) &data)))
+    if (FAILED(hr = osw->audio_render_client->GetBuffer(osw->write_frame_count, reinterpret_cast<BYTE**>(&data))))
     {
         return SoundIoErrorStreaming;
     }
@@ -2068,18 +2091,18 @@ static int outstream_begin_write_wasapi(struct SoundIoPrivate* si, struct SoundI
     return 0;
 }
 
-static int outstream_end_write_wasapi(struct SoundIoPrivate* si, struct SoundIoOutStreamPrivate* os)
+static int outstream_end_write_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
     HRESULT hr;
-    if (FAILED(hr = IAudioRenderClient_ReleaseBuffer(osw->audio_render_client, osw->write_frame_count, 0)))
+    if (FAILED(hr = osw->audio_render_client->ReleaseBuffer(osw->write_frame_count, 0)))
     {
         return SoundIoErrorStreaming;
     }
     return 0;
 }
 
-static int outstream_clear_buffer_wasapi(struct SoundIoPrivate* si, struct SoundIoOutStreamPrivate* os)
+static int outstream_clear_buffer_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
 
@@ -2098,36 +2121,35 @@ static int outstream_clear_buffer_wasapi(struct SoundIoPrivate* si, struct Sound
     return 0;
 }
 
-static int outstream_get_latency_wasapi(struct SoundIoPrivate* si, struct SoundIoOutStreamPrivate* os,
-                                        double* out_latency)
+static int outstream_get_latency_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, double* out_latency)
 {
-    struct SoundIoOutStream* outstream = &os->pub;
+    std::shared_ptr<SoundIoOutStream> outstream = os;
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
 
     HRESULT hr;
     UINT32 frames_used;
-    if (FAILED(hr = IAudioClient_GetCurrentPadding(osw->audio_client, &frames_used)))
+    if (FAILED(hr = osw->audio_client->GetCurrentPadding(&frames_used)))
     {
         return SoundIoErrorStreaming;
     }
 
-    *out_latency = frames_used / (double) outstream->sample_rate;
+    *out_latency = frames_used / static_cast<double>(outstream->sample_rate);
     return 0;
 }
 
-static int outstream_get_time_wasapi(struct SoundIoPrivate* si, struct SoundIoOutStreamPrivate* os, double* out_time)
+static int outstream_get_time_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, double* out_time)
 {
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
 
     UINT64 position = 0;
     UINT64 qpc = 0;
 
-    if (SUCCEEDED(IAudioClock_GetPosition(osw->audio_clock, &position, &qpc)))
+    if (SUCCEEDED(osw->audio_clock->GetPosition(&position, &qpc)))
     {
         UINT64 freq = 0;
-        if (SUCCEEDED(IAudioClock_GetFrequency(osw->audio_clock, &freq) && freq > 0))
+        if (SUCCEEDED(osw->audio_clock->GetFrequency(&freq) && freq > 0))
         {
-            *out_time = (double) position / (double) freq;
+            *out_time = static_cast<double>(position) / static_cast<double>(freq);
             return 0;
         }
     }
@@ -2135,13 +2157,13 @@ static int outstream_get_time_wasapi(struct SoundIoPrivate* si, struct SoundIoOu
     return -1;
 }
 
-static int outstream_set_volume_wasapi(struct SoundIoPrivate* si, struct SoundIoOutStreamPrivate* os, float volume)
+static int outstream_set_volume_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, float volume)
 {
-    struct SoundIoOutStream* outstream = &os->pub;
+    std::shared_ptr<SoundIoOutStream> outstream = os;
     struct SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
 
     HRESULT hr;
-    if (FAILED(hr = osw->audio_volume_control->lpVtbl->SetMasterVolume(osw->audio_volume_control, volume, NULL)))
+    if (FAILED(hr = osw->audio_volume_control->SetMasterVolume(volume, NULL)))
     {
         return SoundIoErrorIncompatibleDevice;
     }
@@ -2150,18 +2172,22 @@ static int outstream_set_volume_wasapi(struct SoundIoPrivate* si, struct SoundIo
     return 0;
 }
 
-static void instream_thread_deinit(struct SoundIoPrivate* si, struct SoundIoInStreamPrivate* is)
+static void instream_thread_deinit(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
 
     if (isw->audio_capture_client)
-        IUnknown_Release(isw->audio_capture_client);
+    {
+        isw->audio_capture_client->Release();
+    }
     if (isw->audio_client)
-        IUnknown_Release(isw->audio_client);
+    {
+        isw->audio_client->Release();
+    }
 }
 
 
-static void instream_destroy_wasapi(struct SoundIoPrivate* si, struct SoundIoInStreamPrivate* is)
+static void instream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
 
@@ -2169,13 +2195,15 @@ static void instream_destroy_wasapi(struct SoundIoPrivate* si, struct SoundIoInS
     {
         SOUNDIO_ATOMIC_FLAG_CLEAR(isw->thread_exit_flag);
         if (isw->h_event)
+        {
             SetEvent(isw->h_event);
+        }
 
         soundio_os_mutex_lock(isw->mutex);
         soundio_os_cond_signal(isw->cond, isw->mutex);
         soundio_os_cond_signal(isw->start_cond, isw->mutex);
         soundio_os_mutex_unlock(isw->mutex);
-        soundio_os_thread_destroy(isw->thread);
+        // soundio_os_thread_destroy(isw->thread);
 
         isw->thread = NULL;
     }
@@ -2196,17 +2224,16 @@ static void instream_destroy_wasapi(struct SoundIoPrivate* si, struct SoundIoInS
     isw->mutex = NULL;
 }
 
-static int instream_do_open(struct SoundIoPrivate* si, struct SoundIoInStreamPrivate* is)
+static int instream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
-    struct SoundIoInStream* instream = &is->pub;
-    struct SoundIoDevice* device = instream->device;
-    struct SoundIoDevicePrivate* dev = (struct SoundIoDevicePrivate*) device;
+    std::shared_ptr<SoundIoInStream> instream = is;
+    std::shared_ptr<SoundIoDevice> device = instream->device;
+    std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(device);
     struct SoundIoDeviceWasapi* dw = &dev->backend_data.wasapi;
     HRESULT hr;
 
-    if (FAILED(hr = IMMDevice_Activate(dw->mm_device, IID_IAUDIOCLIENT, CLSCTX_ALL, NULL,
-        (void **) &isw->audio_client)))
+    if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, reinterpret_cast<void**>(&isw->audio_client))))
     {
         return SoundIoErrorOpeningDevice;
     }
@@ -2229,14 +2256,14 @@ static int instream_do_open(struct SoundIoPrivate* si, struct SoundIoInStreamPri
     else
     {
         WAVEFORMATEXTENSIBLE* mix_format;
-        if (FAILED(hr = IAudioClient_GetMixFormat(isw->audio_client, (WAVEFORMATEX **) &mix_format)))
+        if (FAILED(hr = isw->audio_client->GetMixFormat(reinterpret_cast<WAVEFORMATEX**>(&mix_format))))
         {
             return SoundIoErrorOpeningDevice;
         }
         wave_format.Format.nSamplesPerSec = mix_format->Format.nSamplesPerSec;
         CoTaskMemFree(mix_format);
         mix_format = NULL;
-        if (wave_format.Format.nSamplesPerSec != (DWORD) instream->sample_rate)
+        if (wave_format.Format.nSamplesPerSec != static_cast<DWORD>(instream->sample_rate))
         {
             return SoundIoErrorIncompatibleDevice;
         }
@@ -2249,26 +2276,24 @@ static int instream_do_open(struct SoundIoPrivate* si, struct SoundIoInStreamPri
     to_wave_format_format(instream->format, &wave_format);
     complete_wave_format_data(&wave_format);
 
-    if (FAILED(hr = IAudioClient_Initialize(isw->audio_client, share_mode, flags, buffer_duration, periodicity,
-        (WAVEFORMATEX *) &wave_format, NULL)))
+    if (FAILED(hr = isw->audio_client->Initialize(share_mode, flags, buffer_duration, periodicity, reinterpret_cast<WAVEFORMATEX*>(&wave_format), NULL)))
     {
         if (hr == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED)
         {
-            if (FAILED(hr = IAudioClient_GetBufferSize(isw->audio_client, &isw->buffer_frame_count)))
+            if (FAILED(hr = isw->audio_client->GetBufferSize(&isw->buffer_frame_count)))
             {
                 return SoundIoErrorOpeningDevice;
             }
-            IUnknown_Release(isw->audio_client);
+            isw->audio_client->Release();
             isw->audio_client = NULL;
-            if (FAILED(hr = IMMDevice_Activate(dw->mm_device, IID_IAUDIOCLIENT, CLSCTX_ALL, NULL,
-                (void **) &isw->audio_client)))
+            if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, reinterpret_cast<void**>(&isw->audio_client))))
             {
                 return SoundIoErrorOpeningDevice;
             }
             if (!isw->is_raw)
             {
                 WAVEFORMATEXTENSIBLE* mix_format;
-                if (FAILED(hr = IAudioClient_GetMixFormat(isw->audio_client, (WAVEFORMATEX **) &mix_format)))
+                if (FAILED(hr = isw->audio_client->GetMixFormat(reinterpret_cast<WAVEFORMATEX**>(&mix_format))))
                 {
                     return SoundIoErrorOpeningDevice;
                 }
@@ -2281,11 +2306,10 @@ static int instream_do_open(struct SoundIoPrivate* si, struct SoundIoInStreamPri
                 complete_wave_format_data(&wave_format);
             }
 
-            buffer_duration = to_reference_time(isw->buffer_frame_count / (double) instream->sample_rate);
+            buffer_duration = to_reference_time(isw->buffer_frame_count / static_cast<double>(instream->sample_rate));
             if (isw->is_raw)
                 periodicity = buffer_duration;
-            if (FAILED(hr = IAudioClient_Initialize(isw->audio_client, share_mode, flags, buffer_duration, periodicity,
-                (WAVEFORMATEX *) &wave_format, NULL)))
+            if (FAILED(hr = isw->audio_client->Initialize(share_mode, flags, buffer_duration, periodicity, reinterpret_cast<WAVEFORMATEX*>(&wave_format), NULL)))
             {
                 if (hr == AUDCLNT_E_UNSUPPORTED_FORMAT)
                 {
@@ -2314,7 +2338,7 @@ static int instream_do_open(struct SoundIoPrivate* si, struct SoundIoInStreamPri
             return SoundIoErrorOpeningDevice;
         }
     }
-    if (FAILED(hr = IAudioClient_GetBufferSize(isw->audio_client, &isw->buffer_frame_count)))
+    if (FAILED(hr = isw->audio_client->GetBufferSize(&isw->buffer_frame_count)))
     {
         return SoundIoErrorOpeningDevice;
     }
@@ -2327,7 +2351,7 @@ static int instream_do_open(struct SoundIoPrivate* si, struct SoundIoInStreamPri
 
     if (isw->is_raw)
     {
-        if (FAILED(hr = IAudioClient_SetEventHandle(isw->audio_client, isw->h_event)))
+        if (FAILED(hr = isw->audio_client->SetEventHandle(isw->h_event)))
         {
             return SoundIoErrorOpeningDevice;
         }
@@ -2335,8 +2359,7 @@ static int instream_do_open(struct SoundIoPrivate* si, struct SoundIoInStreamPri
 
     if (instream->name)
     {
-        if (FAILED(hr = IAudioClient_GetService(isw->audio_client, IID_IAUDIOSESSIONCONTROL,
-            (void **) &isw->audio_session_control)))
+        if (FAILED(hr = isw->audio_client->GetService( IID_IAUDIOSESSIONCONTROL, reinterpret_cast<void**>(&isw->audio_session_control))))
         {
             return SoundIoErrorOpeningDevice;
         }
@@ -2346,14 +2369,13 @@ static int instream_do_open(struct SoundIoPrivate* si, struct SoundIoInStreamPri
         {
             return err;
         }
-        if (FAILED(hr = IAudioSessionControl_SetDisplayName(isw->audio_session_control, isw->stream_name, NULL)))
+        if (FAILED(hr = isw->audio_session_control->SetDisplayName(isw->stream_name, NULL)))
         {
             return SoundIoErrorOpeningDevice;
         }
     }
 
-    if (FAILED(hr = IAudioClient_GetService(isw->audio_client, IID_IAUDIOCAPTURECLIENT,
-        (void **) &isw->audio_capture_client)))
+    if (FAILED(hr = isw->audio_client->GetService(IID_IAUDIOCAPTURECLIENT, reinterpret_cast<void**>(&isw->audio_capture_client))))
     {
         return SoundIoErrorOpeningDevice;
     }
@@ -2361,14 +2383,14 @@ static int instream_do_open(struct SoundIoPrivate* si, struct SoundIoInStreamPri
     return 0;
 }
 
-static void instream_raw_run(struct SoundIoInStreamPrivate* is)
+static void instream_raw_run(std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
-    struct SoundIoInStream* instream = &is->pub;
+    std::shared_ptr<SoundIoInStream> instream = is;
 
     HRESULT hr;
 
-    if (FAILED(hr = IAudioClient_Start(isw->audio_client)))
+    if (FAILED(hr = isw->audio_client->Start()))
     {
         instream->error_callback(instream, SoundIoErrorStreaming);
         return;
@@ -2384,14 +2406,14 @@ static void instream_raw_run(struct SoundIoInStreamPrivate* is)
     }
 }
 
-static void instream_shared_run(struct SoundIoInStreamPrivate* is)
+static void instream_shared_run(std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
-    struct SoundIoInStream* instream = &is->pub;
+    std::shared_ptr<SoundIoInStream> instream = is;
 
     HRESULT hr;
 
-    if (FAILED(hr = IAudioClient_Start(isw->audio_client)))
+    if (FAILED(hr = isw->audio_client->Start()))
     {
         instream->error_callback(instream, SoundIoErrorStreaming);
         return;
@@ -2409,7 +2431,7 @@ static void instream_shared_run(struct SoundIoInStreamPrivate* is)
         soundio_os_mutex_unlock(isw->mutex);
 
         UINT32 frames_available;
-        if (FAILED(hr = IAudioClient_GetCurrentPadding(isw->audio_client, &frames_available)))
+        if (FAILED(hr = isw->audio_client->GetCurrentPadding(&frames_available)))
         {
             instream->error_callback(instream, SoundIoErrorStreaming);
             return;
@@ -2421,14 +2443,14 @@ static void instream_shared_run(struct SoundIoInStreamPrivate* is)
     }
 }
 
-static void instream_thread_run(void* arg)
+static void instream_thread_run(std::shared_ptr<void> arg)
 {
-    struct SoundIoInStreamPrivate* is = (struct SoundIoInStreamPrivate*) arg;
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::static_pointer_cast<SoundIoInStreamPrivate>(arg);
     struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
-    struct SoundIoInStream* instream = &is->pub;
-    struct SoundIoDevice* device = instream->device;
-    struct SoundIo* soundio = device->soundio;
-    struct SoundIoPrivate* si = (struct SoundIoPrivate*) soundio;
+    std::shared_ptr<SoundIoInStream> instream = is;
+    std::shared_ptr<SoundIoDevice> device = instream->device;
+    std::shared_ptr<SoundIo> soundio = device->soundio.lock();
+    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
 
     int err;
     if ((err = instream_do_open(si, is)))
@@ -2469,12 +2491,12 @@ static void instream_thread_run(void* arg)
     instream_thread_deinit(si, is);
 }
 
-static int instream_open_wasapi(struct SoundIoPrivate* si, struct SoundIoInStreamPrivate* is)
+static int instream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
-    struct SoundIoInStream* instream = &is->pub;
-    struct SoundIoDevice* device = instream->device;
-    struct SoundIo* soundio = &si->pub;
+    std::shared_ptr<SoundIoInStream> instream = is;
+    std::shared_ptr<SoundIoDevice> device = instream->device;
+    std::shared_ptr<SoundIo> soundio = si;
 
     // All the COM functions are supposed to be called from the same thread. libsoundio API does not
     // restrict the calling thread context in this way. Furthermore, the user might have called
@@ -2535,26 +2557,26 @@ static int instream_open_wasapi(struct SoundIoPrivate* si, struct SoundIoInStrea
     return 0;
 }
 
-static int instream_pause_wasapi(struct SoundIoPrivate* si, struct SoundIoInStreamPrivate* is, bool pause)
+static int instream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, bool pause)
 {
     struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
     HRESULT hr;
     if (pause && !isw->is_paused)
     {
-        if (FAILED(hr = IAudioClient_Stop(isw->audio_client)))
+        if (FAILED(hr = isw->audio_client->Stop()))
             return SoundIoErrorStreaming;
         isw->is_paused = true;
     }
     else if (!pause && isw->is_paused)
     {
-        if (FAILED(hr = IAudioClient_Start(isw->audio_client)))
+        if (FAILED(hr = isw->audio_client->Start()))
             return SoundIoErrorStreaming;
         isw->is_paused = false;
     }
     return 0;
 }
 
-static int instream_start_wasapi(struct SoundIoPrivate* si, struct SoundIoInStreamPrivate* is)
+static int instream_start_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
 
@@ -2566,19 +2588,18 @@ static int instream_start_wasapi(struct SoundIoPrivate* si, struct SoundIoInStre
     return 0;
 }
 
-static int instream_begin_read_wasapi(struct SoundIoPrivate* si, struct SoundIoInStreamPrivate* is,
+static int instream_begin_read_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is,
                                       struct SoundIoChannelArea** out_areas, int* frame_count)
 {
     struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
-    struct SoundIoInStream* instream = &is->pub;
+    std::shared_ptr<SoundIoInStream> instream = is;
     HRESULT hr;
 
     if (isw->read_buf_frames_left <= 0)
     {
         UINT32 frames_to_read;
         DWORD flags;
-        if (FAILED(hr = IAudioCaptureClient_GetBuffer(isw->audio_capture_client, (BYTE **) &isw->read_buf,
-            &frames_to_read, &flags, NULL, NULL)))
+        if (FAILED(hr = isw->audio_capture_client->GetBuffer(reinterpret_cast<BYTE**>(&isw->read_buf), &frames_to_read, &flags, NULL, NULL)))
         {
             return SoundIoErrorStreaming;
         }
@@ -2612,7 +2633,7 @@ static int instream_begin_read_wasapi(struct SoundIoPrivate* si, struct SoundIoI
     return 0;
 }
 
-static int instream_end_read_wasapi(struct SoundIoPrivate* si, struct SoundIoInStreamPrivate* is)
+static int instream_end_read_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
     HRESULT hr;
@@ -2621,7 +2642,7 @@ static int instream_end_read_wasapi(struct SoundIoPrivate* si, struct SoundIoInS
 
     if (isw->read_buf_frames_left <= 0)
     {
-        if (FAILED(hr = IAudioCaptureClient_ReleaseBuffer(isw->audio_capture_client, isw->opened_buf_frames)))
+        if (FAILED(hr = isw->audio_capture_client->ReleaseBuffer(isw->opened_buf_frames)))
         {
             return SoundIoErrorStreaming;
         }
@@ -2630,26 +2651,23 @@ static int instream_end_read_wasapi(struct SoundIoPrivate* si, struct SoundIoInS
     return 0;
 }
 
-static int instream_get_latency_wasapi(struct SoundIoPrivate* si, struct SoundIoInStreamPrivate* is,
-                                       double* out_latency)
+static int instream_get_latency_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, double* out_latency)
 {
-    struct SoundIoInStream* instream = &is->pub;
+    std::shared_ptr<SoundIoInStream> instream = is;
     struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
 
     HRESULT hr;
     UINT32 frames_used;
-    if (FAILED(hr = IAudioClient_GetCurrentPadding(isw->audio_client, &frames_used)))
+    if (FAILED(hr = isw->audio_client->GetCurrentPadding(&frames_used)))
     {
         return SoundIoErrorStreaming;
     }
 
-    *out_latency = frames_used / (double) instream->sample_rate;
+    *out_latency = frames_used / static_cast<double>(instream->sample_rate);
     return 0;
 }
 
-static soundio_NotificationClient* notificationClient;
-
-static void destroy_wasapi(struct SoundIoPrivate* si)
+static void destroy_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     struct SoundIoWasapi* siw = &si->backend_data.wasapi;
 
@@ -2659,46 +2677,45 @@ static void destroy_wasapi(struct SoundIoPrivate* si)
         siw->abort_flag = true;
         soundio_os_cond_signal(siw->scan_devices_cond, siw->scan_devices_mutex);
         soundio_os_mutex_unlock(siw->scan_devices_mutex);
-        soundio_os_thread_destroy(siw->thread);
+        // soundio_os_thread_destroy(siw->thread);
+        siw->thread = nullptr;
     }
 
     if (siw->cond)
+    {
         soundio_os_cond_destroy(siw->cond);
+    }
 
     if (siw->scan_devices_cond)
+    {
         soundio_os_cond_destroy(siw->scan_devices_cond);
+    }
 
     if (siw->scan_devices_mutex)
+    {
         soundio_os_mutex_destroy(siw->scan_devices_mutex);
+    }
 
     if (siw->mutex)
-        soundio_os_mutex_destroy(siw->mutex);
-
-    soundio_destroy_devices_info(siw->ready_devices_info);
-    if (notificationClient)
     {
-        delete notificationClient;
-        notificationClient = nullptr;
+        soundio_os_mutex_destroy(siw->mutex);
     }
 }
 
 
-// static inline struct SoundIoPrivate* soundio_MMNotificationClient_si(soundio_NotificationClient* client)
+// static inline std::shared_ptr<SoundIoPrivate> soundio_MMNotificationClient_si(soundio_NotificationClient* client)
 // {
 //     struct SoundIoWasapi* siw = (struct SoundIoWasapi*) (((char*) client) - offsetof(struct SoundIoWasapi, device_events));
-//     struct SoundIoPrivate* si = (struct SoundIoPrivate*) (((char*) siw) - offsetof(struct SoundIoPrivate, backend_data));
+//     std::shared_ptr<SoundIoPrivate> si = (std::shared_ptr<SoundIoPrivate>) (((char*) siw) - offsetof(struct SoundIoPrivate, backend_data));
 //     return si;
 // }
 
 STDMETHODIMP soundio_NotificationClient::QueryInterface(REFIID riid, void** ppv)
 {
-    if (IS_EQUAL_IID(riid, IID_IUNKNOWN)
-        ||
-        IS_EQUAL_IID(riid, IID_IMMNOTFICATION_CLIENT)
-    )
+    if (IS_EQUAL_IID(riid, IID_IUNKNOWN) || IS_EQUAL_IID(riid, IID_IMMNOTFICATION_CLIENT))
     {
         *ppv = this;
-        IUnknown_AddRef(this);
+        AddRef();
         return S_OK;
     }
     else
@@ -2710,19 +2727,21 @@ STDMETHODIMP soundio_NotificationClient::QueryInterface(REFIID riid, void** ppv)
 
 STDMETHODIMP_(ULONG) soundio_NotificationClient::AddRef()
 {
-    struct SoundIoWasapi* siw = &si->backend_data.wasapi;
-    return InterlockedIncrement(&siw->device_events_refs);
+    // struct SoundIoWasapi* siw = &si.lock()->backend_data.wasapi;
+    // return InterlockedIncrement(&siw->device_events_refs);
+    return S_OK;
 }
 
 STDMETHODIMP_(ULONG) soundio_NotificationClient::Release()
 {
-    struct SoundIoWasapi* siw = &si->backend_data.wasapi;
-    return InterlockedDecrement(&siw->device_events_refs);
+    // struct SoundIoWasapi* siw = &si.lock()->backend_data.wasapi;
+    // return InterlockedDecrement(&siw->device_events_refs);
+    return S_OK;
 }
 
 static HRESULT queue_device_scan(soundio_NotificationClient* client)
 {
-    force_device_scan_wasapi(client->si);
+    force_device_scan_wasapi(client->si.lock());
     return S_OK;
 }
 
@@ -2749,10 +2768,8 @@ STDMETHODIMP soundio_NotificationClient::OnDefaultDeviceChanged(EDataFlow flow, 
     }
 
     auto result = queue_device_scan(this);
-    struct SoundIoOutStreamPrivate* os = reinterpret_cast<SoundIoOutStreamPrivate*>(si->pub.out_stream);
-    outstream_destroy_wasapi(si, os);
-    outstream_open_wasapi(si, os);
 
+    soundio_wait_events(si.lock());
     return result;
 }
 
@@ -2762,7 +2779,7 @@ STDMETHODIMP soundio_NotificationClient::OnPropertyValueChanged(LPCWSTR wid, con
 }
 
 
-int soundio_wasapi_init(struct SoundIoPrivate* si)
+int soundio_wasapi_init(std::shared_ptr<SoundIoPrivate> si)
 {
     struct SoundIoWasapi* siw = &si->backend_data.wasapi;
     int err;
@@ -2806,9 +2823,7 @@ int soundio_wasapi_init(struct SoundIoPrivate* si)
         return err;
     }
 
-    notificationClient = new soundio_NotificationClient(si);
-    siw->device_events_refs = 1;
-    siw->device_events = notificationClient;
+    siw->device_events = std::make_shared<soundio_NotificationClient>(si);
 
     si->destroy = destroy_wasapi;
     si->flush_events = flush_events_wasapi;

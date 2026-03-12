@@ -13,7 +13,7 @@
 #include "list.h"
 #include "atomics.h"
 
-#define CINTERFACE
+// #define CINTERFACE
 #define COBJMACROS
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -30,7 +30,7 @@ extern "C"
 
 struct SoundIoPrivate;
 
-int soundio_wasapi_init(struct SoundIoPrivate* si);
+int soundio_wasapi_init(std::shared_ptr<SoundIoPrivate> si);
 
 struct SoundIoDeviceWasapi
 {
@@ -49,7 +49,7 @@ struct SoundIoOutStreamWasapi
     IAudioClock* audio_clock;
     LPWSTR stream_name;
     bool need_resample;
-    struct SoundIoOsThread* thread;
+    std::shared_ptr<SoundIoOsThread> thread;
     struct SoundIoOsMutex* mutex;
     struct SoundIoOsCond* cond;
     struct SoundIoOsCond* start_cond;
@@ -77,7 +77,7 @@ struct SoundIoInStreamWasapi
     IAudioCaptureClient* audio_capture_client;
     IAudioSessionControl* audio_session_control;
     LPWSTR stream_name;
-    struct SoundIoOsThread* thread;
+    std::shared_ptr<SoundIoOsThread> thread;
     struct SoundIoOsMutex* mutex;
     struct SoundIoOsCond* cond;
     struct SoundIoOsCond* start_cond;
@@ -105,28 +105,25 @@ struct SoundIoWasapi
     struct SoundIoOsCond* cond;
     struct SoundIoOsCond* scan_devices_cond;
     struct SoundIoOsMutex* scan_devices_mutex;
-    struct SoundIoOsThread* thread;
+    std::shared_ptr<SoundIoOsThread> thread;
     bool abort_flag;
     // this one is ready to be read with flush_events. protected by mutex
-    struct SoundIoDevicesInfo* ready_devices_info;
+    std::shared_ptr<struct SoundIoDevicesInfo> ready_devices_info;
     bool have_devices_flag;
     bool device_scan_queued;
     int shutdown_err;
     bool emitted_shutdown_cb;
 
     IMMDeviceEnumerator* device_enumerator;
-    soundio_NotificationClient* device_events;
-    LONG device_events_refs;
+    std::shared_ptr<soundio_NotificationClient> device_events;
 };
 
 class soundio_NotificationClient : public IMMNotificationClient
 {
-    LONG _cRef{1};
-
 public:
-    SoundIoPrivate* si;
+    std::weak_ptr<SoundIoPrivate> si;
 
-    soundio_NotificationClient(SoundIoPrivate* si)
+    soundio_NotificationClient(std::weak_ptr<SoundIoPrivate> si)
     {
         this->si = si;
     }

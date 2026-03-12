@@ -8,10 +8,12 @@
 #ifndef SOUNDIO_SOUNDIO_PRIVATE_H
 #define SOUNDIO_SOUNDIO_PRIVATE_H
 
+#include <memory>
+
 #include "soundio_internal.h"
 #include "config.h"
 #include "list.h"
-
+#include <vector>
 
 #ifdef SOUNDIO_HAVE_JACK
 #include "jack.h"
@@ -43,7 +45,7 @@
 
 #include "dummy.h"
 
-union SoundIoBackendData
+struct SoundIoBackendData
 {
 #ifdef SOUNDIO_HAVE_JACK
     struct SoundIoJack jack;
@@ -70,7 +72,7 @@ union SoundIoBackendData
     struct SoundIoDummy dummy;
 };
 
-union SoundIoDeviceBackendData
+struct SoundIoDeviceBackendData
 {
 #ifdef SOUNDIO_HAVE_JACK
     struct SoundIoDeviceJack jack;
@@ -96,7 +98,7 @@ union SoundIoDeviceBackendData
     struct SoundIoDeviceDummy dummy;
 };
 
-union SoundIoOutStreamBackendData
+struct SoundIoOutStreamBackendData
 {
 #ifdef SOUNDIO_HAVE_JACK
     struct SoundIoOutStreamJack jack;
@@ -122,7 +124,7 @@ union SoundIoOutStreamBackendData
     struct SoundIoOutStreamDummy dummy;
 };
 
-union SoundIoInStreamBackendData
+struct SoundIoInStreamBackendData
 {
 #ifdef SOUNDIO_HAVE_JACK
     struct SoundIoInStreamJack jack;
@@ -148,107 +150,132 @@ union SoundIoInStreamBackendData
     struct SoundIoInStreamDummy dummy;
 };
 
-SOUNDIO_MAKE_LIST_STRUCT(struct SoundIoDevice*, SoundIoListDevicePtr, SOUNDIO_LIST_NOT_STATIC)
-
-SOUNDIO_MAKE_LIST_PROTO(struct SoundIoDevice*, SoundIoListDevicePtr, SOUNDIO_LIST_NOT_STATIC)
+// SOUNDIO_MAKE_LIST_STRUCT(struct SoundIoDevice*, SoundIoListDevicePtr, SOUNDIO_LIST_NOT_STATIC)
+//
+// SOUNDIO_MAKE_LIST_PROTO(struct SoundIoDevice*, SoundIoListDevicePtr, SOUNDIO_LIST_NOT_STATIC)
 
 struct SoundIoDevicesInfo
 {
-    struct SoundIoListDevicePtr input_devices;
-    struct SoundIoListDevicePtr output_devices;
+    std::vector<std::shared_ptr<SoundIoDevice> > input_devices;
+    std::vector<std::shared_ptr<SoundIoDevice> > output_devices;
     // can be -1 when default device is unknown
     int default_output_index;
     int default_input_index;
 };
 
-struct SoundIoOutStreamPrivate
+struct SoundIoOutStreamPrivate : SoundIoOutStream
 {
-    struct SoundIoOutStream pub;
-    union SoundIoOutStreamBackendData backend_data;
+    struct SoundIoOutStreamBackendData backend_data;
 };
 
-struct SoundIoInStreamPrivate
+struct SoundIoInStreamPrivate : SoundIoInStream
 {
-    struct SoundIoInStream pub;
-    union SoundIoInStreamBackendData backend_data;
+    struct SoundIoInStreamBackendData backend_data;
 };
 
-struct SoundIoPrivate
+struct SoundIoPrivate : public SoundIo
 {
-    struct SoundIo pub;
-
     // Safe to read from a single thread without a mutex.
-    struct SoundIoDevicesInfo* safe_devices_info;
+    std::shared_ptr<SoundIoDevicesInfo> safe_devices_info;
 
-    void (*destroy)(struct SoundIoPrivate*);
+    void (*destroy)(std::shared_ptr<SoundIoPrivate>);
 
-    void (*flush_events)(struct SoundIoPrivate*);
+    void (*flush_events)(std::shared_ptr<SoundIoPrivate>);
 
-    void (*wait_events)(struct SoundIoPrivate*);
+    void (*wait_events)(std::shared_ptr<SoundIoPrivate>);
 
-    void (*wakeup)(struct SoundIoPrivate*);
+    void (*wakeup)(std::shared_ptr<SoundIoPrivate>);
 
-    void (*force_device_scan)(struct SoundIoPrivate*);
+    void (*force_device_scan)(std::shared_ptr<SoundIoPrivate>);
 
-    int (*outstream_open)(struct SoundIoPrivate*, struct SoundIoOutStreamPrivate*);
+    int (*outstream_open)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>);
 
-    void (*outstream_destroy)(struct SoundIoPrivate*, struct SoundIoOutStreamPrivate*);
+    void (*outstream_destroy)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>);
 
-    int (*outstream_start)(struct SoundIoPrivate*, struct SoundIoOutStreamPrivate*);
+    int (*outstream_start)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>);
 
-    int (*outstream_begin_write)(struct SoundIoPrivate*, struct SoundIoOutStreamPrivate*,
-                                 struct SoundIoChannelArea** out_areas, int* out_frame_count);
+    int (*outstream_begin_write)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>, struct SoundIoChannelArea** out_areas, int* out_frame_count);
 
-    int (*outstream_end_write)(struct SoundIoPrivate*, struct SoundIoOutStreamPrivate*);
+    int (*outstream_end_write)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>);
 
-    int (*outstream_clear_buffer)(struct SoundIoPrivate*, struct SoundIoOutStreamPrivate*);
+    int (*outstream_clear_buffer)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>);
 
-    int (*outstream_pause)(struct SoundIoPrivate*, struct SoundIoOutStreamPrivate*, bool pause);
+    int (*outstream_pause)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>, bool pause);
 
-    int (*outstream_get_latency)(struct SoundIoPrivate*, struct SoundIoOutStreamPrivate*, double* out_latency);
+    int (*outstream_get_latency)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>, double* out_latency);
 
-    int (*outstream_set_volume)(struct SoundIoPrivate*, struct SoundIoOutStreamPrivate*, float volume);
+    int (*outstream_set_volume)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>, float volume);
 
-    int (*outstream_get_time)(struct SoundIoPrivate*, struct SoundIoOutStreamPrivate*, double* out_time);
+    int (*outstream_get_time)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>, double* out_time);
 
-    int (*instream_open)(struct SoundIoPrivate*, struct SoundIoInStreamPrivate*);
+    int (*instream_open)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>);
 
-    void (*instream_destroy)(struct SoundIoPrivate*, struct SoundIoInStreamPrivate*);
+    void (*instream_destroy)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>);
 
-    int (*instream_start)(struct SoundIoPrivate*, struct SoundIoInStreamPrivate*);
+    int (*instream_start)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>);
 
-    int (*instream_begin_read)(struct SoundIoPrivate*, struct SoundIoInStreamPrivate*,
-                               struct SoundIoChannelArea** out_areas, int* out_frame_count);
+    int (*instream_begin_read)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>, struct SoundIoChannelArea** out_areas, int* out_frame_count);
 
-    int (*instream_end_read)(struct SoundIoPrivate*, struct SoundIoInStreamPrivate*);
+    int (*instream_end_read)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>);
 
-    int (*instream_pause)(struct SoundIoPrivate*, struct SoundIoInStreamPrivate*, bool pause);
+    int (*instream_pause)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>, bool pause);
 
-    int (*instream_get_latency)(struct SoundIoPrivate*, struct SoundIoInStreamPrivate*, double* out_latency);
+    int (*instream_get_latency)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>, double* out_latency);
 
-    union SoundIoBackendData backend_data;
+    struct SoundIoBackendData backend_data;
 };
 
-SOUNDIO_MAKE_LIST_STRUCT(struct SoundIoSampleRateRange, SoundIoListSampleRateRange, SOUNDIO_LIST_NOT_STATIC)
+// SOUNDIO_MAKE_LIST_STRUCT(struct SoundIoSampleRateRange, SoundIoListSampleRateRange, SOUNDIO_LIST_NOT_STATIC)
+//
+// SOUNDIO_MAKE_LIST_PROTO(struct SoundIoSampleRateRange, SoundIoListSampleRateRange, SOUNDIO_LIST_NOT_STATIC)
 
-SOUNDIO_MAKE_LIST_PROTO(struct SoundIoSampleRateRange, SoundIoListSampleRateRange, SOUNDIO_LIST_NOT_STATIC)
-
-struct SoundIoDevicePrivate
+struct SoundIoDevicePrivate : SoundIoDevice
 {
-    struct SoundIoDevice pub;
-    union SoundIoDeviceBackendData backend_data;
+    ~SoundIoDevicePrivate() override
+    {
+        if (backend_data.wasapi.mm_device)
+        {
+            backend_data.wasapi.mm_device->Release();
+            backend_data.wasapi.mm_device = nullptr;
+        }
+        // free(pub.id);
+        // free(pub.name);
+        //
+        // if (pub.sample_rates != &prealloc_sample_rate_range &&
+        //     pub.sample_rates != sample_rates.items)
+        // {
+        //     free(pub.sample_rates);
+        // }
+        // SoundIoListSampleRateRange_deinit(&sample_rates);
+        // if (pub.formats != &prealloc_format)
+        // {
+        //     free(pub.formats);
+        // }
+        //
+        // if (pub.layouts != &pub.current_layout)
+        // {
+        //     free(pub.layouts);
+        // }
+    }
 
-    void (*destruct)(struct SoundIoDevicePrivate*);
+    struct SoundIoDeviceBackendData backend_data;
 
-    struct SoundIoSampleRateRange prealloc_sample_rate_range;
-    struct SoundIoListSampleRateRange sample_rates;
+    void (*destruct)(SoundIoDevicePrivate*);
+
+    std::vector<SoundIoSampleRateRange> sample_rates;
     enum SoundIoFormat prealloc_format;
 };
 
-#ifdef __cplusplus
-extern "C"
-#endif
-void soundio_destroy_devices_info(struct SoundIoDevicesInfo* devices_info);
+// #ifdef __cplusplus
+// extern "C"
+// {
+// #endif
+// void soundio_destroy_devices_info(std::shared_ptr<SoundIoDevicesInfo> devices_info);
+//
+// #ifdef __cplusplus
+// }
+// #endif
+
 
 static const int SOUNDIO_MIN_SAMPLE_RATE = 8000;
 static const int SOUNDIO_MAX_SAMPLE_RATE = 5644800;

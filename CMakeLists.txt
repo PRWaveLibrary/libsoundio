@@ -172,7 +172,7 @@ endif ()
 set(LIBSOUNDIO_SOURCES
         "${libsoundio_SOURCE_DIR}/src/soundio.cpp"
         "${libsoundio_SOURCE_DIR}/src/util.c"
-        "${libsoundio_SOURCE_DIR}/src/os.c"
+        "${libsoundio_SOURCE_DIR}/src/os.cpp"
         "${libsoundio_SOURCE_DIR}/src/dummy.cpp"
         "${libsoundio_SOURCE_DIR}/src/channel_layout.cpp"
         "${libsoundio_SOURCE_DIR}/src/ring_buffer.cpp"
