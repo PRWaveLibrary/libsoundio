@@ -75,27 +75,27 @@ struct SoundIoBackendData
 struct SoundIoDeviceBackendData
 {
 #ifdef SOUNDIO_HAVE_JACK
-    struct SoundIoDeviceJack jack;
+    std::shared_ptr<SoundIoDeviceJack> jack = std::make_shared<SoundIoDeviceJack>();
 #endif
 #ifdef SOUNDIO_HAVE_PULSEAUDIO
-    struct SoundIoDevicePulseAudio pulseaudio;
+    std::shared_ptr<SoundIoDevicePulseAudio> pulseaudio = std::make_shared<SoundIoDevicePulseAudio>();
 #endif
 #ifdef SOUNDIO_HAVE_ALSA
-    struct SoundIoDeviceAlsa alsa;
+    std::shared_ptr<SoundIoDeviceAlsa> alsa = std::make_shared<SoundIoDeviceAlsa>();
 #endif
 #ifdef SOUNDIO_HAVE_COREAUDIO
-    struct SoundIoDeviceCoreAudio coreaudio;
+    std::shared_ptr<SoundIoDeviceCoreAudio> coreaudio = std::make_shared<SoundIoDeviceCoreAudio>();
 #endif
 #ifdef SOUNDIO_HAVE_COREAUDIO_IOS
-    struct SoundIoDeviceCoreAudioIOS coreaudio_ios;
+    std::shared_ptr<SoundIoDeviceCoreAudioIOS> coreaudio_ios = std::make_shared<SoundIoDeviceCoreAudioIOS>();
 #endif
 #ifdef SOUNDIO_HAVE_WASAPI
-    struct SoundIoDeviceWasapi wasapi;
+    std::shared_ptr<SoundIoDeviceWasapi> wasapi = std::make_shared<SoundIoDeviceWasapi>();
 #endif
 #ifdef SOUNDIO_HAVE_OBOE
-    struct SoundIoDeviceOboe oboe;
+    std::shared_ptr<SoundIoDeviceOboe> oboe = std::make_shared<SoundIoDeviceOboe>();
 #endif
-    struct SoundIoDeviceDummy dummy;
+    std::shared_ptr<SoundIoDeviceDummy> dummy = std::make_shared<SoundIoDeviceDummy>();
 };
 
 struct SoundIoOutStreamBackendData
@@ -231,33 +231,6 @@ struct SoundIoPrivate : public SoundIo
 
 struct SoundIoDevicePrivate : SoundIoDevice
 {
-    ~SoundIoDevicePrivate() override
-    {
-        if (backend_data.wasapi.mm_device)
-        {
-            backend_data.wasapi.mm_device->Release();
-            backend_data.wasapi.mm_device = nullptr;
-        }
-        // free(pub.id);
-        // free(pub.name);
-        //
-        // if (pub.sample_rates != &prealloc_sample_rate_range &&
-        //     pub.sample_rates != sample_rates.items)
-        // {
-        //     free(pub.sample_rates);
-        // }
-        // SoundIoListSampleRateRange_deinit(&sample_rates);
-        // if (pub.formats != &prealloc_format)
-        // {
-        //     free(pub.formats);
-        // }
-        //
-        // if (pub.layouts != &pub.current_layout)
-        // {
-        //     free(pub.layouts);
-        // }
-    }
-
     struct SoundIoDeviceBackendData backend_data;
 
     void (*destruct)(SoundIoDevicePrivate*);

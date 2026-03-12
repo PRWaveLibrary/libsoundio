@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <memory>
 #include <vector>
+#include <string>
 
 /// \cond
 #ifdef __cplusplus
@@ -355,9 +356,9 @@ struct SoundIoDevice
     /// supports raw mode, there may be up to four devices with the same id:
     /// one for each value of SoundIoDevice::is_raw and one for each value of
     /// SoundIoDevice::aim.
-    char* id;
+    std::wstring id;
     /// User-friendly UTF-8 encoded text to describe the device.
-    char* name;
+    std::wstring name;
 
     /// Tells whether this device is an input device or an output device.
     enum SoundIoDeviceAim aim;
@@ -944,9 +945,9 @@ SOUNDIO_EXPORT int soundio_default_output_device_index(std::shared_ptr<SoundIo> 
 
 /// Return `true` if and only if the devices have the same SoundIoDevice::id,
 /// SoundIoDevice::is_raw, and SoundIoDevice::aim are the same.
-SOUNDIO_EXPORT bool soundio_device_equal(
-    const struct SoundIoDevice* a,
-    const struct SoundIoDevice* b);
+// SOUNDIO_EXPORT bool soundio_device_equal(
+//     const struct SoundIoDevice* a,
+//     const struct SoundIoDevice* b);
 
 /// Sorts channel layouts by channel count, descending.
 SOUNDIO_EXPORT void soundio_device_sort_channel_layouts(std::shared_ptr<SoundIoDevice> device);

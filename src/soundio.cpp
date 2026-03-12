@@ -986,12 +986,12 @@ int soundio_device_nearest_sample_rate(std::shared_ptr<SoundIoDevice> device, in
     return best_rate;
 }
 
-bool soundio_device_equal(
-    const struct SoundIoDevice* a,
-    const struct SoundIoDevice* b)
-{
-    return a->is_raw == b->is_raw && a->aim == b->aim && strcmp(a->id, b->id) == 0;
-}
+// bool soundio_device_equal(
+//     const struct SoundIoDevice* a,
+//     const struct SoundIoDevice* b)
+// {
+//     return a->is_raw == b->is_raw && a->aim == b->aim && a->id == b->id;
+// }
 
 const char* soundio_version_string(void)
 {

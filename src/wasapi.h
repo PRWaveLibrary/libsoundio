@@ -34,6 +34,15 @@ int soundio_wasapi_init(std::shared_ptr<SoundIoPrivate> si);
 
 struct SoundIoDeviceWasapi
 {
+    ~SoundIoDeviceWasapi()
+    {
+        if (mm_device)
+        {
+            mm_device->Release();
+            mm_device = nullptr;
+        }
+    }
+
     double period_duration;
     IMMDevice* mm_device;
 };

@@ -27,6 +27,8 @@
 
 #include <stdio.h>
 
+#include "../../src/unity_util.h"
+
 #ifdef _MSC_VER
 #include <propkeydef.h>
 #endif
@@ -535,10 +537,8 @@ struct RefreshDevices
     std::shared_ptr<SoundIoDevicesInfo> devices_info;
     std::shared_ptr<SoundIoDevice> device_shared;
     std::shared_ptr<SoundIoDevice> device_raw;
-    char* default_render_id;
-    int default_render_id_len;
-    char* default_capture_id;
-    int default_capture_id_len;
+    std::wstring default_render_id;
+    std::wstring default_capture_id;
 };
 
 static void deinit_refresh_devices(std::shared_ptr<RefreshDevices> rd)
@@ -796,11 +796,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             // We know the device point isn't NULL so we're necessarily out of memory
             return SoundIoErrorNoMem;
         }
-        if ((err = from_lpwstr(rd->lpwstr, &rd->default_render_id, &rd->default_render_id_len)))
-        {
-            deinit_refresh_devices(rd);
-            return err;
-        }
+        rd->default_render_id = rd->lpwstr;
     }
 
 
@@ -823,7 +819,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             CoTaskMemFree(rd->lpwstr);
             rd->lpwstr = NULL;
         }
-        if (FAILED(hr = rd->default_capture_device->GetId( &rd->lpwstr)))
+        if (FAILED(hr = rd->default_capture_device->GetId(&rd->lpwstr)))
         {
             deinit_refresh_devices(rd);
             if (hr == E_OUTOFMEMORY)
@@ -832,11 +828,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             }
             return SoundIoErrorOpeningDevice;
         }
-        if ((err = from_lpwstr(rd->lpwstr, &rd->default_capture_id, &rd->default_capture_id_len)))
-        {
-            deinit_refresh_devices(rd);
-            return err;
-        }
+        rd->default_capture_id = rd->lpwstr;
     }
 
 
@@ -904,7 +896,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             deinit_refresh_devices(rd);
             return SoundIoErrorNoMem;
         }
-        struct SoundIoDeviceWasapi* dev_w_shared = &dev_shared->backend_data.wasapi;
+        std::shared_ptr<SoundIoDeviceWasapi> dev_w_shared = dev_shared->backend_data.wasapi;
         assert(!rd->device_shared);
         rd->device_shared = dev_shared;
         rd->device_shared->ref_count = 1;
@@ -918,7 +910,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             deinit_refresh_devices(rd);
             return SoundIoErrorNoMem;
         }
-        SoundIoDeviceWasapi* dev_w_raw = &dev_raw->backend_data.wasapi;
+        std::shared_ptr<SoundIoDeviceWasapi> dev_w_raw = dev_raw->backend_data.wasapi;
         assert(!rd->device_raw);
         rd->device_raw = dev_raw;
         rd->device_raw->ref_count = 1;
@@ -926,19 +918,8 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         rd->device_raw->is_raw = true;
         rd->device_raw->software_latency_max = 0.5;
 
-        int device_id_len;
-        if ((err = from_lpwstr(rd->lpwstr, &rd->device_shared->id, &device_id_len)))
-        {
-            deinit_refresh_devices(rd);
-            return err;
-        }
-
-        rd->device_raw->id = soundio_str_dupe(rd->device_shared->id, device_id_len);
-        if (!rd->device_raw->id)
-        {
-            deinit_refresh_devices(rd);
-            return SoundIoErrorNoMem;
-        }
+        rd->device_shared->id = rd->lpwstr;
+        rd->device_raw->id = rd->device_shared->id;
 
         if (rd->endpoint)
         {
@@ -972,7 +953,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         if (rd->device_shared->aim == SoundIoDeviceAimOutput)
         {
             device_list = &rd->devices_info->output_devices;
-            if (soundio_streql(rd->device_shared->id, device_id_len, rd->default_render_id, rd->default_render_id_len))
+            if (rd->device_shared->id == rd->default_render_id)
             {
                 rd->devices_info->default_output_index = device_list->size();
             }
@@ -981,7 +962,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         {
             assert(rd->device_shared->aim == SoundIoDeviceAimInput);
             device_list = &rd->devices_info->input_devices;
-            if (soundio_streql(rd->device_shared->id, device_id_len, rd->default_capture_id, rd->default_capture_id_len))
+            if (rd->device_shared->id == rd->default_capture_id)
             {
                 rd->devices_info->default_input_index = device_list->size();
             }
@@ -1057,22 +1038,9 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             rd->device_raw = NULL;
             continue;
         }
-        int device_name_len;
-        if ((err = from_lpwstr(rd->prop_variant_value.pwszVal, &rd->device_shared->name, &device_name_len)))
-        {
-            rd->device_shared->probe_error = err;
-            rd->device_raw->probe_error = err;
-            rd->device_shared = NULL;
-            rd->device_raw = NULL;
-            continue;
-        }
 
-        rd->device_raw->name = soundio_str_dupe(rd->device_shared->name, device_name_len);
-        if (!rd->device_raw->name)
-        {
-            deinit_refresh_devices(rd);
-            return SoundIoErrorNoMem;
-        }
+        rd->device_shared->name = rd->prop_variant_value.pwszVal;
+        rd->device_raw->name = rd->device_shared->name;
 
         // Get the format that WASAPI opens the device with for shared streams.
         // This is guaranteed to work, so we use this to modulate the sample
@@ -1422,7 +1390,7 @@ static IAudioClient3* open_audio_client3(std::shared_ptr<SoundIoOutStreamPrivate
     std::shared_ptr<SoundIoOutStream> outstream = os;
     std::shared_ptr<SoundIoDevice> device = outstream->device;
     std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(device);
-    struct SoundIoDeviceWasapi* dw = &dev->backend_data.wasapi;
+    std::shared_ptr<SoundIoDeviceWasapi> dw = dev->backend_data.wasapi;
 
     WAVEFORMATEXTENSIBLE* mix_format;
     HRESULT hr;
@@ -1463,7 +1431,7 @@ static IAudioClient* open_audio_client(std::shared_ptr<SoundIoOutStreamPrivate> 
     std::shared_ptr<SoundIoOutStream> outstream = os;
     std::shared_ptr<SoundIoDevice> device = outstream->device;
     std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(device);
-    struct SoundIoDeviceWasapi* dw = &dev->backend_data.wasapi;
+    std::shared_ptr<SoundIoDeviceWasapi> dw = dev->backend_data.wasapi;
     HRESULT hr;
 
     WAVEFORMATEXTENSIBLE* mix_format;
@@ -1517,7 +1485,7 @@ static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3
     std::shared_ptr<SoundIoOutStream> outstream = os;
     std::shared_ptr<SoundIoDevice> device = outstream->device;
     std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(device);
-    struct SoundIoDeviceWasapi* dw = &dev->backend_data.wasapi;
+    std::shared_ptr<SoundIoDeviceWasapi> dw = dev->backend_data.wasapi;
     HRESULT hr;
 
     if (*audio_client3 != NULL)
@@ -2230,7 +2198,7 @@ static int instream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
     std::shared_ptr<SoundIoInStream> instream = is;
     std::shared_ptr<SoundIoDevice> device = instream->device;
     std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(device);
-    struct SoundIoDeviceWasapi* dw = &dev->backend_data.wasapi;
+    std::shared_ptr<SoundIoDeviceWasapi> dw = dev->backend_data.wasapi;
     HRESULT hr;
 
     if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, reinterpret_cast<void**>(&isw->audio_client))))

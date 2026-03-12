@@ -517,14 +517,8 @@ int soundio_dummy_init(std::shared_ptr<SoundIoPrivate> si)
 
         device->ref_count = 1;
         device->soundio = soundio;
-        device->id = strdup("dummy-out");
-        device->name = strdup("Dummy Output Device");
-        if (!device->id || !device->name)
-        {
-            device = nullptr;
-            destroy_dummy(si);
-            return SoundIoErrorNoMem;
-        }
+        device->id = *"dummy-out";
+        device->name = *"Dummy Output Device";
 
         int err;
         if ((err = set_all_device_channel_layouts(device)))
@@ -563,14 +557,8 @@ int soundio_dummy_init(std::shared_ptr<SoundIoPrivate> si)
 
         device->ref_count = 1;
         device->soundio = soundio;
-        device->id = strdup("dummy-in");
-        device->name = strdup("Dummy Input Device");
-        if (!device->id || !device->name)
-        {
-            device = nullptr;
-            destroy_dummy(si);
-            return SoundIoErrorNoMem;
-        }
+        device->id = *"dummy-in";
+        device->name = *"Dummy Input Device";
 
         int err;
         if ((err = set_all_device_channel_layouts(device)))
