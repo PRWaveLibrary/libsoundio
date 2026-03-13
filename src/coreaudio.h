@@ -15,19 +15,20 @@
 
 #include <CoreAudio/CoreAudio.h>
 #include <AudioUnit/AudioUnit.h>
+
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 struct SoundIoPrivate;
-int soundio_coreaudio_init(struct SoundIoPrivate *si);
+int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si);
 
 struct SoundIoDeviceCoreAudio {
     AudioDeviceID device_id;
     UInt32 latency_frames;
 };
 
-SOUNDIO_MAKE_LIST_STRUCT(AudioDeviceID, SoundIoListAudioDeviceID, SOUNDIO_LIST_STATIC)
+// SOUNDIO_MAKE_LIST_STRUCT(AudioDeviceID, SoundIoListAudioDeviceID, SOUNDIO_LIST_STATIC)
 
 struct SoundIoCoreAudio {
     struct SoundIoOsMutex *mutex;
@@ -40,7 +41,7 @@ struct SoundIoCoreAudio {
     struct SoundIoAtomicBool have_devices_flag;
     struct SoundIoOsCond *have_devices_cond;
     struct SoundIoOsCond *scan_devices_cond;
-    struct SoundIoListAudioDeviceID registered_listeners;
+    std::vector<AudioDeviceID> registered_listeners;
 
     struct SoundIoAtomicBool device_scan_queued;
     struct SoundIoAtomicBool service_restarted;

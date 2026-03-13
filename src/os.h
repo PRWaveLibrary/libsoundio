@@ -9,8 +9,6 @@
 #define SOUNDIO_OS_H
 
 #if defined(__APPLE__)
-#define _DARWIN_C_SOURCE
-#undef _POSIX_C_SOURCE
 #else
 #define _GNU_SOURCE
 #endif
@@ -59,7 +57,6 @@
 #include <mmsystem.h>
 #include <objbase.h>
 #else
-#include <sys/mman.h>
 
 #include <pthread.h>
 #include <unistd.h>
@@ -179,7 +176,7 @@ struct SoundIoOsCond
     ~SoundIoOsCond()
     {
 #ifdef SOUNDIO_OS_KQUEUE
-        close(cond->kq_id);
+        close(kq_id);
 #elif defined(SOUNDIO_OS_WINDOWS)
         DeleteCriticalSection(&default_cs_id);
 #else
