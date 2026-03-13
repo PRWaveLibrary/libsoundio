@@ -840,11 +840,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
     }
 
     int device_count = unsigned_count;
-
-    if (!(rd->devices_info = std::make_unique<SoundIoDevicesInfo>()))
-    {
-        return SoundIoErrorNoMem;
-    }
+    rd->devices_info = std::make_unique<SoundIoDevicesInfo>();
     rd->devices_info->default_input_index = -1;
     rd->devices_info->default_output_index = -1;
 

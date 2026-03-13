@@ -220,11 +220,11 @@ static int outstream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_
     // int err;
     int buffer_size = outstream->bytes_per_frame * outstream->sample_rate * outstream->software_latency;
     osd->ring_buffer = std::make_unique<SoundIoRingBuffer>();
-    if (!osd->ring_buffer)
-    {
-        outstream_destroy_dummy(si, os);
-        return SoundIoErrorNoMem;
-    }
+    // if (!osd->ring_buffer)
+    // {
+    //     outstream_destroy_dummy(si, os);
+    //     return SoundIoErrorNoMem;
+    // }
 
     int err;
     if ((err = osd->ring_buffer->init(buffer_size)))
@@ -360,11 +360,11 @@ static int instream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_p
 
 
     isd->ring_buffer = std::make_unique<SoundIoRingBuffer>();
-    if (!isd->ring_buffer)
-    {
-        instream_destroy_dummy(si, is);
-        return SoundIoErrorNoMem;
-    }
+    // if (!isd->ring_buffer)
+    // {
+    //     instream_destroy_dummy(si, is);
+    //     return SoundIoErrorNoMem;
+    // }
 
     double target_buffer_duration = isd->period_duration * 4.0;
     int buffer_size = instream->bytes_per_frame * instream->sample_rate * target_buffer_duration;
@@ -521,11 +521,11 @@ int soundio_dummy_init(std::shared_ptr<SoundIoPrivate> si)
 
     assert(!si->safe_devices_info);
     si->safe_devices_info = std::make_unique<SoundIoDevicesInfo>();
-    if (!si->safe_devices_info)
-    {
-        destroy_dummy(si);
-        return SoundIoErrorNoMem;
-    }
+    // if (!si->safe_devices_info)
+    // {
+    //     destroy_dummy(si);
+    //     return SoundIoErrorNoMem;
+    // }
 
     si->safe_devices_info->default_input_index = 0;
     si->safe_devices_info->default_output_index = 0;
@@ -573,11 +573,11 @@ int soundio_dummy_init(std::shared_ptr<SoundIoPrivate> si)
     // create input device
     {
         std::shared_ptr<SoundIoDevicePrivate> dev = std::make_shared<SoundIoDevicePrivate>();
-        if (!dev)
-        {
-            destroy_dummy(si);
-            return SoundIoErrorNoMem;
-        }
+        // if (!dev)
+        // {
+        //     destroy_dummy(si);
+        //     return SoundIoErrorNoMem;
+        // }
         std::shared_ptr<SoundIoDevice> device = dev;
 
         // device->ref_count = 1;

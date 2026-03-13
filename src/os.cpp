@@ -81,11 +81,11 @@ int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared
     *out_thread = nullptr;
 
     std::unique_ptr<SoundIoOsThread> thread = std::make_unique<SoundIoOsThread>();
-    if (!thread)
-    {
-        thread = nullptr;
-        return SoundIoErrorNoMem;
-    }
+    // if (!thread)
+    // {
+    //     thread = nullptr;
+    //     return SoundIoErrorNoMem;
+    // }
 
     thread->run = run;
     thread->arg = arg;
@@ -185,10 +185,10 @@ int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared
 std::unique_ptr<SoundIoOsMutex> soundio_os_mutex_create()
 {
     std::unique_ptr<SoundIoOsMutex> mutex = std::make_unique<SoundIoOsMutex>();
-    if (!mutex)
-    {
-        return NULL;
-    }
+    // if (!mutex)
+    // {
+    //     return NULL;
+    // }
 
 #if defined(SOUNDIO_OS_WINDOWS)
     InitializeCriticalSection(&mutex->id);
@@ -246,10 +246,10 @@ std::unique_ptr<SoundIoOsCond> soundio_os_cond_create()
 {
     std::unique_ptr<SoundIoOsCond> cond = std::make_unique<SoundIoOsCond>();
 
-    if (!cond)
-    {
-        return NULL;
-    }
+    // if (!cond)
+    // {
+    //     return NULL;
+    // }
 #ifdef SOUNDIO_OS_KQUEUE
     cond->kq_id = kqueue();
     if (cond->kq_id == -1)

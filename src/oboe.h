@@ -53,7 +53,7 @@ struct SoundIoOutStreamOboe
     float* request_audio_data;
     int request_num_frames;
 
-    std::unique_ptr<oboe::AudioStream> audio_stream;
+    std::unique_ptr<oboe::AudioStream, OboeStreamDeleter> audio_stream;
     std::unique_ptr<oboe_callback> callback;
 
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];

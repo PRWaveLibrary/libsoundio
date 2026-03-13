@@ -30,4 +30,10 @@ struct SoundIoDeviceOboe
     uint32_t latency_frames;
 };
 
+
+struct oboe_stream_error_callback : oboe::AudioStreamErrorCallback
+{
+};
+
+
 #endif //AUDIORENDERER_OBOE_CALLBACK_H

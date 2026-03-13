@@ -31,10 +31,10 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate>& si)
     SoundIoOboe& sio = si->backend_data->oboe;
 
     std::unique_ptr<SoundIoDevicesInfo> devices_info = std::make_unique<SoundIoDevicesInfo>();
-    if (!devices_info)
-    {
-        return SoundIoErrorNoMem;
-    }
+    // if (!devices_info)
+    // {
+    //     return SoundIoErrorNoMem;
+    // }
 
     devices_info->default_output_index = -1;
     devices_info->default_input_index = -1;
@@ -44,10 +44,10 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate>& si)
         enum SoundIoDeviceAim aim = aims[aim_i];
         std::shared_ptr<SoundIoDevicePrivate> dev = std::make_shared<SoundIoDevicePrivate>();
 
-        if (!dev)
-        {
-            return SoundIoErrorNoMem;
-        }
+        // if (!dev)
+        // {
+        //     return SoundIoErrorNoMem;
+        // }
 
         // dev->ref_count = 1;
         dev->soundio = soundio;
@@ -212,12 +212,6 @@ static void force_device_scan_oboe(std::shared_ptr<SoundIoPrivate> si)
 static void outstream_destroy_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     struct SoundIoOutStreamOboe* oso = &os->backend_data.oboe;
-    if (oso->audio_stream)
-    {
-        oso->audio_stream->requestStop();
-        oso->audio_stream->close();
-    }
-
     oso->audio_stream = nullptr;
     oso->callback = nullptr;
 }
@@ -226,7 +220,6 @@ void OboeStreamDeleter::operator()(oboe::AudioStream* stream) const
 {
     if (stream)
     {
-        stream->requestStop();
         stream->close();
         delete stream;
     }
@@ -268,7 +261,7 @@ static int outstream_open_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_p
         return SoundIoErrorOpeningDevice;
     }
 
-    oso.audio_stream.reset(raw_stream);
+    oso.audio_stream = std::unique_ptr<oboe::AudioStream, OboeStreamDeleter>(raw_stream);
     raw_stream = nullptr;
 
     outstream->sample_rate = oso.audio_stream->getSampleRate();
@@ -289,7 +282,7 @@ static int outstream_open_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_p
 static int outstream_pause_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause)
 {
     struct SoundIoOutStreamOboe* osca = &os->backend_data.oboe;
-    std::unique_ptr<oboe::AudioStream>& stream = osca->audio_stream;
+    std::unique_ptr<oboe::AudioStream, OboeStreamDeleter>& stream = osca->audio_stream;
     oboe::Result result;
     if (pause)
     {
@@ -361,7 +354,7 @@ static int outstream_get_latency_oboe(std::shared_ptr<SoundIoPrivate> si, std::s
 
     if (oso->audio_stream)
     {
-        std::unique_ptr<oboe::AudioStream>& stream = oso->audio_stream;
+        std::unique_ptr<oboe::AudioStream, OboeStreamDeleter>& stream = oso->audio_stream;
         // 通过 Oboe 进行实时运算，能测算出真实物理和缓冲折叠造成的完整精确延迟。
         auto result = stream->calculateLatencyMillis();
         if (result.error() == oboe::Result::OK)
