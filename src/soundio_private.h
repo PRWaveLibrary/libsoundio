@@ -156,8 +156,8 @@ struct SoundIoInStreamBackendData
 
 struct SoundIoDevicesInfo
 {
-    std::vector<std::shared_ptr<SoundIoDevice> > input_devices;
-    std::vector<std::shared_ptr<SoundIoDevice> > output_devices;
+    std::vector<std::shared_ptr<SoundIoDevice>> input_devices;
+    std::vector<std::shared_ptr<SoundIoDevice>> output_devices;
     // can be -1 when default device is unknown
     int default_output_index;
     int default_input_index;
@@ -177,6 +177,7 @@ struct SoundIoPrivate : public SoundIo
 {
     // Safe to read from a single thread without a mutex.
     std::shared_ptr<SoundIoDevicesInfo> safe_devices_info;
+    struct SoundIoBackendData backend_data = {};
 
     void (*destroy)(std::shared_ptr<SoundIoPrivate>);
 
@@ -221,8 +222,6 @@ struct SoundIoPrivate : public SoundIo
     int (*instream_pause)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>, bool pause);
 
     int (*instream_get_latency)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>, double* out_latency);
-
-    struct SoundIoBackendData backend_data;
 };
 
 // SOUNDIO_MAKE_LIST_STRUCT(struct SoundIoSampleRateRange, SoundIoListSampleRateRange, SOUNDIO_LIST_NOT_STATIC)

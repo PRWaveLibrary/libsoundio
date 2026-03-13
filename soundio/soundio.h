@@ -368,8 +368,7 @@ struct SoundIoDevice
     /// layouts will be NULL. It's OK to modify this data, for example calling
     /// ::soundio_sort_channel_layouts on it.
     /// Devices are guaranteed to have at least 1 channel layout.
-    struct SoundIoChannelLayout* layouts;
-    int layout_count;
+    std::vector<SoundIoChannelLayout> layouts;
     /// See SoundIoDevice::current_format
     struct SoundIoChannelLayout current_layout;
 
@@ -872,7 +871,7 @@ SOUNDIO_EXPORT const struct SoundIoChannelLayout* soundio_best_matching_channel_
     const struct SoundIoChannelLayout* available_layouts, int available_layout_count);
 
 /// Sorts by channel count, descending.
-SOUNDIO_EXPORT void soundio_sort_channel_layouts(struct SoundIoChannelLayout* layouts, int layout_count);
+SOUNDIO_EXPORT void soundio_sort_channel_layouts(std::vector<SoundIoChannelLayout>& layouts);
 
 
 // Sample Formats
@@ -1230,33 +1229,33 @@ struct SoundIoRingBuffer;
 /// Use ::soundio_ring_buffer_capacity to get the actual capacity, which might
 /// be greater for alignment purposes.
 /// See also ::soundio_ring_buffer_destroy
-SOUNDIO_EXPORT struct SoundIoRingBuffer* soundio_ring_buffer_create(std::shared_ptr<SoundIo> soundio, int requested_capacity);
+SOUNDIO_EXPORT std::shared_ptr<SoundIoRingBuffer> soundio_ring_buffer_create(std::shared_ptr<SoundIo> soundio, int requested_capacity);
 
-SOUNDIO_EXPORT void soundio_ring_buffer_destroy(struct SoundIoRingBuffer* ring_buffer);
+// SOUNDIO_EXPORT void soundio_ring_buffer_destroy(std::shared_ptr<SoundIoRingBuffer> ring_buffer);
 
 /// When you create a ring buffer, capacity might be more than the requested
 /// capacity for alignment purposes. This function returns the actual capacity.
-SOUNDIO_EXPORT int soundio_ring_buffer_capacity(struct SoundIoRingBuffer* ring_buffer);
+SOUNDIO_EXPORT int soundio_ring_buffer_capacity(std::shared_ptr<SoundIoRingBuffer> ring_buffer);
 
 /// Do not write more than capacity.
-SOUNDIO_EXPORT char* soundio_ring_buffer_write_ptr(struct SoundIoRingBuffer* ring_buffer);
+SOUNDIO_EXPORT char* soundio_ring_buffer_write_ptr(std::shared_ptr<SoundIoRingBuffer> ring_buffer);
 
 /// `count` in bytes.
-SOUNDIO_EXPORT void soundio_ring_buffer_advance_write_ptr(struct SoundIoRingBuffer* ring_buffer, int count);
+SOUNDIO_EXPORT void soundio_ring_buffer_advance_write_ptr(std::shared_ptr<SoundIoRingBuffer> ring_buffer, int count);
 
 /// Do not read more than capacity.
-SOUNDIO_EXPORT char* soundio_ring_buffer_read_ptr(struct SoundIoRingBuffer* ring_buffer);
+SOUNDIO_EXPORT char* soundio_ring_buffer_read_ptr(std::shared_ptr<SoundIoRingBuffer> ring_buffer);
 
 /// `count` in bytes.
-SOUNDIO_EXPORT void soundio_ring_buffer_advance_read_ptr(struct SoundIoRingBuffer* ring_buffer, int count);
+SOUNDIO_EXPORT void soundio_ring_buffer_advance_read_ptr(std::shared_ptr<SoundIoRingBuffer> ring_buffer, int count);
 
 /// Returns how many bytes of the buffer is used, ready for reading.
-SOUNDIO_EXPORT int soundio_ring_buffer_fill_count(struct SoundIoRingBuffer* ring_buffer);
+SOUNDIO_EXPORT int soundio_ring_buffer_fill_count(std::shared_ptr<SoundIoRingBuffer> ring_buffer);
 
 /// Returns how many bytes of the buffer is free, ready for writing.
-SOUNDIO_EXPORT int soundio_ring_buffer_free_count(struct SoundIoRingBuffer* ring_buffer);
+SOUNDIO_EXPORT int soundio_ring_buffer_free_count(std::shared_ptr<SoundIoRingBuffer> ring_buffer);
 
 /// Must be called by the writer.
-SOUNDIO_EXPORT void soundio_ring_buffer_clear(struct SoundIoRingBuffer* ring_buffer);
+SOUNDIO_EXPORT void soundio_ring_buffer_clear(std::shared_ptr<SoundIoRingBuffer> ring_buffer);
 
 #endif

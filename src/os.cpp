@@ -60,7 +60,9 @@
 
 #include <pthread.h>
 #include <unistd.h>
-#include <sys/mman.h>
+
+
+#include <utility>
 #if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
 #define MAP_ANONYMOUS MAP_ANON
 #endif
@@ -95,12 +97,12 @@ struct SoundIoOsThread
 
         if (running)
         {
-            assert_no_err(pthread_join(id, NULL));
+            assert(!pthread_join(id, nullptr));
         }
 
-        if (thread->attr_init)
+        if (attr_init)
         {
-            assert_no_err(pthread_attr_destroy(&attr));
+            assert(!pthread_attr_destroy(&attr));
         }
 #endif
     }
@@ -213,13 +215,13 @@ static void assert_no_err(int err)
 
 static void* run_pthread(void* userdata)
 {
-    struct SoundIoOsThread* thread = (struct SoundIoOsThread*) userdata;
+    struct SoundIoOsThread* thread = static_cast<struct SoundIoOsThread*>(userdata);
     thread->run(thread->arg);
     return NULL;
 }
 #endif
 
-int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared_ptr<void> arg, void (*emit_rtprio_warning)(void), std::shared_ptr<SoundIoOsThread>* out_thread)
+int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared_ptr<void> arg, void (*emit_rtprio_warning)(), std::shared_ptr<SoundIoOsThread>* out_thread)
 {
     *out_thread = NULL;
 
@@ -227,7 +229,6 @@ int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared
     if (!thread)
     {
         thread = nullptr;
-        // soundio_os_thread_destroy(thread);
         return SoundIoErrorNoMem;
     }
 
@@ -253,7 +254,6 @@ int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared
     int err;
     if ((err = pthread_attr_init(&thread->attr)))
     {
-        soundio_os_thread_destroy(thread);
         return SoundIoErrorNoMem;
     }
     thread->attr_init = true;
@@ -263,13 +263,11 @@ int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared
         int max_priority = sched_get_priority_max(SCHED_FIFO);
         if (max_priority == -1)
         {
-            soundio_os_thread_destroy(thread);
             return SoundIoErrorSystemResources;
         }
 
         if ((err = pthread_attr_setschedpolicy(&thread->attr, SCHED_FIFO)))
         {
-            soundio_os_thread_destroy(thread);
             return SoundIoErrorSystemResources;
         }
 
@@ -277,21 +275,19 @@ int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared
         param.sched_priority = max_priority;
         if ((err = pthread_attr_setschedparam(&thread->attr, &param)))
         {
-            soundio_os_thread_destroy(thread);
             return SoundIoErrorSystemResources;
         }
     }
 
-    if ((err = pthread_create(&thread->id, &thread->attr, run_pthread, thread)))
+    if ((err = pthread_create(&thread->id, &thread->attr, run_pthread, thread.get())))
     {
         if (err == EPERM && emit_rtprio_warning)
         {
             emit_rtprio_warning();
-            err = pthread_create(&thread->id, NULL, run_pthread, thread);
+            err = pthread_create(&thread->id, NULL, run_pthread, thread.get());
         }
         if (err)
         {
-            soundio_os_thread_destroy(thread);
             return SoundIoErrorNoMem;
         }
     }
@@ -358,14 +354,16 @@ struct SoundIoOsMutex* soundio_os_mutex_create(void)
 void soundio_os_mutex_destroy(struct SoundIoOsMutex* mutex)
 {
     if (!mutex)
+    {
         return;
+    }
 
 #if defined(SOUNDIO_OS_WINDOWS)
     DeleteCriticalSection(&mutex->id);
 #else
     if (mutex->id_init)
     {
-        assert_no_err(pthread_mutex_destroy(&mutex->id));
+        assert(!pthread_mutex_destroy(&mutex->id));
     }
 #endif
 
@@ -377,7 +375,7 @@ void soundio_os_mutex_lock(struct SoundIoOsMutex* mutex)
 #if defined(SOUNDIO_OS_WINDOWS)
     EnterCriticalSection(&mutex->id);
 #else
-    assert_no_err(pthread_mutex_lock(&mutex->id));
+    assert(!pthread_mutex_lock(&mutex->id));
 #endif
 }
 
@@ -705,163 +703,5 @@ int soundio_os_page_size(void)
     return page_size;
 }
 
-static inline size_t ceil_dbl_to_size_t(double x)
-{
-    const double truncation = (size_t) x;
-    return truncation + (truncation < x);
-}
 
-int soundio_os_init_mirrored_memory(struct SoundIoOsMirroredMemory* mem, size_t requested_capacity)
-{
-    size_t actual_capacity = ceil_dbl_to_size_t(requested_capacity / (double) page_size) * page_size;
 
-#if defined(SOUNDIO_OS_WINDOWS)
-    BOOL ok;
-    HANDLE hMapFile = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, actual_capacity * 2, NULL);
-    if (!hMapFile)
-        return SoundIoErrorNoMem;
-
-    for (;;)
-    {
-        // find a free address space with the correct size
-        char* address = (char*) MapViewOfFile(hMapFile, FILE_MAP_ALL_ACCESS, 0, 0, actual_capacity * 2);
-        if (!address)
-        {
-            ok = CloseHandle(hMapFile);
-            assert(ok);
-            return SoundIoErrorNoMem;
-        }
-
-        // found a big enough address space. hopefully it will remain free
-        // while we map to it. if not, we'll try again.
-        ok = UnmapViewOfFile(address);
-        assert(ok);
-
-        char* addr1 = (char*) MapViewOfFileEx(hMapFile, FILE_MAP_ALL_ACCESS, 0, 0, actual_capacity, address);
-        if (addr1 != address)
-        {
-            DWORD err = GetLastError();
-            if (err == ERROR_INVALID_ADDRESS)
-            {
-                continue;
-            }
-            else
-            {
-                ok = CloseHandle(hMapFile);
-                assert(ok);
-                return SoundIoErrorNoMem;
-            }
-        }
-
-        char* addr2 = (char*) MapViewOfFileEx(hMapFile, FILE_MAP_WRITE, 0, 0,
-                                              actual_capacity, address + actual_capacity);
-        if (addr2 != address + actual_capacity)
-        {
-            ok = UnmapViewOfFile(addr1);
-            assert(ok);
-
-            DWORD err = GetLastError();
-            if (err == ERROR_INVALID_ADDRESS)
-            {
-                continue;
-            }
-            else
-            {
-                ok = CloseHandle(hMapFile);
-                assert(ok);
-                return SoundIoErrorNoMem;
-            }
-        }
-
-        mem->priv = hMapFile;
-        mem->address = address;
-        break;
-    }
-#else
-    char shm_path[] = "/dev/shm/soundio-XXXXXX";
-    char tmp_path[] = "/tmp/soundio-XXXXXX";
-    char* chosen_path;
-
-    int fd = mkstemp(shm_path);
-    if (fd < 0)
-    {
-        fd = mkstemp(tmp_path);
-        if (fd < 0)
-        {
-            return SoundIoErrorSystemResources;
-        }
-        else
-        {
-            chosen_path = tmp_path;
-        }
-    }
-    else
-    {
-        chosen_path = shm_path;
-    }
-
-    if (unlink(chosen_path))
-    {
-        close(fd);
-        return SoundIoErrorSystemResources;
-    }
-
-    if (ftruncate(fd, actual_capacity))
-    {
-        close(fd);
-        return SoundIoErrorSystemResources;
-    }
-
-    char* address = (char*) mmap(NULL, actual_capacity * 2, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    if (address == MAP_FAILED)
-    {
-        close(fd);
-        return SoundIoErrorNoMem;
-    }
-
-    char* other_address = (char*) mmap(address, actual_capacity, PROT_READ | PROT_WRITE,
-                                       MAP_FIXED | MAP_SHARED, fd, 0);
-    if (other_address != address)
-    {
-        munmap(address, 2 * actual_capacity);
-        close(fd);
-        return SoundIoErrorNoMem;
-    }
-
-    other_address = (char*) mmap(address + actual_capacity, actual_capacity,
-                                 PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED, fd, 0);
-    if (other_address != address + actual_capacity)
-    {
-        munmap(address, 2 * actual_capacity);
-        close(fd);
-        return SoundIoErrorNoMem;
-    }
-
-    mem->address = address;
-
-    if (close(fd))
-        return SoundIoErrorSystemResources;
-#endif
-
-    mem->capacity = actual_capacity;
-    return 0;
-}
-
-void soundio_os_deinit_mirrored_memory(struct SoundIoOsMirroredMemory* mem)
-{
-    if (!mem->address)
-        return;
-#if defined(SOUNDIO_OS_WINDOWS)
-    BOOL ok;
-    ok = UnmapViewOfFile(mem->address);
-    assert(ok);
-    ok = UnmapViewOfFile(mem->address + mem->capacity);
-    assert(ok);
-    ok = CloseHandle((HANDLE) mem->priv);
-    assert(ok);
-#else
-    int err = munmap(mem->address, 2 * mem->capacity);
-    assert(!err);
-#endif
-    mem->address = NULL;
-}

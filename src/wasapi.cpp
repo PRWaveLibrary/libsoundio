@@ -524,7 +524,7 @@ static REFERENCE_TIME to_reference_time(double seconds)
 struct RefreshDevices
 {
     IMMDeviceCollection* collection;
-    IMMDevice* mm_device;
+    std::shared_ptr<IMMDevice> mm_device;
     IMMDevice* default_render_device;
     IMMDevice* default_capture_device;
     IMMEndpoint* endpoint;
@@ -592,13 +592,6 @@ static int detect_valid_layouts(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEX
     std::shared_ptr<SoundIoDevice> device = dev;
     HRESULT hr;
 
-    device->layout_count = 0;
-    device->layouts = ALLOCATE(struct SoundIoChannelLayout, ARRAY_LENGTH(test_layouts));
-    if (!device->layouts)
-    {
-        return SoundIoErrorNoMem;
-    }
-
     WAVEFORMATEX* closest_match = NULL;
     WAVEFORMATEXTENSIBLE orig_wave_format = *wave_format;
 
@@ -617,7 +610,7 @@ static int detect_valid_layouts(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEX
         }
         if (hr == S_OK)
         {
-            device->layouts[device->layout_count++] = *test_layout;
+            device->layouts.push_back(*test_layout);
         }
         else if (hr == AUDCLNT_E_UNSUPPORTED_FORMAT || hr == S_FALSE || hr == E_INVALIDARG)
         {
@@ -760,6 +753,19 @@ static int detect_valid_sample_rates(std::shared_ptr<RefreshDevices> rd, WAVEFOR
     return 0;
 }
 
+struct IMMDeviceDeleter
+{
+    void operator()(IMMDevice* device) const
+    {
+        if (device == nullptr)
+        {
+            return;
+        }
+
+        device->Release();
+    }
+};
+
 
 static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 {
@@ -875,10 +881,15 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             rd->mm_device = NULL;
         }
 
-        if (FAILED(hr = rd->collection->Item(device_i, &rd->mm_device)))
+        IMMDevice* device;
+        if (FAILED(hr = rd->collection->Item(device_i, &device)))
         {
             continue;
         }
+
+
+        rd->mm_device = std::shared_ptr<IMMDevice>(device, IMMDeviceDeleter());
+
         if (rd->lpwstr)
         {
             CoTaskMemFree(rd->lpwstr);
@@ -949,7 +960,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         rd->device_shared->aim = data_flow_to_aim(data_flow);
         rd->device_raw->aim = rd->device_shared->aim;
 
-        std::vector<std::shared_ptr<SoundIoDevice> >* device_list;
+        std::vector<std::shared_ptr<SoundIoDevice>>* device_list;
         if (rd->device_shared->aim == SoundIoDeviceAimOutput)
         {
             device_list = &rd->devices_info->output_devices;
@@ -1137,8 +1148,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             else
             {
                 from_wave_format_layout(rd->wave_format, &rd->device_shared->current_layout);
-                rd->device_shared->layout_count = 1;
-                rd->device_shared->layouts = &rd->device_shared->current_layout;
+                rd->device_shared->layouts.push_back(rd->device_shared->current_layout);
             }
         }
 

@@ -899,29 +899,27 @@ const struct SoundIoChannelLayout* soundio_best_matching_channel_layout(
     return NULL;
 }
 
-static int compare_layouts(const void* a, const void* b)
+static int compare_layouts(SoundIoChannelLayout a, SoundIoChannelLayout b)
 {
-    const struct SoundIoChannelLayout* layout_a = *((struct SoundIoChannelLayout**) a);
-    const struct SoundIoChannelLayout* layout_b = *((struct SoundIoChannelLayout**) b);
-    if (layout_a->channel_count > layout_b->channel_count)
+    if (a.channel_count > b.channel_count)
+    {
         return -1;
-    else if (layout_a->channel_count < layout_b->channel_count)
+    }
+    if (a.channel_count < b.channel_count)
+    {
         return 1;
-    else
-        return 0;
+    }
+    return 0;
 }
 
-void soundio_sort_channel_layouts(struct SoundIoChannelLayout* layouts, int layouts_count)
+void soundio_sort_channel_layouts(std::vector<SoundIoChannelLayout>& layouts)
 {
-    if (!layouts)
-        return;
-
-    qsort(layouts, layouts_count, sizeof(struct SoundIoChannelLayout), compare_layouts);
+    std::sort(layouts.begin(), layouts.end(), compare_layouts);
 }
 
 void soundio_device_sort_channel_layouts(std::shared_ptr<SoundIoDevice> device)
 {
-    soundio_sort_channel_layouts(device->layouts, device->layout_count);
+    soundio_sort_channel_layouts(device->layouts);
 }
 
 bool soundio_device_supports_format(std::shared_ptr<SoundIoDevice> device, enum SoundIoFormat format)
@@ -936,7 +934,7 @@ bool soundio_device_supports_format(std::shared_ptr<SoundIoDevice> device, enum 
 
 bool soundio_device_supports_layout(std::shared_ptr<SoundIoDevice> device, const struct SoundIoChannelLayout* layout)
 {
-    for (int i = 0; i < device->layout_count; ++i)
+    for (int i = 0; i < device->layouts.size(); ++i)
     {
         if (soundio_channel_layout_equal(&device->layouts[i], layout))
             return true;

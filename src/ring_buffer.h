@@ -11,14 +11,29 @@
 #include "os.h"
 #include "atomics.h"
 
-struct SoundIoRingBuffer {
-    struct SoundIoOsMirroredMemory mem;
+struct SoundIoRingBuffer
+{
+    std::shared_ptr<SoundIoOsMirroredMemory> mem;
     struct SoundIoAtomicULong write_offset;
     struct SoundIoAtomicULong read_offset;
-    int capacity;
+
+    int init(int requested_capacity);
+
+    int capacity() const
+    {
+        if (mem == nullptr)
+        {
+            return 0;
+        }
+        return mem->capacity;
+    }
+
+private:
+    int init_mirrored_memory(int requested_capacity);
 };
 
-int soundio_ring_buffer_init(struct SoundIoRingBuffer *rb, int requested_capacity);
-void soundio_ring_buffer_deinit(struct SoundIoRingBuffer *rb);
+int soundio_ring_buffer_init(std::shared_ptr<SoundIoRingBuffer> rb, int requested_capacity);
+
+// void soundio_ring_buffer_deinit(std::shared_ptr<SoundIoRingBuffer> rb);
 
 #endif

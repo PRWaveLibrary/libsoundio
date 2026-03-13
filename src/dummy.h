@@ -39,7 +39,7 @@ struct SoundIoOutStreamDummy
     int buffer_frame_count;
     int frames_left;
     int write_frame_count;
-    struct SoundIoRingBuffer ring_buffer;
+    std::shared_ptr<SoundIoRingBuffer> ring_buffer;
     double playback_start_time;
     struct SoundIoAtomicFlag clear_buffer_flag;
     struct SoundIoAtomicBool pause_requested;
@@ -55,7 +55,7 @@ struct SoundIoInStreamDummy
     int frames_left;
     int read_frame_count;
     int buffer_frame_count;
-    struct SoundIoRingBuffer ring_buffer;
+    std::shared_ptr<SoundIoRingBuffer> ring_buffer;
     struct SoundIoAtomicBool pause_requested;
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };

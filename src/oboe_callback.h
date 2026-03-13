@@ -4,7 +4,7 @@
 
 #ifndef AUDIORENDERER_OBOE_CALLBACK_H
 #define AUDIORENDERER_OBOE_CALLBACK_H
-#include <cstdint>
+#include <memory>
 #include "oboe/AudioStreamCallback.h"
 
 struct SoundIoOutStreamPrivate;
@@ -12,7 +12,7 @@ struct SoundIoOutStreamPrivate;
 
 struct oboe_callback : oboe::AudioStreamDataCallback
 {
-    oboe_callback(SoundIoOutStreamPrivate* out_stream_private)
+    oboe_callback(std::shared_ptr<SoundIoOutStreamPrivate> out_stream_private)
     {
         outstream_private = out_stream_private;
     }
@@ -22,7 +22,7 @@ struct oboe_callback : oboe::AudioStreamDataCallback
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream* audioStream, void* audioData, int32_t numFrames) override;
 
 private:
-    SoundIoOutStreamPrivate* outstream_private = nullptr;
+    std::weak_ptr<SoundIoOutStreamPrivate> outstream_private;
 };
 
 struct SoundIoDeviceOboe

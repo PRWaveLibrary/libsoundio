@@ -11,6 +11,15 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <memory>
+#include <functional>
+#include <cassert>
+
+#ifdef _WIN32
+#else
+#include <sys/mman.h>
+#endif
+
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -26,8 +35,7 @@ struct SoundIoOsThread;
 
 int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared_ptr<void> arg, void (*emit_rtprio_warning)(void), std::shared_ptr<SoundIoOsThread>* out_thread);
 
-void soundio_os_thread_destroy(std::shared_ptr<SoundIoOsThread> thread);
-
+// void soundio_os_thread_destroy(std::shared_ptr<SoundIoOsThread> thread);
 
 struct SoundIoOsMutex;
 
@@ -40,6 +48,7 @@ void soundio_os_mutex_lock(struct SoundIoOsMutex* mutex);
 void soundio_os_mutex_unlock(struct SoundIoOsMutex* mutex);
 
 struct SoundIoOsCond;
+struct SoundIoRingBuffer;
 
 struct SoundIoOsCond* soundio_os_cond_create(void);
 
@@ -65,16 +74,16 @@ int soundio_os_page_size(void);
 // You may rely on the size of this struct as part of the API and ABI.
 struct SoundIoOsMirroredMemory
 {
-    size_t capacity;
-    char* address;
-    void* priv;
+    size_t capacity = 0;
+    std::unique_ptr<char, std::function<void(char*)>> address;
+    void* priv = nullptr;
 };
 
 // returned capacity might be increased from capacity to be a multiple of the
 // system page size
-int soundio_os_init_mirrored_memory(struct SoundIoOsMirroredMemory* mem, size_t capacity);
+int soundio_os_init_mirrored_memory(std::shared_ptr<SoundIoOsMirroredMemory> mem, size_t capacity);
 
-void soundio_os_deinit_mirrored_memory(struct SoundIoOsMirroredMemory* mem);
+// void soundio_os_deinit_mirrored_memory(struct SoundIoOsMirroredMemory* mem);
 
 #ifdef __cplusplus
 }

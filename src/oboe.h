@@ -17,17 +17,17 @@ extern "C"
 {
 #endif
 
-int soundio_oboe_init(struct SoundIoPrivate* si);
+int soundio_oboe_init(std::shared_ptr<SoundIoPrivate> si);
 
 struct SoundIoOboe
 {
     struct SoundIoOsMutex* mutex;
     struct SoundIoOsCond* cond;
-    struct SoundIoOsThread* thread;
+    std::shared_ptr<SoundIoOsThread> thread;
     struct SoundIoAtomicFlag abort_flag;
 
     // this one is ready to be read with flush_events. protected by mutex
-    struct SoundIoDevicesInfo* ready_devices_info;
+    std::shared_ptr<struct SoundIoDevicesInfo> ready_devices_info;
     struct SoundIoAtomicBool have_devices_flag;
     struct SoundIoOsCond* have_devices_cond;
     struct SoundIoOsCond* scan_devices_cond;
@@ -47,8 +47,8 @@ struct SoundIoOutStreamOboe
     float* request_audio_data;
     int request_num_frames;
 
-    oboe::AudioStream* output_stream; /* oboe::AudioStream* in C++ */
-    oboe_callback* callback; /* oboe_callback* in C++ */
+    std::unique_ptr<oboe::AudioStream, std::function<void(oboe::AudioStream*)>> output_stream;
+    std::unique_ptr<oboe_callback> callback;
 
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };
