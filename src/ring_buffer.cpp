@@ -18,8 +18,9 @@
 #define _DARWIN_C_SOURCE
 #endif
 
+#ifndef _WIN32
 #include <sys/mman.h>
-
+#endif
 
 int SoundIoRingBuffer::init(int requested_capacity)
 {

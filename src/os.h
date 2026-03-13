@@ -8,11 +8,6 @@
 #ifndef SOUNDIO_OS_H
 #define SOUNDIO_OS_H
 
-#if defined(__APPLE__)
-#else
-#define _GNU_SOURCE
-#endif
-
 #include <stdbool.h>
 #include <stddef.h>
 #include <memory>
@@ -84,12 +79,6 @@
 
 #ifdef SOUNDIO_OS_KQUEUE
 static const uintptr_t notify_ident = 1;
-#endif
-
-
-#ifdef __cplusplus
-extern "C"
-{
 #endif
 
 
@@ -222,7 +211,7 @@ void soundio_os_mutex_lock(std::unique_ptr<SoundIoOsMutex>& mutex);
 void soundio_os_mutex_unlock(std::unique_ptr<SoundIoOsMutex>& mutex);
 
 
-std::unique_ptr<SoundIoOsCond> soundio_os_cond_create(void);
+std::unique_ptr<SoundIoOsCond> soundio_os_cond_create();
 
 // void soundio_os_cond_destroy(struct SoundIoOsCond* cond);
 
@@ -253,9 +242,5 @@ struct SoundIoOsMirroredMemory
 // int soundio_os_init_mirrored_memory(std::shared_ptr<SoundIoOsMirroredMemory> mem, size_t capacity);
 
 // void soundio_os_deinit_mirrored_memory(struct SoundIoOsMirroredMemory* mem);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

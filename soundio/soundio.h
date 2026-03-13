@@ -16,7 +16,8 @@
 
 /// \cond
 #ifdef __cplusplus
-#define SOUNDIO_EXTERN_C extern "C"
+// #define SOUNDIO_EXTERN_C extern "C"
+#define SOUNDIO_EXTERN_C
 #else
 #define SOUNDIO_EXTERN_C
 #endif
