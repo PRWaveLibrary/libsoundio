@@ -315,26 +315,6 @@ std::unique_ptr<SoundIoOsCond> soundio_os_cond_create()
 //     free(cond);
 // }
 
-#if defined(SOUNDIO_OS_WINDOWS)
-oid soundio_os_cond_signal(SoundIoOsCond* cond, SoundIoOsMutex* locked_mutex)
-{
-    if (locked_mutex)
-    {
-        WakeConditionVariable(&cond->id);
-    }
-    else
-    {
-        EnterCriticalSection(&cond->default_cs_id);
-        WakeConditionVariable(&cond->id);
-        LeaveCriticalSection(&cond->default_cs_id);
-    }
-}
-#elif defined(SOUNDIO_OS_KQUEUE)
-
-#else
-
-#endif
-
 void soundio_os_cond_signal(SoundIoOsCond* cond, SoundIoOsMutex* locked_mutex)
 {
 #if defined(SOUNDIO_OS_WINDOWS)

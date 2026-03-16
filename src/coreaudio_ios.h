@@ -16,23 +16,72 @@
 #include <AudioToolbox/AudioToolbox.h>
 
 struct SoundIoPrivate;
-int soundio_coreaudio_init(struct SoundIoPrivate *si);
+struct SoundIoDevicesInfo;
+struct SoundIoOutStreamPrivate;
+struct SoundIoInStreamPrivate;
 
-struct SoundIoDeviceCoreAudioIOS {
+int soundio_coreaudio_init(struct SoundIoPrivate* si);
+
+struct CoreAudioInstanceDeleter
+{
+    void operator()(OpaqueAudioComponentInstance* stream) const;
+};
+
+
+struct CoreAudioCallback
+{
+    std::weak_ptr<SoundIoOutStreamPrivate> out_stream;
+    std::weak_ptr<SoundIoInStreamPrivate> in_stream;
+    std::weak_ptr<SoundIoPrivate> si;
+
+    //    OSStatus devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]);
+    //
+    //    OSStatus service_restarted(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]);
+    //
+    //    OSStatus outstream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]);
+    //
+    //    OSStatus instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]) const;
+
+    OSStatus write_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList* io_data);
+
+    OSStatus read_callback_ca(AudioUnitRenderActionFlags *io_action_flags, const AudioTimeStamp *in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList *io_data);
+
+
+    //    void unsubscribe_device_listeners() const;
+
+    //    static OSStatus on_devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data);
+    //
+    //    static OSStatus on_service_restarted(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data);
+    //
+    //    static OSStatus on_outstream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data);
+    //
+    //    static OSStatus on_instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data);
+
+    static OSStatus write_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList* io_data);
+
+    static OSStatus read_callback(void *userdata, AudioUnitRenderActionFlags *io_action_flags, const AudioTimeStamp *in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList *io_data);
+    //
+    //    static void unsubscribe_device_listeners(std::shared_ptr<SoundIoPrivate> si);
+};
+
+struct SoundIoDeviceCoreAudioIOS
+{
     UInt32 latency_frames;
 };
 
-struct SoundIoCoreAudioIOS {
-    struct SoundIoOsMutex *mutex;
-    struct SoundIoOsCond *cond;
-    struct SoundIoOsThread *thread;
+struct SoundIoCoreAudioIOS
+{
+    std::unique_ptr<CoreAudioCallback> callback = std::make_unique<CoreAudioCallback>();
+    std::unique_ptr<SoundIoOsMutex> mutex;
+    std::unique_ptr<SoundIoOsCond> cond;
+    std::unique_ptr<SoundIoOsThread> thread;
     struct SoundIoAtomicFlag abort_flag;
 
     // this one is ready to be read with flush_events. protected by mutex
-    struct SoundIoDevicesInfo *ready_devices_info;
+    std::unique_ptr<SoundIoDevicesInfo> ready_devices_info;
     struct SoundIoAtomicBool have_devices_flag;
-    struct SoundIoOsCond *have_devices_cond;
-    struct SoundIoOsCond *scan_devices_cond;
+    std::unique_ptr<SoundIoOsCond> have_devices_cond;
+    std::unique_ptr<SoundIoOsCond> scan_devices_cond;
 
     struct SoundIoAtomicBool device_scan_queued;
     struct SoundIoAtomicBool service_restarted;
@@ -40,9 +89,10 @@ struct SoundIoCoreAudioIOS {
     bool emitted_shutdown_cb;
 };
 
-struct SoundIoOutStreamCoreAudioIOS {
-    AudioComponentInstance instance;
-    AudioBufferList *io_data;
+struct SoundIoOutStreamCoreAudioIOS
+{
+    std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter> instance;
+    AudioBufferList* io_data;
     int buffer_index;
     int frames_left;
     int write_frame_count;
@@ -51,9 +101,10 @@ struct SoundIoOutStreamCoreAudioIOS {
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };
 
-struct SoundIoInStreamCoreAudioIOS {
-    AudioComponentInstance instance;
-    AudioBufferList *buffer_list;
+struct SoundIoInStreamCoreAudioIOS
+{
+    std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter> instance;
+    std::unique_ptr<AudioBufferList,decltype(&std::free)> buffer_list;
     int frames_left;
     double hardware_latency;
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(libsoundio CXX)
+project(libsoundio LANGUAGES CXX OBJCXX)
 set(CMAKE_MODULE_PATH ${libsoundio_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 
 set(CMAKE_C_STANDARD 11)
@@ -102,6 +102,7 @@ else ()
     set(SOUNDIO_HAVE_ALSA false)
     set(ALSA_LIBRARIES "")
 endif ()
+
 
 if (SOUNDIO_ENABLE_COREAUDIO AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
     find_package(COREAUDIO)
@@ -206,6 +207,7 @@ if (SOUNDIO_HAVE_COREAUDIO)
             "${libsoundio_SOURCE_DIR}/src/coreaudio.cpp"
     )
 endif ()
+
 if (SOUNDIO_HAVE_COREAUDIO_IOS)
     set(LIBSOUNDIO_HEADERS ${LIBSOUNDIO_HEADERS}
             "${libsoundio_SOURCE_DIR}/src/soundio_internal.h"
@@ -213,7 +215,7 @@ if (SOUNDIO_HAVE_COREAUDIO_IOS)
             "${libsoundio_SOURCE_DIR}/src/coreaudio_ios.h"
     )
     set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES} ${LIBSOUNDIO_HEADERS} ${CONFIGURE_OUT_FILE}
-            "${libsoundio_SOURCE_DIR}/src/coreaudio_ios.m"
+            "${libsoundio_SOURCE_DIR}/src/coreaudio_ios.mm"
     )
 
     find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox REQUIRED)
@@ -459,6 +461,6 @@ message(
         "* ALSA           (optional)    : ${STATUS_ALSA}\n"
         "* CoreAudio      (optional)    : ${STATUS_COREAUDIO}\n"
         "* CoreAudio iOS  (optional)    : ${STATUS_COREAUDIO_IOS}\n"
-        "* Oboe  (optional)             : ${STATUS_OBOE}\n"
+        "* Oboe           (optional)    : ${STATUS_OBOE}\n"
         "* WASAPI         (optional)    : ${STATUS_WASAPI}\n"
 )
