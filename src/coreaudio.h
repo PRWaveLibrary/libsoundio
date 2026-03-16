@@ -116,7 +116,7 @@ struct SoundIoOutStreamCoreAudio
 struct SoundIoInStreamCoreAudio
 {
     AudioComponentInstance instance;
-    std::unique_ptr<AudioBufferList> buffer_list;
+    std::unique_ptr<AudioBufferList, decltype(&std::free)> buffer_list{nullptr, std::free};
     int frames_left;
     double hardware_latency;
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
