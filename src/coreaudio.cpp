@@ -51,6 +51,7 @@ OSStatus CoreAudioCallback::devices_changed(AudioObjectID in_object_id, UInt32 i
     SoundIoCoreAudio& sica = s->backend_data->coreaudio;
     SOUNDIO_ATOMIC_STORE(sica.device_scan_queued, true);
     soundio_os_cond_signal(sica.scan_devices_cond.get(), nullptr);
+    soundio_wait_events(s);
 
     return noErr;
 }
@@ -95,7 +96,11 @@ void CoreAudioCallback::unsubscribe_device_listeners() const
     {
         for (auto& device_listen_prop: device_listen_props)
         {
-            AudioObjectRemovePropertyListener(device_id, &device_listen_prop, on_devices_changed, s->backend_data->coreaudio.callback.get());
+            OSStatus os_err = AudioObjectRemovePropertyListener(device_id, &device_listen_prop, on_devices_changed, s->backend_data->coreaudio.callback.get());
+            if (os_err != noErr)
+            {
+                ERROR_LOG(std::to_string(os_err).c_str());
+            }
         }
     }
     sica.registered_listeners.clear();
@@ -143,6 +148,12 @@ static void destroy_core_audio(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoCoreAudio& sica = si->backend_data->coreaudio;
     AudioObjectPropertyAddress prop_address = {kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+    AudioObjectRemovePropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si->backend_data->coreaudio.callback.get());
+
+    prop_address.mSelector = kAudioHardwarePropertyDefaultInputDevice;
+    AudioObjectRemovePropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si->backend_data->coreaudio.callback.get());
+
+    prop_address.mSelector = kAudioHardwarePropertyDefaultOutputDevice;
     AudioObjectRemovePropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si->backend_data->coreaudio.callback.get());
 
     prop_address.mSelector = kAudioHardwarePropertyServiceRestarted;
@@ -502,9 +513,9 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
     std::shared_ptr<SoundIo> soundio = si;
     struct SoundIoCoreAudio& sica = si->backend_data->coreaudio;
 
-    UInt32 io_size;
-    OSStatus os_err;
-    int err;
+    UInt32 io_size = 0;
+    OSStatus os_err = 0;
+    int err = 0;
 
     CoreAudioCallback::unsubscribe_device_listeners(si);
 
@@ -514,8 +525,8 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
     rd.devices_info = std::make_unique<SoundIoDevicesInfo>();
 
     AudioObjectPropertyAddress prop_address = {kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
-
-    if ((os_err = AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &prop_address, 0, nullptr, &io_size)))
+    os_err = AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &prop_address, 0, nullptr, &io_size);
+    if (os_err != noErr)
     {
         deinit_refresh_devices(&rd);
         return SoundIoErrorOpeningDevice;
@@ -532,8 +543,8 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
     {
         rd.devices_size = io_size;
         auto* system_devices = new AudioObjectID[device_count];
-
-        if ((os_err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &prop_address, 0, nullptr, &io_size, system_devices)))
+        os_err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &prop_address, 0, nullptr, &io_size, system_devices);
+        if (os_err != noErr)
         {
             delete[] system_devices;
             system_devices = nullptr;
@@ -552,7 +563,8 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
         io_size = sizeof(AudioObjectID);
         prop_address.mSelector = kAudioHardwarePropertyDefaultInputDevice;
-        if ((os_err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &prop_address, 0, nullptr, &io_size, &default_input_id)))
+        os_err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &prop_address, 0, nullptr, &io_size, &default_input_id);
+        if (os_err != noErr)
         {
             deinit_refresh_devices(&rd);
             return SoundIoErrorOpeningDevice;
@@ -560,7 +572,8 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
         io_size = sizeof(AudioObjectID);
         prop_address.mSelector = kAudioHardwarePropertyDefaultOutputDevice;
-        if ((os_err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &prop_address, 0, nullptr, &io_size, &default_output_id)))
+        os_err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &prop_address, 0, nullptr, &io_size, &default_output_id);
+        if (os_err != noErr)
         {
             deinit_refresh_devices(&rd);
             return SoundIoErrorOpeningDevice;
@@ -573,16 +586,15 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
         for (int i = 0; i < std::size(device_listen_props); i += 1)
         {
-            os_err = AudioObjectAddPropertyListener(device_id, &device_listen_props[i], CoreAudioCallback::on_devices_changed, si.get());
+            os_err = AudioObjectAddPropertyListener(device_id, &device_listen_props[i], CoreAudioCallback::on_devices_changed, si->backend_data->coreaudio.callback.get());
             if (os_err != noErr)
             {
                 deinit_refresh_devices(&rd);
                 return SoundIoErrorOpeningDevice;
             }
-
-            sica.registered_listeners.push_back(device_id);
         }
 
+        sica.registered_listeners.push_back(device_id);
         prop_address.mSelector = kAudioObjectPropertyName;
         prop_address.mScope = kAudioObjectPropertyScopeGlobal;
         prop_address.mElement = kAudioObjectPropertyElementMain;
@@ -1552,6 +1564,22 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si)
     }
 
     AudioObjectPropertyAddress prop_address = {kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+    err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si->backend_data->coreaudio.callback.get());
+    if (err != noErr)
+    {
+        destroy_core_audio(si);
+        return SoundIoErrorSystemResources;
+    }
+
+    prop_address.mSelector = kAudioHardwarePropertyDefaultInputDevice;
+    err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si->backend_data->coreaudio.callback.get());
+    if (err != noErr)
+    {
+        destroy_core_audio(si);
+        return SoundIoErrorSystemResources;
+    }
+
+    prop_address.mSelector = kAudioHardwarePropertyDefaultOutputDevice;
     err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si->backend_data->coreaudio.callback.get());
     if (err != noErr)
     {

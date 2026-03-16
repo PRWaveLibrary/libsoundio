@@ -656,9 +656,6 @@ struct SoundIo
     /// Optional. Put whatever you want here. Defaults to NULL.
     void* userdata;
 
-    std::shared_ptr<SoundIoOutStream> out_stream;
-    std::shared_ptr<SoundIoInStream> in_stream;
-
     /// Optional callback. Called when the list of devices change. Only called
     /// during a call to ::soundio_flush_events or ::soundio_wait_events.
     void (*on_devices_change)(std::shared_ptr<SoundIo>);
