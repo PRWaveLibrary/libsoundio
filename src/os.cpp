@@ -31,7 +31,7 @@ double soundio_os_get_time(void)
 {
 #if defined(SOUNDIO_OS_WINDOWS)
     unsigned __int64 time;
-    QueryPerformanceCounter((LARGE_INTEGER*) &time);
+    QueryPerformanceCounter((LARGE_INTEGER *) &time);
     return time * win32_time_resolution;
 #elif defined(__MACH__)
     mach_timespec_t mts;
@@ -55,7 +55,7 @@ double soundio_os_get_time(void)
 #if defined(SOUNDIO_OS_WINDOWS)
 static DWORD WINAPI run_win32_thread(LPVOID userdata)
 {
-    struct SoundIoOsThread* thread = (struct SoundIoOsThread*) userdata;
+    struct SoundIoOsThread* thread = (struct SoundIoOsThread *) userdata;
     HRESULT err = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     assert(err == S_OK);
     thread->run(thread->arg);
@@ -70,7 +70,7 @@ static void assert_no_err(int err)
 
 static void* run_pthread(void* userdata)
 {
-    struct SoundIoOsThread* thread = static_cast<struct SoundIoOsThread*>(userdata);
+    struct SoundIoOsThread* thread = static_cast<struct SoundIoOsThread *>(userdata);
     thread->run(thread->arg);
     return NULL;
 }
@@ -315,6 +315,26 @@ std::unique_ptr<SoundIoOsCond> soundio_os_cond_create()
 //     free(cond);
 // }
 
+#if defined(SOUNDIO_OS_WINDOWS)
+oid soundio_os_cond_signal(SoundIoOsCond* cond, SoundIoOsMutex* locked_mutex)
+{
+    if (locked_mutex)
+    {
+        WakeConditionVariable(&cond->id);
+    }
+    else
+    {
+        EnterCriticalSection(&cond->default_cs_id);
+        WakeConditionVariable(&cond->id);
+        LeaveCriticalSection(&cond->default_cs_id);
+    }
+}
+#elif defined(SOUNDIO_OS_KQUEUE)
+
+#else
+
+#endif
+
 void soundio_os_cond_signal(SoundIoOsCond* cond, SoundIoOsMutex* locked_mutex)
 {
 #if defined(SOUNDIO_OS_WINDOWS)
@@ -494,7 +514,7 @@ static int internal_init(void)
 {
 #if defined(SOUNDIO_OS_WINDOWS)
     unsigned __int64 frequency;
-    if (QueryPerformanceFrequency((LARGE_INTEGER*) &frequency))
+    if (QueryPerformanceFrequency((LARGE_INTEGER *) &frequency))
     {
         win32_time_resolution = 1.0 / (double) frequency;
     }

@@ -1181,12 +1181,12 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate> si, bool wait)
     // soundio_destroy_devices_info(old_devices_info);
 }
 
-static void flush_events_wasapi(std::shared_ptr<SoundIoPrivate> si)
+static void flush_events_ca(std::shared_ptr<SoundIoPrivate> si)
 {
     my_flush_events(si, false);
 }
 
-static void wait_events_wasapi(std::shared_ptr<SoundIoPrivate> si)
+static void wait_events_ca(std::shared_ptr<SoundIoPrivate> si)
 {
     my_flush_events(si, true);
 }
@@ -2734,8 +2734,8 @@ int soundio_wasapi_init(std::shared_ptr<SoundIoPrivate> si)
     siw.device_events = std::make_unique<soundio_NotificationClient>(si);
 
     si->destroy = destroy_wasapi;
-    si->flush_events = flush_events_wasapi;
-    si->wait_events = wait_events_wasapi;
+    si->flush_events = flush_events_ca;
+    si->wait_events = wait_events_ca;
     si->wakeup = wakeup_wasapi;
     si->force_device_scan = force_device_scan_wasapi;
 

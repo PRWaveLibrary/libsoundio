@@ -184,7 +184,7 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
 }
 
 
-static void flush_events_oboe(std::shared_ptr<SoundIoPrivate> si)
+static void flush_events_ca(std::shared_ptr<SoundIoPrivate> si)
 {
     my_flush_events(si, false);
 }
@@ -476,7 +476,7 @@ int soundio_oboe_init(std::shared_ptr<SoundIoPrivate> si)
     }
 
     si->destroy = destroy_oboe;
-    si->flush_events = flush_events_oboe;
+    si->flush_events = flush_events_ca;
     si->wait_events = wait_events_oboe;
     si->wakeup = wakeup_oboe;
     si->force_device_scan = force_device_scan_oboe;

@@ -445,7 +445,7 @@ bool soundio_channel_layout_detect_builtin(struct SoundIoChannelLayout* layout)
             return true;
         }
     }
-    layout->name = NULL;
+    layout->name = nullptr;
     return false;
 }
 
