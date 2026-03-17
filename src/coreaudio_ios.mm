@@ -82,7 +82,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si) {
         dev->layouts.push_back(dev->current_layout);
         dev->current_layout.channel_count = static_cast<int>(aim == SoundIoDeviceAimOutput ? session.outputNumberOfChannels : session.inputNumberOfChannels);
 
-        dev->sample_rate_current = session.sampleRate;
+        dev->sample_rate_current = static_cast<int>(session.sampleRate);
         dev->sample_rates.push_back(SoundIoSampleRateRange{dev->sample_rate_current, dev->sample_rate_current});
         
         dev->software_latency_current = aim == SoundIoDeviceAimOutput ? session.outputLatency : session.inputLatency;
@@ -260,11 +260,11 @@ OSStatus CoreAudioCallback::write_callback(void *userdata, AudioUnitRenderAction
 static int set_ca_desc(enum SoundIoFormat fmt, AudioStreamBasicDescription *desc) {
     switch (fmt) {
     case SoundIoFormatFloat32LE:
-        desc->mFormatFlags = kAudioFormatFlagIsFloat;
+        desc->mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
         desc->mBitsPerChannel = 32;
         break;
     case SoundIoFormatFloat64LE:
-        desc->mFormatFlags = kAudioFormatFlagIsFloat;
+        desc->mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
         desc->mBitsPerChannel = 64;
         break;
     case SoundIoFormatS32LE:
@@ -586,8 +586,9 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
         return SoundIoErrorOpeningDevice;
     }
 
-    instance = nullptr;
     isca.instance = std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter>(instance,CoreAudioInstanceDeleter());
+    instance = nullptr;
+
     os_err = AudioUnitInitialize(isca.instance.get());
     if (os_err != noErr)
     {
