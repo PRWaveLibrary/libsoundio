@@ -366,7 +366,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     return 0;
 }
 
-static int outstream_pause_ca(std::shared_ptr<SoundIoPrivate> si, struct SoundIoOutStreamPrivate *os, bool pause) {
+static int outstream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause) {
     SoundIoOutStreamCoreAudioIOS& osca = os->backend_data.coreaudio_ios;
     OSStatus os_err;
     if (pause)
@@ -389,12 +389,12 @@ static int outstream_pause_ca(std::shared_ptr<SoundIoPrivate> si, struct SoundIo
     return 0;
 }
 
-static int outstream_start_ca(std::shared_ptr<SoundIoPrivate> si, struct SoundIoOutStreamPrivate *os) {
+static int outstream_start_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os) {
     return outstream_pause_ca(si, os, false);
 }
 
 
-static int outstream_begin_write_ca(std::shared_ptr<SoundIoPrivate> si, struct SoundIoOutStreamPrivate *os, struct SoundIoChannelArea **out_areas, int *frame_count)
+static int outstream_begin_write_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, struct SoundIoChannelArea **out_areas, int *frame_count)
 {
     SoundIoOutStreamCoreAudioIOS& osca = os->backend_data.coreaudio_ios;
 
@@ -422,7 +422,7 @@ static int outstream_begin_write_ca(std::shared_ptr<SoundIoPrivate> si, struct S
     return 0;
 }
 
-static int outstream_end_write_ca(std::shared_ptr<SoundIoPrivate> si, struct SoundIoOutStreamPrivate *os)
+static int outstream_end_write_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     SoundIoOutStreamCoreAudioIOS& osca = os->backend_data.coreaudio_ios;
     osca.buffer_index += 1;
@@ -431,19 +431,19 @@ static int outstream_end_write_ca(std::shared_ptr<SoundIoPrivate> si, struct Sou
     return 0;
 }
 
-static int outstream_clear_buffer_ca(std::shared_ptr<SoundIoPrivate> si, struct SoundIoOutStreamPrivate *os)
+static int outstream_clear_buffer_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     return SoundIoErrorIncompatibleBackend;
 }
 
-static int outstream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, struct SoundIoOutStreamPrivate *os, double *out_latency)
+static int outstream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, double *out_latency)
 {
     SoundIoOutStreamCoreAudioIOS& osca = os->backend_data.coreaudio_ios;
     *out_latency = osca.hardware_latency;
     return 0;
 }
 
-static int outstream_set_volume_ca(std::shared_ptr<SoundIoPrivate> si, struct SoundIoOutStreamPrivate *os, float volume)
+static int outstream_set_volume_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, float volume)
 {
     os->volume = volume;
     return 0;
@@ -684,13 +684,13 @@ static int instream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
 }
 
 int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
-    struct SoundIoCoreAudioIOS *sica = &si->backend_data.coreaudio_ios;
+    SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
     int err;
 
-    SOUNDIO_ATOMIC_STORE(sica->have_devices_flag, false);
-    SOUNDIO_ATOMIC_STORE(sica->device_scan_queued, true);
-    SOUNDIO_ATOMIC_STORE(sica->service_restarted, false);
-    SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(sica->abort_flag);
+    SOUNDIO_ATOMIC_STORE(sica.have_devices_flag, false);
+    SOUNDIO_ATOMIC_STORE(sica.device_scan_queued, true);
+    SOUNDIO_ATOMIC_STORE(sica.service_restarted, false);
+    SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(sica.abort_flag);
     
     // 这里unity会处理
 //    NSError* ns_err = nil;
@@ -710,31 +710,32 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
 //    }
     
     
-    sica->mutex = soundio_os_mutex_create();
-    if (!sica->mutex) {
+    sica.mutex = soundio_os_mutex_create();
+    if (!sica.mutex) {
         destroy_ca(si);
         return SoundIoErrorNoMem;
     }
 
-    sica->cond = soundio_os_cond_create();
-    if (!sica->cond) {
+    sica.cond = soundio_os_cond_create();
+    if (!sica.cond) {
         destroy_ca(si);
         return SoundIoErrorNoMem;
     }
 
-    sica->have_devices_cond = soundio_os_cond_create();
-    if (!sica->have_devices_cond) {
+    sica.have_devices_cond = soundio_os_cond_create();
+    if (!sica.have_devices_cond) {
         destroy_ca(si);
         return SoundIoErrorNoMem;
     }
 
-    sica->scan_devices_cond = soundio_os_cond_create();
-    if (!sica->scan_devices_cond) {
+    sica.scan_devices_cond = soundio_os_cond_create();
+    if (!sica.scan_devices_cond) {
         destroy_ca(si);
         return SoundIoErrorNoMem;
     }
 
-    if ((err = soundio_os_thread_create(device_thread_run, si, NULL, &sica->thread))) {
+    err = soundio_os_thread_create(device_thread_run, si, NULL, &sica.thread);
+    if (err != SoundIoErrorNone) {
         destroy_ca(si);
         return err;
     }

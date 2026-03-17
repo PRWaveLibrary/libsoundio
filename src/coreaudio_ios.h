@@ -20,7 +20,7 @@ struct SoundIoDevicesInfo;
 struct SoundIoOutStreamPrivate;
 struct SoundIoInStreamPrivate;
 
-int soundio_coreaudio_init(struct SoundIoPrivate* si);
+int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si);
 
 struct CoreAudioInstanceDeleter
 {
@@ -91,7 +91,7 @@ struct SoundIoCoreAudioIOS
 
 struct SoundIoOutStreamCoreAudioIOS
 {
-    std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter> instance;
+    std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter> instance = std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter>(nullptr,CoreAudioInstanceDeleter());
     AudioBufferList* io_data;
     int buffer_index;
     int frames_left;
@@ -103,8 +103,8 @@ struct SoundIoOutStreamCoreAudioIOS
 
 struct SoundIoInStreamCoreAudioIOS
 {
-    std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter> instance;
-    std::unique_ptr<AudioBufferList,decltype(&std::free)> buffer_list;
+    std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter> instance = std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter>(nullptr,CoreAudioInstanceDeleter());
+    std::unique_ptr<AudioBufferList,decltype(&std::free)> buffer_list = std::unique_ptr<AudioBufferList,decltype(&std::free)>(nullptr,std::free);
     int frames_left;
     double hardware_latency;
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
