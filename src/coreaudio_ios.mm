@@ -561,10 +561,16 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
         return SoundIoErrorOpeningDevice;
     }
 
-    UInt32 num_buffers = input_format.mChannelsPerFrame;
+    // 我们使用的 ASBD 是交错模式 (Interleaved)，所以 mNumberBuffers 应当固定为 1
+    UInt32 num_buffers = 1;
     io_size = offsetof(AudioBufferList, mBuffers[0]) + (sizeof(AudioBuffer) * num_buffers);
 
     isca.buffer_list = std::unique_ptr<AudioBufferList,decltype(&std::free)>((AudioBufferList*)malloc(io_size),std::free);
+    // 强制初始化结构体字段，防止 garbage value 导致崩溃
+    isca.buffer_list->mNumberBuffers = num_buffers;
+    isca.buffer_list->mBuffers[0].mNumberChannels = is->layout.channel_count;
+    isca.buffer_list->mBuffers[0].mDataByteSize = 0;
+    isca.buffer_list->mBuffers[0].mData = NULL;
 
     AudioComponentDescription desc = {0};
     desc.componentType = kAudioUnitType_Output;
