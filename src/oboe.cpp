@@ -27,7 +27,6 @@ static enum SoundIoDeviceAim aims[] = {
 
 static int refresh_devices(std::shared_ptr<SoundIoPrivate>& si)
 {
-    std::shared_ptr<SoundIo> soundio = si;
     SoundIoOboe& sio = si->backend_data->oboe;
 
     std::unique_ptr<SoundIoDevicesInfo> devices_info = std::make_unique<SoundIoDevicesInfo>();
@@ -50,7 +49,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate>& si)
         // }
 
         // dev->ref_count = 1;
-        dev->soundio = soundio;
+        dev->soundio = si;
         dev->is_raw = false;
         dev->aim = aim;
         dev->name = aim == SoundIoDeviceAimInput ? L"Oboe Input" : L"Oboe Output";
@@ -97,21 +96,19 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate>& si)
     sio.ready_devices_info = std::move(devices_info);
     SOUNDIO_ATOMIC_STORE(sio.have_devices_flag, true);
     soundio_os_cond_signal(sio.cond.get(), sio.mutex.get());
-    soundio->on_events_signal(soundio);
     soundio_os_mutex_unlock(sio.mutex);
-
+    si->on_events_signal(si);
     return 0;
 }
 
 static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
 {
-    std::shared_ptr<SoundIo> soundio = si;
     SoundIoOboe& sio = si->backend_data->oboe;
     soundio_os_mutex_lock(sio.mutex);
     sio.shutdown_err = err;
     soundio_os_cond_signal(sio.cond.get(), sio.mutex.get());
-    soundio->on_events_signal(soundio);
     soundio_os_mutex_unlock(sio.mutex);
+    si->on_events_signal(si);
 }
 
 static void device_thread_run(std::shared_ptr<void> arg)
@@ -184,7 +181,7 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
 }
 
 
-static void flush_events_ca(std::shared_ptr<SoundIoPrivate> si)
+static void flush_events_oboe(std::shared_ptr<SoundIoPrivate> si)
 {
     my_flush_events(si, false);
 }
@@ -481,7 +478,7 @@ int soundio_oboe_init(std::shared_ptr<SoundIoPrivate> si)
     }
 
     si->destroy = destroy_oboe;
-    si->flush_events = flush_events_ca;
+    si->flush_events = flush_events_oboe;
     si->wait_events = wait_events_oboe;
     si->wakeup = wakeup_oboe;
     si->force_device_scan = force_device_scan_oboe;

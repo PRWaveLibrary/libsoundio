@@ -215,7 +215,6 @@ static void device_thread_run(std::shared_ptr<void> arg) {
                 soundio_os_cond_signal(sica.have_devices_cond.get(), NULL);
             }
             soundio_os_cond_signal(sica.cond.get(), NULL);
-            si->on_events_signal(si);
         }
         soundio_os_cond_wait(sica.scan_devices_cond.get(), NULL);
     }

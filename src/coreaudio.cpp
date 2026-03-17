@@ -106,34 +106,34 @@ void CoreAudioCallback::unsubscribe_device_listeners() const
 
 OSStatus CoreAudioCallback::on_devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback *>(in_client_data);
+    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->devices_changed(in_object_id, in_number_addresses, in_addresses);
 }
 
 OSStatus CoreAudioCallback::on_service_restarted(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback *>(in_client_data);
+    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->service_restarted(in_object_id, in_number_addresses, in_addresses);
 }
 
 OSStatus CoreAudioCallback::on_outstream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[],
                                                          void* in_client_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback *>(in_client_data);
+    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->outstream_device_overload(in_object_id, in_number_addresses, in_addresses);
 }
 
 OSStatus CoreAudioCallback::on_instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[],
                                                         void* in_client_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback *>(in_client_data);
+    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->instream_device_overload(in_object_id, in_number_addresses, in_addresses);
 }
 
 OSStatus CoreAudioCallback::write_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number,
                                            UInt32 in_number_frames, AudioBufferList* io_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback *>(userdata);
+    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(userdata);
     return callback->write_callback_ca(io_action_flags, in_time_stamp, in_bus_number, in_number_frames, io_data);
 }
 
@@ -202,7 +202,7 @@ static std::wstring from_cf_string(CFStringRef string_ref)
     }
 
     std::wstring wstr(usedBufLen / sizeof(wchar_t), L'\0');
-    CFStringGetBytes(string_ref, range, encoding, '?', false, reinterpret_cast<UInt8 *>(&wstr[0]), usedBufLen, nullptr);
+    CFStringGetBytes(string_ref, range, encoding, '?', false, reinterpret_cast<UInt8*>(&wstr[0]), usedBufLen, nullptr);
     return wstr;
 }
 
@@ -641,7 +641,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             }
 
             std::unique_ptr<AudioBufferList, decltype(&std::free)> buffer_list = std::unique_ptr<AudioBufferList, decltype(&std::free)>(
-                static_cast<AudioBufferList *>(malloc(io_size)), std::free);
+                static_cast<AudioBufferList*>(malloc(io_size)), std::free);
             os_err = AudioObjectGetPropertyData(device_id, &prop_address, 0, nullptr, &io_size, buffer_list.get());
             if (os_err != noErr)
             {
@@ -683,7 +683,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
             if (os_err == noErr)
             {
-                std::unique_ptr<AudioChannelLayout, decltype(&std::free)> layout_buf(static_cast<AudioChannelLayout *>(std::malloc(io_size)), std::free);
+                std::unique_ptr<AudioChannelLayout, decltype(&std::free)> layout_buf(static_cast<AudioChannelLayout*>(std::malloc(io_size)), std::free);
 
                 if (!layout_buf)
                 {
@@ -764,7 +764,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
                 UInt32 avr_array_len = io_size / sizeof(AudioValueRange);
                 std::unique_ptr<AudioValueRange[], decltype(&std::free)> avr_buf = std::unique_ptr<AudioValueRange[], decltype(&std::free)>(
-                    static_cast<AudioValueRange *>(std::malloc(io_size)), std::free);
+                    static_cast<AudioValueRange*>(std::malloc(io_size)), std::free);
 
                 if (!avr_buf)
                 {
@@ -959,7 +959,7 @@ static void device_thread_run(std::shared_ptr<void> arg)
                 soundio_os_cond_signal(sica.have_devices_cond.get(), nullptr);
             }
             soundio_os_cond_signal(sica.cond.get(), nullptr);
-            si->on_events_signal(si);
+            continue;
         }
         soundio_os_cond_wait(sica.scan_devices_cond.get(), nullptr);
     }
@@ -1187,7 +1187,7 @@ static int outstream_begin_write_ca(std::shared_ptr<SoundIoPrivate> si, std::sha
     assert((audio_buffer->mDataByteSize % os->bytes_per_frame) == 0);
     for (int ch = 0; ch < os->layout.channel_count; ch += 1)
     {
-        osca.areas[ch].ptr = static_cast<char *>(audio_buffer->mData) + os->bytes_per_sample * ch;
+        osca.areas[ch].ptr = static_cast<char*>(audio_buffer->mData) + os->bytes_per_sample * ch;
         osca.areas[ch].step = os->bytes_per_frame;
     }
     *out_areas = osca.areas;
@@ -1265,7 +1265,7 @@ OSStatus CoreAudioCallback::read_callback(void* userdata, AudioUnitRenderActionF
                                           UInt32 in_number_frames,
                                           AudioBufferList* io_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback *>(userdata);
+    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(userdata);
     return callback->read_callback_ca(io_action_flags, in_time_stamp, in_bus_number, in_number_frames, io_data);
 }
 
@@ -1299,7 +1299,7 @@ OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags* io_acti
         assert(audio_buffer->mDataByteSize == in_number_frames * is->bytes_per_frame);
         for (int ch = 0; ch < is->layout.channel_count; ch += 1)
         {
-            isca.areas[ch].ptr = static_cast<char *>(audio_buffer->mData) + (is->bytes_per_sample * ch);
+            isca.areas[ch].ptr = static_cast<char*>(audio_buffer->mData) + (is->bytes_per_sample * ch);
             isca.areas[ch].step = is->bytes_per_frame;
         }
     }
@@ -1310,7 +1310,7 @@ OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags* io_acti
         {
             AudioBuffer* audio_buffer = &isca.buffer_list->mBuffers[ch];
             assert(audio_buffer->mDataByteSize == in_number_frames * is->bytes_per_sample);
-            isca.areas[ch].ptr = static_cast<char *>(audio_buffer->mData);
+            isca.areas[ch].ptr = static_cast<char*>(audio_buffer->mData);
             isca.areas[ch].step = is->bytes_per_sample;
         }
     }
@@ -1349,7 +1349,7 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
         return SoundIoErrorOpeningDevice;
     }
 
-    isca.buffer_list = std::unique_ptr<AudioBufferList, decltype(&std::free)>(static_cast<AudioBufferList *>(malloc(io_size)), &std::free);
+    isca.buffer_list = std::unique_ptr<AudioBufferList, decltype(&std::free)>(static_cast<AudioBufferList*>(malloc(io_size)), &std::free);
     if (!isca.buffer_list)
     {
         instream_destroy_ca(si, is);

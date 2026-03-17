@@ -1122,8 +1122,8 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
     siw.ready_devices_info = std::move(rd->devices_info);
     siw.have_devices_flag = true;
     soundio_os_cond_signal(siw.cond.get(), siw.mutex.get());
-    soundio->on_events_signal(soundio);
     soundio_os_mutex_unlock(siw.mutex);
+    soundio->on_events_signal(soundio);
     return 0;
 }
 
@@ -1135,8 +1135,8 @@ static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
     soundio_os_mutex_lock(siw.mutex);
     siw.shutdown_err = err;
     soundio_os_cond_signal(siw.cond.get(), siw.mutex.get());
-    soundio->on_events_signal(soundio);
     soundio_os_mutex_unlock(siw.mutex);
+    soundio->on_events_signal(soundio);
 }
 
 
@@ -1180,12 +1180,12 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate> si, bool wait)
     // soundio_destroy_devices_info(old_devices_info);
 }
 
-static void flush_events_ca(std::shared_ptr<SoundIoPrivate> si)
+static void flush_events_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     my_flush_events(si, false);
 }
 
-static void wait_events_ca(std::shared_ptr<SoundIoPrivate> si)
+static void wait_events_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     my_flush_events(si, true);
 }
@@ -1249,9 +1249,12 @@ static void force_device_scan_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
 
+    soundio_os_mutex_lock(siw.mutex);
+    siw.have_devices_flag = false;
+    soundio_os_mutex_unlock(siw.mutex);
+
     soundio_os_mutex_lock(siw.scan_devices_mutex);
     siw.device_scan_queued = true;
-    siw.have_devices_flag = false;
     soundio_os_cond_signal(siw.scan_devices_cond.get(), siw.scan_devices_mutex.get());
     soundio_os_mutex_unlock(siw.scan_devices_mutex);
 }
@@ -2649,7 +2652,14 @@ STDMETHODIMP_(ULONG) soundio_NotificationClient::Release()
 
 static HRESULT queue_device_scan(soundio_NotificationClient* client)
 {
-    force_device_scan_wasapi(client->si.lock());
+    std::shared_ptr<SoundIoPrivate> si = client->si.lock();
+    if (si == nullptr)
+    {
+        printf("os is nullptr!");
+        return S_OK;
+    }
+
+    force_device_scan_wasapi(si);
     return S_OK;
 }
 
@@ -2740,8 +2750,8 @@ int soundio_wasapi_init(std::shared_ptr<SoundIoPrivate> si)
     siw.device_events = std::make_unique<soundio_NotificationClient>(si);
 
     si->destroy = destroy_wasapi;
-    si->flush_events = flush_events_ca;
-    si->wait_events = wait_events_ca;
+    si->flush_events = flush_events_wasapi;
+    si->wait_events = wait_events_wasapi;
     si->wakeup = wakeup_wasapi;
     si->force_device_scan = force_device_scan_wasapi;
 
