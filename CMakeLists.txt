@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(libsoundio LANGUAGES CXX OBJCXX)
+project(libsoundio LANGUAGES CXX)
 set(CMAKE_MODULE_PATH ${libsoundio_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 
 set(CMAKE_C_STANDARD 11)
