@@ -53,8 +53,6 @@ static void destroy_ca(std::shared_ptr<SoundIoPrivate> si) {
 static int refresh_devices(std::shared_ptr<SoundIoPrivate> si) {
     SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
 
-    int err;
-    
     std::unique_ptr<SoundIoDevicesInfo> devices_info = std::make_unique<SoundIoDevicesInfo>();
 
     devices_info->default_output_index = 0;
@@ -62,7 +60,8 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si) {
     
     AVAudioSession* session = AVAudioSession.sharedInstance;
     
-    for (size_t aim_i = 0; aim_i < std::size(aims); aim_i += 1) {
+    for (size_t aim_i = 0; aim_i < std::size(aims); aim_i += 1)
+    {
         enum SoundIoDeviceAim aim = aims[aim_i];
         std::shared_ptr<SoundIoDevicePrivate> dev = std::make_shared<SoundIoDevicePrivate>();
         
@@ -153,9 +152,13 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
     soundio_os_mutex_unlock(sica.mutex);
 
     if (cb_shutdown)
+    {
         si->on_backend_disconnect(si, sica.shutdown_err);
+    }
     else if (change)
+    {
         si->on_devices_change(si);
+    }
 }
 
 static void flush_events_ca(std::shared_ptr<SoundIoPrivate> si)
@@ -217,6 +220,7 @@ static void device_thread_run(std::shared_ptr<void> arg) {
 
 static void outstream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
+    si->backend_data->coreaudio_ios.callback->out_stream.reset();
     os->backend_data.coreaudio_ios.instance = nullptr;
 }
 
@@ -277,7 +281,8 @@ static int set_ca_desc(enum SoundIoFormat fmt, AudioStreamBasicDescription *desc
     return 0;
 }
 
-static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os) {
+static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+{
     SoundIoOutStreamCoreAudioIOS& osca = os->backend_data.coreaudio_ios;
     std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(os->device);
     std::shared_ptr<SoundIoDeviceCoreAudioIOS> dca = dev->backend_data.coreaudio_ios;
@@ -322,7 +327,16 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     }
 
     AudioStreamBasicDescription format = {0};
-    format.mSampleRate = os->sample_rate;
+    auto& infos = si->safe_devices_info;
+    auto default_out_index = infos->default_output_index;
+    if (infos->output_devices.size() <= default_out_index)
+    {
+        outstream_destroy_ca(si, os);
+        return SoundIoErrorOpeningDevice;
+    }
+    
+    auto default_output = infos->output_devices.at(infos->default_output_index);
+    format.mSampleRate = default_output->sample_rate_current;
     format.mFormatID = kAudioFormatLinearPCM;
     int err = set_ca_desc(os->format, &format);
     if (err)
@@ -334,15 +348,13 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     format.mFramesPerPacket = 1;
     format.mBytesPerFrame = os->bytes_per_frame;
     format.mChannelsPerFrame = os->layout.channel_count;
-    os_err = AudioUnitSetProperty(osca.instance.get(), kAudioUnitProperty_StreamFormat,kAudioUnitScope_Input, OUTPUT_ELEMENT, &format,sizeof(AudioStreamBasicDescription));
+    os_err = AudioUnitSetProperty(osca.instance.get(), kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, OUTPUT_ELEMENT, &format,sizeof(AudioStreamBasicDescription));
     if (os_err != noErr)
     {
         outstream_destroy_ca(si, os);
         return SoundIoErrorIncompatibleDevice;
     }
 
-    
-    
     AURenderCallbackStruct render_callback = {CoreAudioCallback::write_callback, si->backend_data->coreaudio_ios.callback.get()};
     os_err = AudioUnitSetProperty(osca.instance.get(), kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, OUTPUT_ELEMENT, &render_callback, sizeof(AURenderCallbackStruct));
     if (os_err != noErr)
@@ -361,8 +373,8 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
 //    }
 
     os->volume = 1.0;
-    osca.hardware_latency = dca->latency_frames / (double)os->sample_rate;
-
+    osca.hardware_latency = dca->latency_frames / static_cast<double>(os->sample_rate);
+    os->sample_rate = format.mSampleRate;
     return 0;
 }
 
@@ -390,6 +402,7 @@ static int outstream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_pt
 }
 
 static int outstream_start_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os) {
+    si->backend_data->coreaudio_ios.callback->out_stream = os;
     return outstream_pause_ca(si, os, false);
 }
 
@@ -451,6 +464,7 @@ static int outstream_set_volume_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
 
 static void instream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
+    si->backend_data->coreaudio_ios.callback->in_stream.reset();
     SoundIoInStreamCoreAudioIOS& isca = is->backend_data.coreaudio_ios;
     isca.instance = nullptr;
     isca.buffer_list = nullptr;
