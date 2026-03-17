@@ -1225,7 +1225,8 @@ static void device_thread_run(std::shared_ptr<void> arg)
             if (err)
             {
                 shutdown_backend(si, err);
-                return;
+                soundio_os_mutex_lock(siw.scan_devices_mutex);
+                break;
             }
             soundio_os_mutex_lock(siw.scan_devices_mutex);
             continue;
