@@ -1248,8 +1248,10 @@ static void wakeup_wasapi(std::shared_ptr<SoundIoPrivate> si)
 static void force_device_scan_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
+
     soundio_os_mutex_lock(siw.scan_devices_mutex);
     siw.device_scan_queued = true;
+    siw.have_devices_flag = false;
     soundio_os_cond_signal(siw.scan_devices_cond.get(), siw.scan_devices_mutex.get());
     soundio_os_mutex_unlock(siw.scan_devices_mutex);
 }
@@ -2679,10 +2681,9 @@ STDMETHODIMP soundio_NotificationClient::OnDefaultDeviceChanged(EDataFlow flow, 
         return S_OK;
     }
 
-    auto result = queue_device_scan(this);
-
-    soundio_wait_events(s);
-    return result;
+    soundio_force_device_scan(s);
+    soundio_flush_events(s);
+    return S_OK;
 }
 
 STDMETHODIMP soundio_NotificationClient::OnPropertyValueChanged(LPCWSTR wid, const PROPERTYKEY key)

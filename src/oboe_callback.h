@@ -8,6 +8,7 @@
 #include "oboe/AudioStreamCallback.h"
 
 struct SoundIoOutStreamPrivate;
+struct SoundIoPrivate;
 
 
 struct oboe_callback : oboe::AudioStreamDataCallback
@@ -33,6 +34,15 @@ struct SoundIoDeviceOboe
 
 struct oboe_stream_error_callback : oboe::AudioStreamErrorCallback
 {
+    oboe_stream_error_callback(std::shared_ptr<SoundIoPrivate> si)
+    {
+        si_ = si;
+    }
+
+    void onErrorAfterClose(oboe::AudioStream* audioStream, oboe::Result error) override;
+
+private:
+    std::weak_ptr<SoundIoPrivate> si_;
 };
 
 

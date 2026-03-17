@@ -24,3 +24,20 @@ oboe::DataCallbackResult oboe_callback::onAudioReady(oboe::AudioStream* audioStr
 
     return oboe::DataCallbackResult::Continue;
 }
+
+void oboe_stream_error_callback::onErrorAfterClose(oboe::AudioStream* audioStream, oboe::Result error)
+{
+    if (error != oboe::Result::ErrorDisconnected)
+    {
+        return;
+    }
+    std::shared_ptr<SoundIoPrivate> si = si_.lock();
+    if (si == nullptr)
+    {
+        printf("os is nullptr!");
+        return;
+    }
+
+    soundio_force_device_scan(si);
+    soundio_flush_events(si);
+}

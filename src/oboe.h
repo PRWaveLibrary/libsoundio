@@ -55,6 +55,7 @@ struct SoundIoOutStreamOboe
 
     std::unique_ptr<oboe::AudioStream, OboeStreamDeleter> audio_stream;
     std::unique_ptr<oboe_callback> callback;
+    std::unique_ptr<oboe_stream_error_callback> error_callback;
 
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };

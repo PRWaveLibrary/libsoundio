@@ -36,8 +36,8 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate>& si)
     //     return SoundIoErrorNoMem;
     // }
 
-    devices_info->default_output_index = -1;
-    devices_info->default_input_index = -1;
+    devices_info->default_output_index = 0;
+    devices_info->default_input_index = 0;
 
     for (int aim_i = 0; aim_i < std::size(aims); aim_i += 1)
     {
@@ -203,7 +203,9 @@ static void wakeup_oboe(std::shared_ptr<SoundIoPrivate> si)
 static void force_device_scan_oboe(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoOboe& sio = si->backend_data->oboe;
+
     soundio_os_mutex_lock(sio.scan_devices_mutex);
+    SOUNDIO_ATOMIC_STORE(sio.have_devices_flag, false);
     SOUNDIO_ATOMIC_STORE(sio.device_scan_queued, true);
     soundio_os_cond_signal(sio.scan_devices_cond.get(), sio.scan_devices_mutex.get());
     soundio_os_mutex_unlock(sio.scan_devices_mutex);
@@ -214,6 +216,7 @@ static void outstream_destroy_oboe(std::shared_ptr<SoundIoPrivate> si, std::shar
     struct SoundIoOutStreamOboe* oso = &os->backend_data.oboe;
     oso->audio_stream = nullptr;
     oso->callback = nullptr;
+    oso->error_callback = nullptr;
 }
 
 void OboeStreamDeleter::operator()(oboe::AudioStream* stream) const
@@ -243,6 +246,7 @@ static int outstream_open_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_p
 
     // Allocate the callback object on the heap
     oso.callback = std::make_unique<oboe_callback>(os);
+    oso.error_callback = std::make_unique<oboe_stream_error_callback>(si);
 
     oboe::AudioStreamBuilder builder;
     builder.setSharingMode(oboe::SharingMode::Exclusive)
@@ -251,7 +255,8 @@ static int outstream_open_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_p
             ->setFormat(oboe::AudioFormat::Float)
             ->setChannelCount(outstream->layout.channel_count)
             ->setSampleRateConversionQuality(oboe::SampleRateConversionQuality::Medium)
-            ->setDataCallback(oso.callback.get());
+            ->setDataCallback(oso.callback.get())
+            ->setErrorCallback(oso.error_callback.get());
 
     oboe::AudioStream* raw_stream = nullptr;
     oboe::Result result = builder.openStream(&raw_stream);
