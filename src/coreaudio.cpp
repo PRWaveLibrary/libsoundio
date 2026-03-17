@@ -48,10 +48,8 @@ OSStatus CoreAudioCallback::devices_changed(AudioObjectID in_object_id, UInt32 i
         return noErr;
     }
 
-    SoundIoCoreAudio& sica = s->backend_data->coreaudio;
-    SOUNDIO_ATOMIC_STORE(sica.device_scan_queued, true);
-    soundio_os_cond_signal(sica.scan_devices_cond.get(), nullptr);
-    soundio_wait_events(s);
+    soundio_force_device_scan(s);
+    soundio_flush_events(s);
 
     return noErr;
 }
@@ -883,7 +881,7 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
     // block until have devices
     while (wait || (!SOUNDIO_ATOMIC_LOAD(sica.have_devices_flag) && !sica.shutdown_err))
     {
-        soundio_os_cond_wait(sica.cond.get(), nullptr);
+        soundio_os_cond_wait(sica.cond.get(), sica.mutex.get());
         wait = false;
     }
 
@@ -926,6 +924,7 @@ static void force_device_scan_ca(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoCoreAudio& sica = si->backend_data->coreaudio;
     SOUNDIO_ATOMIC_STORE(sica.device_scan_queued, true);
+    SOUNDIO_ATOMIC_STORE(sica.have_devices_flag, false);
     soundio_os_cond_signal(sica.scan_devices_cond.get(), nullptr);
 }
 
