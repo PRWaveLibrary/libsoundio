@@ -520,7 +520,7 @@ static double from_reference_time(REFERENCE_TIME rt)
 
 static REFERENCE_TIME to_reference_time(double seconds)
 {
-    return (REFERENCE_TIME)(seconds * 10000000.0 + 0.5);
+    return (REFERENCE_TIME) (seconds * 10000000.0 + 0.5);
 }
 
 struct RefreshDevices
@@ -603,7 +603,7 @@ static int detect_valid_layouts(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEX
         to_wave_format_layout(test_layout, wave_format);
         complete_wave_format_data(wave_format);
 
-        hr = rd->audio_client->IsFormatSupported(share_mode, reinterpret_cast<WAVEFORMATEX *>(wave_format), &closest_match);
+        hr = rd->audio_client->IsFormatSupported(share_mode, reinterpret_cast<WAVEFORMATEX*>(wave_format), &closest_match);
         if (closest_match)
         {
             CoTaskMemFree(closest_match);
@@ -648,7 +648,7 @@ static int detect_valid_formats(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEX
         to_wave_format_format(test_format, wave_format);
         complete_wave_format_data(wave_format);
 
-        hr = rd->audio_client->IsFormatSupported(share_mode, (WAVEFORMATEX *) wave_format, &closest_match);
+        hr = rd->audio_client->IsFormatSupported(share_mode, (WAVEFORMATEX*) wave_format, &closest_match);
         if (closest_match)
         {
             CoTaskMemFree(closest_match);
@@ -687,10 +687,9 @@ static int do_sample_rate_test(std::shared_ptr<RefreshDevices> rd, std::shared_p
                                int* current_min, int* last_success_rate)
 {
     WAVEFORMATEX* closest_match = NULL;
-    int err;
 
     wave_format->Format.nSamplesPerSec = test_sample_rate;
-    HRESULT hr = rd->audio_client->IsFormatSupported(share_mode, (WAVEFORMATEX *) wave_format, &closest_match);
+    HRESULT hr = rd->audio_client->IsFormatSupported(share_mode, (WAVEFORMATEX*) wave_format, &closest_match);
     if (closest_match)
     {
         CoTaskMemFree(closest_match);
@@ -1030,7 +1029,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             rd->device_raw = nullptr;
             continue;
         }
-        WAVEFORMATEXTENSIBLE* valid_wave_format = reinterpret_cast<WAVEFORMATEXTENSIBLE *>(rd->prop_variant_value.blob.pBlobData);
+        WAVEFORMATEXTENSIBLE* valid_wave_format = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(rd->prop_variant_value.blob.pBlobData);
         if (valid_wave_format->Format.wFormatTag != WAVE_FORMAT_EXTENSIBLE)
         {
             rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
@@ -1198,7 +1197,7 @@ static void device_thread_run(std::shared_ptr<void> arg)
     SoundIoWasapi& siw = si->backend_data->wasapi;
     int err;
 
-    HRESULT hr = CoCreateInstance(CLSID_MMDEVICEENUMERATOR, NULL, CLSCTX_ALL, IID_IMMDEVICEENUMERATOR, reinterpret_cast<void **>(&siw.device_enumerator));
+    HRESULT hr = CoCreateInstance(CLSID_MMDEVICEENUMERATOR, NULL, CLSCTX_ALL, IID_IMMDEVICEENUMERATOR, reinterpret_cast<void**>(&siw.device_enumerator));
     if (FAILED(hr))
     {
         shutdown_backend(si, SoundIoErrorSystemResources);
@@ -1369,7 +1368,7 @@ static IAudioClient3* open_audio_client3(std::shared_ptr<SoundIoOutStreamPrivate
             return NULL;
         }
 
-        auto need_resample = mix_format->Format.nSamplesPerSec != outstream->sample_rate;
+        auto need_resample = mix_format->Format.nSamplesPerSec != static_cast<DWORD>(outstream->sample_rate);
         if (need_resample)
         {
             // we can't use resampling with this new interface, fallback to old method
@@ -1411,7 +1410,7 @@ static IAudioClient* open_audio_client(std::shared_ptr<SoundIoOutStreamPrivate> 
         }
         // wave_format->Format.nSamplesPerSec = mix_format->Format.nSamplesPerSec;
         // outstream->sample_rate = mix_format->Format.nSamplesPerSec;
-        osw->need_resample = mix_format->Format.nSamplesPerSec != outstream->sample_rate;
+        osw->need_resample = mix_format->Format.nSamplesPerSec != static_cast<DWORD>(outstream->sample_rate);
         CoTaskMemFree(mix_format);
         mix_format = NULL;
     }
@@ -1478,7 +1477,7 @@ static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3
         UINT32 periodicity_in_frames = default_period;
         if (outstream->software_latency < 1.0)
         {
-            periodicity_in_frames = fundamental_period * (UINT32)(mix_format->Format.nSamplesPerSec * outstream->software_latency / fundamental_period);
+            periodicity_in_frames = fundamental_period * (UINT32) (mix_format->Format.nSamplesPerSec * outstream->software_latency / fundamental_period);
             periodicity_in_frames = soundio_uint_clamp(min_period, periodicity_in_frames, max_period);
         }
 
@@ -2632,14 +2631,14 @@ STDMETHODIMP soundio_NotificationClient::QueryInterface(REFIID riid, void** ppv)
     }
 }
 
-STDMETHODIMP_ (ULONG) soundio_NotificationClient::AddRef()
+STDMETHODIMP_(ULONG) soundio_NotificationClient::AddRef()
 {
     // SoundIoWasapi& siw = &si.lock()->backend_data.wasapi;
     // return InterlockedIncrement(&siw->device_events_refs);
     return S_OK;
 }
 
-STDMETHODIMP_ (ULONG) soundio_NotificationClient::Release()
+STDMETHODIMP_(ULONG) soundio_NotificationClient::Release()
 {
     // SoundIoWasapi& siw = &si.lock()->backend_data.wasapi;
     // return InterlockedDecrement(&siw->device_events_refs);

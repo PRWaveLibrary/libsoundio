@@ -229,6 +229,10 @@ OSStatus CoreAudioCallback::write_callback_ca(AudioUnitRenderActionFlags *io_act
     std::shared_ptr<SoundIoOutStreamPrivate> os = out_stream.lock();
     if(os == nullptr)
     {
+        for (UInt32 i = 0; i < io_data->mNumberBuffers; ++i)
+        {
+            memset(io_data->mBuffers[i].mData, 0, io_data->mBuffers[i].mDataByteSize);
+        }
         ERROR_LOG("os is nullptr.");
         return noErr;
     }

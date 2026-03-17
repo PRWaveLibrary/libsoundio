@@ -42,9 +42,11 @@ struct CoreAudioCallback
     //
     //    OSStatus instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]) const;
 
-    OSStatus write_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList* io_data);
+    OSStatus write_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
+                               AudioBufferList* io_data);
 
-    OSStatus read_callback_ca(AudioUnitRenderActionFlags *io_action_flags, const AudioTimeStamp *in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList *io_data);
+    OSStatus read_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
+                              AudioBufferList* io_data);
 
 
     //    void unsubscribe_device_listeners() const;
@@ -57,9 +59,12 @@ struct CoreAudioCallback
     //
     //    static OSStatus on_instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data);
 
-    static OSStatus write_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList* io_data);
+    static OSStatus write_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
+                                   AudioBufferList* io_data);
 
-    static OSStatus read_callback(void *userdata, AudioUnitRenderActionFlags *io_action_flags, const AudioTimeStamp *in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList *io_data);
+    static OSStatus read_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
+                                  AudioBufferList* io_data);
+
     //
     //    static void unsubscribe_device_listeners(std::shared_ptr<SoundIoPrivate> si);
 };
@@ -74,7 +79,7 @@ struct SoundIoCoreAudioIOS
     std::unique_ptr<CoreAudioCallback> callback = std::make_unique<CoreAudioCallback>();
     std::unique_ptr<SoundIoOsMutex> mutex;
     std::unique_ptr<SoundIoOsCond> cond;
-    std::unique_ptr<SoundIoOsThread> thread;
+    std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter> thread = std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter>(nullptr, SoundIoOsThreadDeleter());
     struct SoundIoAtomicFlag abort_flag;
 
     // this one is ready to be read with flush_events. protected by mutex
@@ -91,7 +96,8 @@ struct SoundIoCoreAudioIOS
 
 struct SoundIoOutStreamCoreAudioIOS
 {
-    std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter> instance = std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter>(nullptr,CoreAudioInstanceDeleter());
+    std::unique_ptr<OpaqueAudioComponentInstance, CoreAudioInstanceDeleter> instance = std::unique_ptr<OpaqueAudioComponentInstance, CoreAudioInstanceDeleter>(
+        nullptr, CoreAudioInstanceDeleter());
     AudioBufferList* io_data;
     int buffer_index;
     int frames_left;
@@ -103,8 +109,9 @@ struct SoundIoOutStreamCoreAudioIOS
 
 struct SoundIoInStreamCoreAudioIOS
 {
-    std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter> instance = std::unique_ptr<OpaqueAudioComponentInstance,CoreAudioInstanceDeleter>(nullptr,CoreAudioInstanceDeleter());
-    std::unique_ptr<AudioBufferList,decltype(&std::free)> buffer_list = std::unique_ptr<AudioBufferList,decltype(&std::free)>(nullptr,std::free);
+    std::unique_ptr<OpaqueAudioComponentInstance, CoreAudioInstanceDeleter> instance = std::unique_ptr<OpaqueAudioComponentInstance, CoreAudioInstanceDeleter>(
+        nullptr, CoreAudioInstanceDeleter());
+    std::unique_ptr<AudioBufferList, decltype(&std::free)> buffer_list = std::unique_ptr<AudioBufferList, decltype(&std::free)>(nullptr, std::free);
     int frames_left;
     double hardware_latency;
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];

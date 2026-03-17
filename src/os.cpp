@@ -31,7 +31,7 @@ double soundio_os_get_time(void)
 {
 #if defined(SOUNDIO_OS_WINDOWS)
     unsigned __int64 time;
-    QueryPerformanceCounter((LARGE_INTEGER *) &time);
+    QueryPerformanceCounter((LARGE_INTEGER*) &time);
     return time * win32_time_resolution;
 #elif defined(__MACH__)
     mach_timespec_t mts;
@@ -55,7 +55,7 @@ double soundio_os_get_time(void)
 #if defined(SOUNDIO_OS_WINDOWS)
 static DWORD WINAPI run_win32_thread(LPVOID userdata)
 {
-    struct SoundIoOsThread* thread = (struct SoundIoOsThread *) userdata;
+    struct SoundIoOsThread* thread = (struct SoundIoOsThread*) userdata;
     HRESULT err = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     assert(err == S_OK);
     thread->run(thread->arg);
@@ -70,17 +70,18 @@ static void assert_no_err(int err)
 
 static void* run_pthread(void* userdata)
 {
-    struct SoundIoOsThread* thread = static_cast<struct SoundIoOsThread *>(userdata);
+    struct SoundIoOsThread* thread = static_cast<struct SoundIoOsThread*>(userdata);
     thread->run(thread->arg);
     return NULL;
 }
 #endif
 
-int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared_ptr<void> arg, void (*emit_rtprio_warning)(), std::unique_ptr<SoundIoOsThread>* out_thread)
+int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared_ptr<void> arg, void (*emit_rtprio_warning)(),
+                             std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter>* out_thread)
 {
     *out_thread = nullptr;
 
-    std::unique_ptr<SoundIoOsThread> thread = std::make_unique<SoundIoOsThread>();
+    std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter> thread = std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter>(new SoundIoOsThread(), SoundIoOsThreadDeleter());
     // if (!thread)
     // {
     //     thread = nullptr;
@@ -494,7 +495,7 @@ static int internal_init(void)
 {
 #if defined(SOUNDIO_OS_WINDOWS)
     unsigned __int64 frequency;
-    if (QueryPerformanceFrequency((LARGE_INTEGER *) &frequency))
+    if (QueryPerformanceFrequency((LARGE_INTEGER*) &frequency))
     {
         win32_time_resolution = 1.0 / (double) frequency;
     }

@@ -10,9 +10,8 @@
 #include "os.h"
 #include "config.h"
 
-#include <string.h>
-#include <assert.h>
-#include <stdio.h>
+#include <cassert>
+#include <cstdio>
 
 static const enum SoundIoBackend available_backends[] = {
 #ifdef SOUNDIO_HAVE_JACK
@@ -310,9 +309,8 @@ int soundio_connect(std::shared_ptr<SoundIo> soundio)
     std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
     si->backend_data = std::make_unique<SoundIoBackendData>();
 
-    for (auto i = 0; i < std::size(available_backends); i += 1)
+    for (auto backend: available_backends)
     {
-        enum SoundIoBackend backend = available_backends[i];
         err = soundio_connect_backend(soundio, backend);
         if (!err)
             return 0;
@@ -478,7 +476,7 @@ struct std::shared_ptr<SoundIoDevice> soundio_get_input_device(std::shared_ptr<S
     //     return NULL;
 
     assert(index >= 0);
-    assert(index < si->safe_devices_info->input_devices.size());
+    assert(static_cast<size_t>(index) < si->safe_devices_info->input_devices.size());
     // if (index < 0 || index >= si->safe_devices_info->input_devices.size())
     //     return NULL;
 
@@ -501,7 +499,7 @@ struct std::shared_ptr<SoundIoDevice> soundio_get_output_device(std::shared_ptr<
     //     return NULL;
 
     assert(index >= 0);
-    assert(index < si->safe_devices_info->output_devices.size());
+    assert(static_cast<size_t>(index) < si->safe_devices_info->output_devices.size());
     // if (index >= si->safe_devices_info->output_devices.size())
     //     return NULL;
     std::shared_ptr<SoundIoDevice> device = si->safe_devices_info->output_devices.at(index);
@@ -932,9 +930,9 @@ void soundio_device_sort_channel_layouts(std::shared_ptr<SoundIoDevice> device)
 
 bool soundio_device_supports_format(std::shared_ptr<SoundIoDevice> device, enum SoundIoFormat format)
 {
-    for (int i = 0; i < device->formats.size(); ++i)
+    for (auto& i: device->formats)
     {
-        if (device->formats[i] == format)
+        if (i == format)
         {
             return true;
         }
@@ -944,21 +942,24 @@ bool soundio_device_supports_format(std::shared_ptr<SoundIoDevice> device, enum 
 
 bool soundio_device_supports_layout(std::shared_ptr<SoundIoDevice> device, const struct SoundIoChannelLayout* layout)
 {
-    for (int i = 0; i < device->layouts.size(); ++i)
+    for (auto& i: device->layouts)
     {
-        if (soundio_channel_layout_equal(&device->layouts[i], layout))
+        if (soundio_channel_layout_equal(&i, layout))
+        {
             return true;
+        }
     }
     return false;
 }
 
 bool soundio_device_supports_sample_rate(std::shared_ptr<SoundIoDevice> device, int sample_rate)
 {
-    for (int i = 0; i < device->sample_rates.size(); ++i)
+    for (auto& range: device->sample_rates)
     {
-        struct SoundIoSampleRateRange* range = &device->sample_rates[i];
-        if (sample_rate >= range->min && sample_rate <= range->max)
+        if (sample_rate >= range.min && sample_rate <= range.max)
+        {
             return true;
+        }
     }
     return false;
 }
@@ -973,7 +974,7 @@ int soundio_device_nearest_sample_rate(std::shared_ptr<SoundIoDevice> device, in
 {
     int best_rate = -1;
     int best_delta = -1;
-    for (int i = 0; i < device->sample_rates.size(); ++i)
+    for (size_t i = 0; i < device->sample_rates.size(); ++i)
     {
         struct SoundIoSampleRateRange* range = &device->sample_rates[i];
         int candidate_rate = soundio_int_clamp(range->min, sample_rate, range->max);
