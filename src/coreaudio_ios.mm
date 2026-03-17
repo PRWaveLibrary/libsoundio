@@ -113,12 +113,13 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si) {
 static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
 {
     SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
+    
     soundio_os_mutex_lock(sica.mutex);
     sica.shutdown_err = err;
     SOUNDIO_ATOMIC_STORE(sica.have_devices_flag, true);
-    soundio_os_mutex_unlock(sica.mutex);
     soundio_os_cond_signal(sica.cond.get(), nullptr);
     soundio_os_cond_signal(sica.have_devices_cond.get(), nullptr);
+    soundio_os_mutex_unlock(sica.mutex);
     si->on_events_signal(si);
 }
 
@@ -181,6 +182,7 @@ static void force_device_scan_ca(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
     SOUNDIO_ATOMIC_STORE(sica.device_scan_queued, true);
+    SOUNDIO_ATOMIC_STORE(sica.have_devices_flag, false);
     soundio_os_cond_signal(sica.scan_devices_cond.get(), NULL);
 }
  
@@ -206,6 +208,7 @@ static void device_thread_run(std::shared_ptr<void> arg) {
             if(err)
             {
                 shutdown_backend(si,err);
+                return;
             }
             if (!SOUNDIO_ATOMIC_EXCHANGE(sica.have_devices_flag, true))
             {
@@ -220,8 +223,8 @@ static void device_thread_run(std::shared_ptr<void> arg) {
 
 static void outstream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
-    si->backend_data->coreaudio_ios.callback->out_stream.reset();
     os->backend_data.coreaudio_ios.instance = nullptr;
+    si->backend_data->coreaudio_ios.callback->out_stream.reset();
 }
 
 OSStatus CoreAudioCallback::write_callback_ca(AudioUnitRenderActionFlags *io_action_flags, const AudioTimeStamp *in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList *io_data)
@@ -468,10 +471,11 @@ static int outstream_set_volume_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
 
 static void instream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
-    si->backend_data->coreaudio_ios.callback->in_stream.reset();
+    // 先 stop AudioUnit（同步等待正在运行的回调结束），再清 weak_ptr
     SoundIoInStreamCoreAudioIOS& isca = is->backend_data.coreaudio_ios;
     isca.instance = nullptr;
     isca.buffer_list = nullptr;
+    si->backend_data->coreaudio_ios.callback->in_stream.reset();
 }
 
 OSStatus CoreAudioCallback::read_callback(void *userdata, AudioUnitRenderActionFlags *io_action_flags,
@@ -550,16 +554,6 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
     }
 
     is->software_latency = soundio_double_clamp(dev->software_latency_min, is->software_latency, dev->software_latency_max);
-    
-    AudioStreamBasicDescription input_format = {};
-    io_size = sizeof(AudioStreamBasicDescription);
-    os_err = AudioUnitGetProperty(isca.instance.get(), kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, INPUT_ELEMENT, &input_format, &io_size);
-    
-    if (os_err != noErr)
-    {
-        instream_destroy_ca(si, is);
-        return SoundIoErrorOpeningDevice;
-    }
 
     // 我们使用的 ASBD 是交错模式 (Interleaved)，所以 mNumberBuffers 应当固定为 1
     UInt32 num_buffers = 1;
@@ -619,7 +613,8 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
         instream_destroy_ca(si, is);
         return SoundIoErrorOpeningDevice;
     }
-
+    
+    
     AudioStreamBasicDescription format = {0};
     format.mSampleRate = is->sample_rate;
     format.mFormatID = kAudioFormatLinearPCM;
@@ -678,6 +673,7 @@ static int instream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
 }
 
 static int instream_start_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is) {
+    si->backend_data->coreaudio_ios.callback->in_stream = is;
     return instream_pause_ca(si, is, false);
 }
 
