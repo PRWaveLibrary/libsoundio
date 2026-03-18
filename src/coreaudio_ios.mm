@@ -14,22 +14,19 @@
 static const int OUTPUT_ELEMENT = 0;
 static const int INPUT_ELEMENT = 1;
 
-#define ERROR_LOG(msg) \
-NSLog(@"%s:%d: [ERROR] %s\n", __FILE__, __LINE__, msg)
-
 static enum SoundIoDeviceAim aims[] = {
     SoundIoDeviceAimInput,
     SoundIoDeviceAimOutput,
 };
 
 
-void CoreAudioInstanceDeleter::operator()(OpaqueAudioComponentInstance* stream) const{
+void CoreAudioInstanceDeleter::operator()(OpaqueAudioComponentInstance* stream) const
+{
     if(stream)
     {
         AudioOutputUnitStop(stream);
         AudioComponentInstanceDispose(stream);
     }
-    
 }
 
 
@@ -38,13 +35,15 @@ static void destroy_ca(std::shared_ptr<SoundIoPrivate> si) {
 
 
     if (sica.thread) {
-        SOUNDIO_ATOMIC_FLAG_CLEAR(sica.abort_flag);
-        soundio_os_cond_signal(sica.scan_devices_cond.get(), NULL);
+        std::unique_lock lock(sica.scan_devices_mutex->get());
+        
+        SOUNDIO_ATOMIC_STORE(sica.abort_flag, true);
+        sica.scan_devices_cond->signal(&lock);
+        lock.unlock();
         sica.thread = nullptr;
     }
 
     sica.cond = nullptr;
-    sica.have_devices_cond = nullptr;
     sica.scan_devices_cond = nullptr;
     sica.mutex = nullptr;
     sica.ready_devices_info = nullptr;
@@ -103,9 +102,12 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si) {
         device_list->push_back(dev);
     }
 
-    soundio_os_mutex_lock(sica.mutex);
+    std::unique_lock lock(sica.mutex->get());
+    
     sica.ready_devices_info = std::move(devices_info);
-    soundio_os_mutex_unlock(sica.mutex);
+    SOUNDIO_ATOMIC_STORE(sica.have_devices_flag, true);
+    sica.cond->signal(&lock);
+    si->on_events_signal(si);
 
     return 0;
 }
@@ -113,13 +115,10 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si) {
 static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
 {
     SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
-    
-    soundio_os_mutex_lock(sica.mutex);
+    std::unique_lock lock(sica.mutex->get());
+
     sica.shutdown_err = err;
-    SOUNDIO_ATOMIC_STORE(sica.have_devices_flag, true);
-    soundio_os_cond_signal(sica.cond.get(), nullptr);
-    soundio_os_cond_signal(sica.have_devices_cond.get(), nullptr);
-    soundio_os_mutex_unlock(sica.mutex);
+    sica.cond->signal(&lock);
     si->on_events_signal(si);
 }
 
@@ -130,12 +129,12 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
     bool change = false;
     bool cb_shutdown = false;
 
-    soundio_os_mutex_lock(sica.mutex);
+    std::unique_lock lock(sica.mutex->get());
 
     // block until have devices
     while (wait || (!SOUNDIO_ATOMIC_LOAD(sica.have_devices_flag) && !sica.shutdown_err))
     {
-        soundio_os_cond_wait(sica.cond.get(), sica.mutex.get());
+        sica.cond->wait(&lock);
         wait = false;
     }
 
@@ -150,7 +149,7 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
         change = true;
     }
 
-    soundio_os_mutex_unlock(sica.mutex);
+    lock.unlock();
 
     if (cb_shutdown)
     {
@@ -175,7 +174,8 @@ static void wait_events_ca(std::shared_ptr<SoundIoPrivate> si)
 static void wakeup_ca(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
-    soundio_os_cond_signal(sica.cond.get(), NULL);
+    std::unique_lock lock(sica.mutex->get());
+    sica.cond->signal(&lock);
 }
 
 static void force_device_scan_ca(std::shared_ptr<SoundIoPrivate> si)
@@ -183,41 +183,41 @@ static void force_device_scan_ca(std::shared_ptr<SoundIoPrivate> si)
     SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
     SOUNDIO_ATOMIC_STORE(sica.device_scan_queued, true);
     SOUNDIO_ATOMIC_STORE(sica.have_devices_flag, false);
-    soundio_os_cond_signal(sica.scan_devices_cond.get(), NULL);
+
+    std::unique_lock scan_lock(sica.scan_devices_mutex->get());
+    sica.scan_devices_cond->signal(&scan_lock);
 }
  
 static void device_thread_run(std::shared_ptr<void> arg) {
     std::shared_ptr<SoundIoPrivate> si = std::static_pointer_cast<SoundIoPrivate>(arg);
     SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
-    int err;
+    
+    std::unique_lock lock(sica.scan_devices_mutex->get());
 
-    for (;;)
+    while (!SOUNDIO_ATOMIC_LOAD(sica.abort_flag))
     {
-        if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(sica.abort_flag))
-        {
-            break;
-        }
         if (SOUNDIO_ATOMIC_LOAD(sica.service_restarted))
         {
             shutdown_backend(si, SoundIoErrorBackendDisconnected);
-            return;
+            break;
         }
         if (SOUNDIO_ATOMIC_EXCHANGE(sica.device_scan_queued, false))
         {
-            err = refresh_devices(si);
-            if(err)
+            lock.unlock();
+            if (int err = refresh_devices(si))
             {
-                shutdown_backend(si,err);
-                return;
+                shutdown_backend(si, err);
+                lock.lock();
+                break;
             }
-            if (!SOUNDIO_ATOMIC_EXCHANGE(sica.have_devices_flag, true))
-            {
-                soundio_os_cond_signal(sica.have_devices_cond.get(), NULL);
-            }
-            soundio_os_cond_signal(sica.cond.get(), NULL);
+            flush_events_ca(si);
+            lock.lock();
+            continue;
         }
-        soundio_os_cond_wait(sica.scan_devices_cond.get(), NULL);
+
+        sica.scan_devices_cond->wait(&lock);
     }
+    lock.unlock();
 }
 
 static void outstream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
@@ -235,7 +235,7 @@ OSStatus CoreAudioCallback::write_callback_ca(AudioUnitRenderActionFlags *io_act
         {
             memset(io_data->mBuffers[i].mData, 0, io_data->mBuffers[i].mDataByteSize);
         }
-        ERROR_LOG("os is nullptr.");
+        LOGE("os is nullptr.");
         return noErr;
     }
     
@@ -491,7 +491,7 @@ OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags *io_acti
     auto is = in_stream.lock();
     if(is == nullptr)
     {
-        ERROR_LOG("is is nullptr.");
+        LOGE("is is nullptr.");
         return noErr;
     }
     
@@ -705,12 +705,11 @@ static int instream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
 
 int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
     SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
-    int err;
 
     SOUNDIO_ATOMIC_STORE(sica.have_devices_flag, false);
     SOUNDIO_ATOMIC_STORE(sica.device_scan_queued, true);
     SOUNDIO_ATOMIC_STORE(sica.service_restarted, false);
-    SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(sica.abort_flag);
+    SOUNDIO_ATOMIC_STORE(sica.abort_flag, false);
     
     // 这里unity会处理
 //    NSError* ns_err = nil;
@@ -742,8 +741,9 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
         return SoundIoErrorNoMem;
     }
 
-    sica.have_devices_cond = soundio_os_cond_create();
-    if (!sica.have_devices_cond) {
+    sica.scan_devices_mutex = soundio_os_mutex_create();
+    if (!sica.scan_devices_mutex)
+    {
         destroy_ca(si);
         return SoundIoErrorNoMem;
     }
@@ -754,11 +754,7 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
         return SoundIoErrorNoMem;
     }
 
-    err = soundio_os_thread_create(device_thread_run, si, NULL, &sica.thread);
-    if (err != SoundIoErrorNone) {
-        destroy_ca(si);
-        return err;
-    }
+    sica.thread = SoundIoOsThread::create(device_thread_run, si);
 
     si->destroy = destroy_ca;
     si->flush_events = flush_events_ca;

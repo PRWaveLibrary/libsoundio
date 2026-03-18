@@ -5,14 +5,11 @@
 #ifndef WAVEAUDIO_LOG_H
 #define WAVEAUDIO_LOG_H
 
-#define LOG_TAG "WaveAudio"
+#include <string>
+#include <string_view>
+#include <format> // 修复 1：你的 FormatLog 无条件使用了 std::format，所以这里必须全局引入，不能只限制在 Apple 平台
 
-#if defined(__GNUC__) || defined(__clang__)
-// 告诉编译器：这和 printf 是一样的，请检查对应位置的参数！
-#define WAVE_PRINTF_CHECK(fmt_idx, arg_idx) __attribute__((format(printf, fmt_idx, arg_idx)))
-#else
-#define WAVE_PRINTF_CHECK(fmt_idx, arg_idx)
-#endif
+#define LOG_TAG "WaveAudio"
 
 enum LogLevel
 {
@@ -25,157 +22,101 @@ enum LogLevel
 // =======================================================
 // 底层格式化实现核心
 // =======================================================
-#ifdef _WIN32
-#include <windows.h>
-#include <cstdio>
-#include <cstring>
-
-inline const char* GetLogLevelString(LogLevel level)
-{
-    switch (level)
-    {
-        case Debug:
-            return "DEBUG";
-        case Info:
-            return "INFO";
-        case Warn:
-            return "WARN";
-        case Error:
-            return "ERROR";
-        default:
-            return "UNKNOWN";
-    }
-}
-
-template<typename... Args>
-WAVE_PRINTF_CHECK(4, 5)
-inline void PlatformLog(LogLevel level, const char* file, int line, const char* format, Args... args)
-{
-    // 截取简短文件名 (去掉 C:\xxx\src 这种冗长的绝对路径)
-    const char* fileName = strrchr(file, '/');
-    if (!fileName)
-        fileName = strrchr(file, '\\');
-    fileName = fileName ? fileName + 1 : file;
-
-    // 格式化真实的业务数据
-    char msgBuffer[2048];
-    snprintf(msgBuffer, sizeof(msgBuffer), format, args...);
-
-    // 终极拼接：[LOG_TAG][LEVEL][文件名:行号] 业务消息
-    char finalBuffer[2560];
-    snprintf(finalBuffer, sizeof(finalBuffer), "[%s][%s][%s:%d] %s\n", LOG_TAG, GetLogLevelString(level), fileName, line, msgBuffer);
-
-    if (IsDebuggerPresent())
-    {
-        printf("%s", finalBuffer);
-        fflush(stdout); // 修复 2：防止 GDB 缓存导致日志不立即显示
-    }
-    else
-    {
-        OutputDebugStringA(finalBuffer);
-    }
-}
-
-#elif defined(__ANDROID__) // 修复 3：Android 平台标准的编译器宏
-#include <android/log.h>
-#include <cstdio>
-#include <cstring>
-
-template<typename... Args>
-WAVE_PRINTF_CHECK(4, 5)
-inline void PlatformLog(LogLevel level, const char* file, int line, const char* format, Args... args)
-{
-    const char* fileName = strrchr(file, '/');
-    if (!fileName)
-        fileName = strrchr(file, '\\');
-    fileName = fileName ? fileName + 1 : file;
-
-    // 映射 Android 底层优先级
-    android_LogPriority priority = ANDROID_LOG_DEFAULT;
-    switch (level)
-    {
-        case Debug:
-            priority = ANDROID_LOG_DEBUG;
-            break;
-        case Info:
-            priority = ANDROID_LOG_INFO;
-            break;
-        case Warn:
-            priority = ANDROID_LOG_WARN;
-            break;
-        case Error:
-            priority = ANDROID_LOG_ERROR;
-            break;
-    }
-
-    // 先格式化业务数据
-    char msgBuffer[2048];
-    snprintf(msgBuffer, sizeof(msgBuffer), format, args...);
-
-    // 将文件名和行号拼接到格式化好的消息前面
-    char finalBuffer[2560];
-    snprintf(finalBuffer, sizeof(finalBuffer), "[%s:%d] %s", fileName, line, msgBuffer);
-
-    // 修复 4：极其安全的最终输出，绝对不崩溃
-    __android_log_print(priority, LOG_TAG, "%s", finalBuffer);
-}
-
-#elif __MACH__
-#include <cstdio>
-#include <cstring>
-#include <sys/time.h>
-#include <ctime>
 
 inline const char* GetLogLevelString(LogLevel level)
 {
     switch (level)
     {
         case Debug: return "DEBUG";
-        case Info: return "INFO";
-        case Warn: return "WARN";
+        case Info:  return "INFO";
+        case Warn:  return "WARN";
         case Error: return "ERROR";
-        default: return "UNKNOWN";
+        default:    return "UNKNOWN";
     }
 }
 
+// 🌟 修复 2：将 const char* fmt 替换为 std::format_string<Args...>
 template<typename... Args>
-WAVE_PRINTF_CHECK(4, 5)
-inline void PlatformLog(LogLevel level, const char* file, int line, const char* format, Args... args)
+inline std::string FormatLog(LogLevel level, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
 {
-    const char* fileName = strrchr(file, '/');
-    if (!fileName)
-        fileName = strrchr(file, '\\');
-    fileName = fileName ? fileName + 1 : file;
+    // 1. 获取文件名 (使用 std::string_view 零拷贝，更高效)
+    std::string_view filePath(file);
+    auto lastSlash = filePath.find_last_of("/\\");
+    std::string_view fileName = (lastSlash == std::string_view::npos) ? filePath : filePath.substr(lastSlash + 1);
 
-    // 获取时间戳
-    timeval tv{};
-    tm tm_info{};
+    // 3. 格式化真实的业务数据 (使用 std::forward 完美转发参数，性能更好)
+    std::string msgBuffer = std::format(fmt, std::forward<Args>(args)...);
 
-    gettimeofday(&tv, nullptr);
-    localtime_r(&tv.tv_sec, &tm_info);
+    // 4. 拼接最终的控制台输出格式
+    return std::format("[{}][{}][{}:{}] {}\n", LOG_TAG, GetLogLevelString(level), fileName, line, msgBuffer);
+}
 
-    char timeStr[32];
-    strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &tm_info);
 
-    // 格式化真实的业务数据
-    char msgBuffer[2048];
-    snprintf(msgBuffer, sizeof(msgBuffer), format, args...);
+#ifdef _WIN32
+#include <windows.h>
+#include <cstdio>
+#include <cstring>
 
-    // 格式化控制台输出：[时间][TAG][级别][文件名:行号] 消息
-    // Xcode 控制台或者 Terminal 都支持这种基本格式，而且 C++ 原生不需要混写 Obj-C
-    fprintf(level >= Error ? stderr : stdout, "[%s.%03d][%s][%s][%s:%d] %s\n", timeStr, static_cast<int>(tv.tv_usec / 1000), LOG_TAG, GetLogLevelString(level), fileName, line,
-            msgBuffer);
-    fflush(level >= Error ? stderr : stdout);
+// 🌟 修复 3：外层包装函数的 format 参数也必须是 std::format_string，否则会在此处退化报错
+template<typename... Args>
+inline void PlatformLog(LogLevel level, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+{
+    auto s = FormatLog(level, file, line, fmt, std::forward<Args>(args)...);
+
+    if (IsDebuggerPresent())
+    {
+        printf("%s", s.c_str());
+        fflush(stdout);
+    }
+    else
+    {
+        OutputDebugStringA(s.c_str());
+    }
+}
+
+#elif defined(__ANDROID__)
+#include <android/log.h>
+#include <cstdio>
+#include <cstring>
+
+template<typename... Args>
+inline void PlatformLog(LogLevel level, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+{
+    // 映射 Android 底层优先级
+    android_LogPriority priority = ANDROID_LOG_DEFAULT;
+    switch (level)
+    {
+        case Debug: priority = ANDROID_LOG_DEBUG; break;
+        case Info:  priority = ANDROID_LOG_INFO; break;
+        case Warn:  priority = ANDROID_LOG_WARN; break;
+        case Error: priority = ANDROID_LOG_ERROR; break;
+    }
+
+    auto s = FormatLog(level, file, line, fmt, std::forward<Args>(args)...);
+    __android_log_print(priority, LOG_TAG, "%s", s.c_str());
+}
+
+#elif __MACH__
+#include <cstdio>
+
+template<typename... Args>
+inline void PlatformLog(LogLevel level, const char* file_name, int file_line, std::format_string<Args...> fmt, Args&&... args)
+{
+    auto s = FormatLog(level, file_name, file_line, fmt, std::forward<Args>(args)...);
+    FILE* stream = level >= Error ? stderr : stdout;
+    std::fputs(s.c_str(), stream);
+    std::fflush(stream);
 }
 #endif
 
 // =======================================================
-// 对外暴露的业务宏 (完美劫持文件名和行号，并修复悬空逗号)
+// 对外暴露的业务宏
 // =======================================================
-// 注意前面的 ##：当你不传参数只传 format 时，它会自动吞掉多余的逗号
-#define LOGD(format, ...) PlatformLog(LogLevel::Debug, __FILE__, __LINE__, format, ##__VA_ARGS__)
-#define LOGI(format, ...) PlatformLog(LogLevel::Info,  __FILE__, __LINE__, format, ##__VA_ARGS__)
-#define LOGW(format, ...) PlatformLog(LogLevel::Warn,  __FILE__, __LINE__, format, ##__VA_ARGS__)
-#define LOGE(format, ...) PlatformLog(LogLevel::Error, __FILE__, __LINE__, format, ##__VA_ARGS__)
+// 🌟 修复 4：使用 C++20 标准的 __VA_OPT__(,) 替代非标准的 ##__VA_ARGS__
+// 这样当只有 fmt 没有 args 时，逗号会被完美消除，跨平台兼容性 100%
+#define LOGD(fmt, ...) PlatformLog(LogLevel::Debug, __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
+#define LOGI(fmt, ...) PlatformLog(LogLevel::Info,  __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
+#define LOGW(fmt, ...) PlatformLog(LogLevel::Warn,  __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
+#define LOGE(fmt, ...) PlatformLog(LogLevel::Error, __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
 
 #endif //WAVEAUDIO_LOG_H

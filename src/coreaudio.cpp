@@ -42,7 +42,7 @@ static enum SoundIoDeviceAim aims[] =
 
 OSStatus CoreAudioCallback::devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[])
 {
-    LOGI("on devices changed %d", in_object_id);
+    LOGI("on devices changed {}", in_object_id);
     std::shared_ptr<SoundIoPrivate> s = si.lock();
     if (s == nullptr)
     {

@@ -19,7 +19,7 @@ oboe::DataCallbackResult oboe_callback::onAudioReady(oboe::AudioStream* audioStr
     struct SoundIoOutStreamOboe* osca = &os->backend_data.oboe;
 
     osca->request_num_frames = numFrames;
-    osca->request_audio_data = static_cast<float*>(audioData);
+    osca->request_audio_data = static_cast<float *>(audioData);
     os->write_callback(os, osca->request_num_frames, osca->request_num_frames);
 
     return oboe::DataCallbackResult::Continue;
@@ -41,5 +41,4 @@ void oboe_stream_error_callback::onErrorAfterClose(oboe::AudioStream* audioStrea
 
     LOGI("device change.");
     soundio_force_device_scan(si);
-    soundio_flush_events(si);
 }
