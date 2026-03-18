@@ -256,13 +256,9 @@ void soundio_destroy(std::shared_ptr<SoundIo> soundio)
     soundio_disconnect(soundio);
 }
 
-static void do_nothing_cb(std::shared_ptr<SoundIo> soundio)
-{
-}
+static void do_nothing_cb(std::shared_ptr<SoundIo> soundio) {}
 
-static void default_msg_callback(const char* msg)
-{
-}
+static void default_msg_callback(const char* msg) {}
 
 static void default_backend_disconnect_cb(std::shared_ptr<SoundIo> soundio, int err)
 {
@@ -590,9 +586,7 @@ static void default_outstream_error_callback(std::shared_ptr<SoundIoOutStream> o
     soundio_panic("libsoundio: %s", soundio_strerror(err));
 }
 
-static void default_underflow_callback(std::shared_ptr<SoundIoOutStream> outstream)
-{
-}
+static void default_underflow_callback(std::shared_ptr<SoundIoOutStream> outstream) {}
 
 std::shared_ptr<SoundIoOutStream> soundio_outstream_create(std::shared_ptr<SoundIoDevice> device)
 {
@@ -620,13 +614,19 @@ int soundio_outstream_open(std::shared_ptr<SoundIoOutStream> outstream)
     std::shared_ptr<SoundIoDevice> device = outstream->device;
 
     if (device->aim != SoundIoDeviceAimOutput)
+    {
         return SoundIoErrorInvalid;
+    }
 
     if (device->probe_error)
+    {
         return device->probe_error;
+    }
 
     if (outstream->layout.channel_count > SOUNDIO_MAX_CHANNELS)
+    {
         return SoundIoErrorInvalid;
+    }
 
     if (outstream->format == SoundIoFormatInvalid)
     {
@@ -634,7 +634,9 @@ int soundio_outstream_open(std::shared_ptr<SoundIoOutStream> outstream)
     }
 
     if (outstream->format <= SoundIoFormatInvalid)
+    {
         return SoundIoErrorInvalid;
+    }
 
     if (!outstream->layout.channel_count)
     {
@@ -643,7 +645,9 @@ int soundio_outstream_open(std::shared_ptr<SoundIoOutStream> outstream)
     }
 
     if (!outstream->sample_rate)
+    {
         outstream->sample_rate = soundio_device_nearest_sample_rate(device, 48000);
+    }
 
     std::shared_ptr<SoundIoOutStreamPrivate> os = std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(outstream);
     outstream->bytes_per_frame = soundio_get_bytes_per_frame(outstream->format, outstream->layout.channel_count);
@@ -722,9 +726,7 @@ static void default_instream_error_callback(std::shared_ptr<SoundIoInStream> is,
     soundio_panic("libsoundio: %s", soundio_strerror(err));
 }
 
-static void default_overflow_callback(std::shared_ptr<SoundIoInStream> instream)
-{
-}
+static void default_overflow_callback(std::shared_ptr<SoundIoInStream> instream) {}
 
 std::shared_ptr<SoundIoInStream> soundio_instream_create(std::shared_ptr<SoundIoDevice> device)
 {
@@ -1002,22 +1004,22 @@ int soundio_device_nearest_sample_rate(std::shared_ptr<SoundIoDevice> device, in
 //     return a->is_raw == b->is_raw && a->aim == b->aim && a->id == b->id;
 // }
 
-const char* soundio_version_string(void)
+const char* soundio_version_string()
 {
     return SOUNDIO_VERSION_STRING;
 }
 
-int soundio_version_major(void)
+int soundio_version_major()
 {
     return SOUNDIO_VERSION_MAJOR;
 }
 
-int soundio_version_minor(void)
+int soundio_version_minor()
 {
     return SOUNDIO_VERSION_MINOR;
 }
 
-int soundio_version_patch(void)
+int soundio_version_patch()
 {
     return SOUNDIO_VERSION_PATCH;
 }

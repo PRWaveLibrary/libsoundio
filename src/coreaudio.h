@@ -42,14 +42,16 @@ struct SoundIoCoreAudio
     std::unique_ptr<CoreAudioCallback> callback = std::make_unique<CoreAudioCallback>();
     std::unique_ptr<SoundIoOsMutex> mutex;
     std::unique_ptr<SoundIoOsCond> cond;
-    std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter> thread = std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter>(nullptr, SoundIoOsThreadDeleter());
-    struct SoundIoAtomicFlag abort_flag;
+    std::unique_ptr<SoundIoOsThread> thread = nullptr;
+    SoundIoAtomicBool abort_flag;
 
     // this one is ready to be read with flush_events. protected by mutex
     std::unique_ptr<struct SoundIoDevicesInfo> ready_devices_info;
     struct SoundIoAtomicBool have_devices_flag;
-    std::unique_ptr<SoundIoOsCond> have_devices_cond;
+
     std::unique_ptr<SoundIoOsCond> scan_devices_cond;
+    std::unique_ptr<SoundIoOsMutex> scan_devices_mutex;
+
     std::vector<AudioDeviceID> registered_listeners;
 
     struct SoundIoAtomicBool device_scan_queued;

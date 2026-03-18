@@ -48,7 +48,7 @@ inline const char* GetLogLevelString(LogLevel level)
 }
 
 template<typename... Args>
-WAVE_PRINTF_CHECK (4, 5)
+WAVE_PRINTF_CHECK(4, 5)
 inline void PlatformLog(LogLevel level, const char* file, int line, const char* format, Args... args)
 {
     // 截取简短文件名 (去掉 C:\xxx\src 这种冗长的绝对路径)
@@ -120,6 +120,53 @@ inline void PlatformLog(LogLevel level, const char* file, int line, const char* 
     __android_log_print(priority, LOG_TAG, "%s", finalBuffer);
 }
 
+#elif __MACH__
+#include <cstdio>
+#include <cstring>
+#include <sys/time.h>
+#include <ctime>
+
+inline const char* GetLogLevelString(LogLevel level)
+{
+    switch (level)
+    {
+        case Debug: return "DEBUG";
+        case Info: return "INFO";
+        case Warn: return "WARN";
+        case Error: return "ERROR";
+        default: return "UNKNOWN";
+    }
+}
+
+template<typename... Args>
+WAVE_PRINTF_CHECK(4, 5)
+inline void PlatformLog(LogLevel level, const char* file, int line, const char* format, Args... args)
+{
+    const char* fileName = strrchr(file, '/');
+    if (!fileName)
+        fileName = strrchr(file, '\\');
+    fileName = fileName ? fileName + 1 : file;
+
+    // 获取时间戳
+    timeval tv{};
+    tm tm_info{};
+
+    gettimeofday(&tv, nullptr);
+    localtime_r(&tv.tv_sec, &tm_info);
+
+    char timeStr[32];
+    strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &tm_info);
+
+    // 格式化真实的业务数据
+    char msgBuffer[2048];
+    snprintf(msgBuffer, sizeof(msgBuffer), format, args...);
+
+    // 格式化控制台输出：[时间][TAG][级别][文件名:行号] 消息
+    // Xcode 控制台或者 Terminal 都支持这种基本格式，而且 C++ 原生不需要混写 Obj-C
+    fprintf(level >= Error ? stderr : stdout, "[%s.%03d][%s][%s][%s:%d] %s\n", timeStr, static_cast<int>(tv.tv_usec / 1000), LOG_TAG, GetLogLevelString(level), fileName, line,
+            msgBuffer);
+    fflush(level >= Error ? stderr : stdout);
+}
 #endif
 
 // =======================================================
