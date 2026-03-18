@@ -17,7 +17,6 @@ static std::mutex init_mutex;
 
 #if defined(SOUNDIO_OS_WINDOWS)
 
-static INIT_ONCE win32_init_once = INIT_ONCE_STATIC_INIT;
 static double win32_time_resolution;
 static SYSTEM_INFO win32_system_info;
 
@@ -37,7 +36,7 @@ double soundio_os_get_time()
 {
 #if defined(SOUNDIO_OS_WINDOWS)
     unsigned __int64 time;
-    QueryPerformanceCounter((LARGE_INTEGER *) &time);
+    QueryPerformanceCounter((LARGE_INTEGER*) &time);
     return time * win32_time_resolution;
 #elif defined(__MACH__)
     mach_timespec_t mts;
@@ -139,7 +138,7 @@ static int internal_init()
 {
 #if defined(SOUNDIO_OS_WINDOWS)
     unsigned __int64 frequency;
-    if (QueryPerformanceFrequency((LARGE_INTEGER *) &frequency))
+    if (QueryPerformanceFrequency((LARGE_INTEGER*) &frequency))
     {
         win32_time_resolution = 1.0 / (double) frequency;
     }

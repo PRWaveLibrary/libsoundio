@@ -436,7 +436,7 @@ int soundio_channel_layout_find_channel(
 
 bool soundio_channel_layout_detect_builtin(struct SoundIoChannelLayout* layout)
 {
-    for (int i = 0; i < std::size(builtin_channel_layouts); i += 1)
+    for (size_t i = 0; i < std::size(builtin_channel_layouts); i += 1)
     {
         const struct SoundIoChannelLayout* builtin_layout = &builtin_channel_layouts[i];
         if (soundio_channel_layout_equal(builtin_layout, layout))
@@ -475,7 +475,7 @@ const struct SoundIoChannelLayout* soundio_channel_layout_get_default(int channe
 
 enum SoundIoChannelId soundio_parse_channel_id(const std::wstring str)
 {
-    for (int id = 0; id < std::size(channel_names); id += 1)
+    for (size_t id = 0; id < std::size(channel_names); id += 1)
     {
         for (int i = 0; i < CHANNEL_NAME_ALIAS_COUNT; i += 1)
         {
