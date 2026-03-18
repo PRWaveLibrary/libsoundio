@@ -185,6 +185,7 @@ set(CONFIGURE_OUT_FILE "${libsoundio_BINARY_DIR}/config.h")
 set(LIBSOUNDIO_HEADERS
         "${libsoundio_SOURCE_DIR}/soundio/soundio.h"
         "${libsoundio_SOURCE_DIR}/soundio/endian.h"
+        "${libsoundio_SOURCE_DIR}/logger/logger.h"
 )
 
 if (SOUNDIO_HAVE_JACK)
@@ -404,7 +405,8 @@ if (SOUNDIO_BUILD_TESTS)
         target_link_libraries(underflow libsoundio_static ${LIBSOUNDIO_LIBS} ${LIBM})
     endif ()
 
-    add_executable(backend_disconnect_recover test/backend_disconnect_recover.c)
+    add_executable(backend_disconnect_recover test/backend_disconnect_recover.c
+    )
     set_target_properties(backend_disconnect_recover PROPERTIES
             LINKER_LANGUAGE C
             COMPILE_FLAGS ${EXAMPLE_CFLAGS})

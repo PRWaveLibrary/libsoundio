@@ -31,6 +31,7 @@ void oboe_stream_error_callback::onErrorAfterClose(oboe::AudioStream* audioStrea
     {
         return;
     }
+
     std::shared_ptr<SoundIoPrivate> si = si_.lock();
     if (si == nullptr)
     {
@@ -38,6 +39,7 @@ void oboe_stream_error_callback::onErrorAfterClose(oboe::AudioStream* audioStrea
         return;
     }
 
+    LOGI("device change.");
     soundio_force_device_scan(si);
     soundio_flush_events(si);
 }

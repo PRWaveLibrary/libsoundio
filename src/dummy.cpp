@@ -36,8 +36,7 @@ static void playback_thread_run(std::shared_ptr<void> arg)
                              ceil_dbl(time_passed / osd->period_duration) * osd->period_duration;
         double relative_time = next_period - now;
 
-
-        soundio_os_cond_timed_wait(osd->cond.get(), NULL, relative_time);
+        osd->cond->timed_wait(nullptr, relative_time);
         if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osd->clear_buffer_flag))
         {
             osd->ring_buffer->clear();
@@ -65,7 +64,7 @@ static void playback_thread_run(std::shared_ptr<void> arg)
 
         double total_time = soundio_os_get_time() - start_time;
         long total_frames = total_time * outstream->sample_rate;
-        int frames_to_kill = (int) (total_frames - frames_consumed);
+        int frames_to_kill = static_cast<int>(total_frames - frames_consumed);
         int read_count = soundio_int_min(frames_to_kill, fill_frames);
         int byte_count = read_count * outstream->bytes_per_frame;
         osd->ring_buffer->advance_read_ptr(byte_count);
@@ -104,7 +103,7 @@ static void capture_thread_run(std::shared_ptr<void> arg)
         double next_period = start_time +
                              ceil_dbl(time_passed / isd->period_duration) * isd->period_duration;
         double relative_time = next_period - now;
-        soundio_os_cond_timed_wait(isd->cond.get(), NULL, relative_time);
+        isd->cond->timed_wait(nullptr, relative_time);
 
         if (SOUNDIO_ATOMIC_LOAD(isd->pause_requested))
         {
@@ -169,13 +168,13 @@ static void wait_events_dummy(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoDummy& sid = si->backend_data->dummy;
     flush_events_dummy(si);
-    soundio_os_cond_wait(sid.cond.get(), NULL);
+    sid.cond->wait(nullptr);
 }
 
 static void wakeup_dummy(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoDummy& sid = si->backend_data->dummy;
-    soundio_os_cond_signal(sid.cond.get(), NULL);
+    sid.cond->signal(nullptr);
 }
 
 static void force_device_scan_dummy(std::shared_ptr<SoundIoPrivate> si)
@@ -190,14 +189,12 @@ static void outstream_destroy_dummy(std::shared_ptr<SoundIoPrivate> si, std::sha
     if (osd->thread)
     {
         SOUNDIO_ATOMIC_FLAG_CLEAR(osd->abort_flag);
-        soundio_os_cond_signal(osd->cond.get(), NULL);
-        // soundio_os_thread_destroy(osd->thread);
-        osd->thread = NULL;
+        osd->cond->signal(nullptr);
+        osd->thread = nullptr;
     }
 
-    osd->cond = NULL;
+    osd->cond = nullptr;
     osd->ring_buffer = nullptr;
-    // soundio_ring_buffer_deinit(&osd->ring_buffer);
 }
 
 static int outstream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
@@ -259,11 +256,7 @@ static int outstream_start_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared
     std::shared_ptr<SoundIo> soundio = si;
     assert(!osd->thread);
     SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osd->abort_flag);
-    int err;
-    if ((err = soundio_os_thread_create(playback_thread_run, os, soundio->emit_rtprio_warning, &osd->thread)))
-    {
-        return err;
-    }
+    osd->thread = SoundIoOsThread::create(playback_thread_run, os);
     return 0;
 }
 
@@ -303,7 +296,7 @@ static int outstream_clear_buffer_dummy(std::shared_ptr<SoundIoPrivate> si, std:
 {
     struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
     SOUNDIO_ATOMIC_FLAG_CLEAR(osd->clear_buffer_flag);
-    soundio_os_cond_signal(osd->cond.get(), NULL);
+    osd->cond->signal(nullptr);
     return 0;
 }
 
@@ -331,7 +324,7 @@ static void instream_destroy_dummy(std::shared_ptr<SoundIoPrivate> si, std::shar
     if (isd->thread)
     {
         SOUNDIO_ATOMIC_FLAG_CLEAR(isd->abort_flag);
-        soundio_os_cond_signal(isd->cond.get(), NULL);
+        isd->cond->signal(nullptr);
         // soundio_os_thread_destroy(isd->thread);
         isd->thread = NULL;
     }
@@ -401,11 +394,7 @@ static int instream_start_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_
     std::shared_ptr<SoundIo> soundio = si;
     assert(!isd->thread);
     SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(isd->abort_flag);
-    int err;
-    if ((err = soundio_os_thread_create(capture_thread_run, is, soundio->emit_rtprio_warning, &isd->thread)))
-    {
-        return err;
-    }
+    isd->thread = SoundIoOsThread::create(capture_thread_run, is);
     return 0;
 }
 

@@ -63,7 +63,7 @@ struct SoundIoOutStreamWasapi
     IAudioClock* audio_clock;
     std::wstring stream_name;
     bool need_resample;
-    std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter> thread = std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter>(nullptr, SoundIoOsThreadDeleter());
+    std::unique_ptr<SoundIoOsThread> thread = nullptr;
     std::unique_ptr<SoundIoOsMutex> mutex;
     std::unique_ptr<SoundIoOsCond> cond;
     std::unique_ptr<SoundIoOsCond> start_cond;
@@ -91,7 +91,7 @@ struct SoundIoInStreamWasapi
     IAudioCaptureClient* audio_capture_client;
     IAudioSessionControl* audio_session_control;
     std::wstring stream_name;
-    std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter> thread = std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter>(nullptr, SoundIoOsThreadDeleter());
+    std::unique_ptr<SoundIoOsThread> thread = nullptr;
     std::unique_ptr<SoundIoOsMutex> mutex;
     std::unique_ptr<SoundIoOsCond> cond;
     std::unique_ptr<SoundIoOsCond> start_cond;
@@ -119,7 +119,7 @@ struct SoundIoWasapi
     std::unique_ptr<SoundIoOsCond> cond;
     std::unique_ptr<SoundIoOsCond> scan_devices_cond;
     std::unique_ptr<SoundIoOsMutex> scan_devices_mutex;
-    std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter> thread = std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter>(nullptr, SoundIoOsThreadDeleter());
+    std::unique_ptr<SoundIoOsThread> thread = nullptr;
     bool abort_flag;
     // this one is ready to be read with flush_events. protected by mutex
     std::unique_ptr<struct SoundIoDevicesInfo> ready_devices_info;

@@ -8,11 +8,14 @@
 #ifndef SOUNDIO_OS_H
 #define SOUNDIO_OS_H
 
-#include <stdbool.h>
-#include <stddef.h>
 #include <memory>
 #include <functional>
 #include <cassert>
+#include <thread>
+#include <mutex>
+#include <atomic>
+#include <condition_variable>
+
 
 #if defined(__FreeBSD__) || defined(__MACH__)
 #define SOUNDIO_OS_KQUEUE
@@ -43,156 +46,71 @@
 #undef WINVER
 #define WINVER 0x0601
 #endif
+
 #if _WIN32_WINNT < 0x0601
 #undef _WIN32_WINNT
 #define _WIN32_WINNT 0x0601
 #endif
 
 #include <windows.h>
-#include <mmsystem.h>
-#include <objbase.h>
 #else
 
-#include <pthread.h>
 #include <unistd.h>
 
-#include <utility>
 #if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 
 #endif
 
+using STATIC_CALLBACK_PTR = void (*)(std::shared_ptr<void>);
 
-#if defined(__FreeBSD__) || defined(__MACH__)
-#define SOUNDIO_OS_KQUEUE
-#include <sys/types.h>
-#include <sys/event.h>
-#include <sys/time.h>
-#endif
-
-#if defined(__MACH__)
-#include <mach/clock.h>
-#include <mach/mach.h>
-#endif
-
-
-#ifdef SOUNDIO_OS_KQUEUE
-static const uintptr_t notify_ident = 1;
-#endif
-
-
-struct SoundIoOsThread
+class SoundIoOsThread
 {
-#ifdef _WIN32
-    HANDLE handle;
-    DWORD id;
-#else
-    pthread_attr_t attr;
-    bool attr_init;
+    std::unique_ptr<std::thread> thread;
 
-    pthread_t id;
-    bool running;
-#endif
-    std::shared_ptr<void> arg;
-
-    void (*run)(std::shared_ptr<void> arg);
-};
-
-struct SoundIoOsMutex
-{
-#ifdef _WIN32
-    CRITICAL_SECTION id;
-#else
-    pthread_mutex_t id;
-    bool id_init;
-#endif
-    ~SoundIoOsMutex()
-    {
-#ifdef _WIN32
-        DeleteCriticalSection(&id);
-#else
-        if (id_init)
-        {
-            assert(!pthread_mutex_destroy(&id));
-        }
-#endif
-    }
-};
-
-struct SoundIoOsThreadDeleter
-{
-    void operator()(SoundIoOsThread* thread) const
+public:
+    virtual ~SoundIoOsThread()
     {
         if (thread == nullptr)
         {
             return;
         }
-
-#ifdef _WIN32
-        if (thread->handle)
+        if (thread->joinable())
         {
-            DWORD err = WaitForSingleObject(thread->handle, INFINITE);
-            assert(err != WAIT_FAILED);
-            BOOL ok = CloseHandle(thread->handle);
-            assert(ok);
+            thread->join();
         }
-#else
+    }
 
-        if (thread->running)
-        {
-            assert(!pthread_join(thread->id, nullptr));
-        }
+    static std::unique_ptr<SoundIoOsThread> create(STATIC_CALLBACK_PTR run, std::shared_ptr<void> arg);
+};
 
-        if (thread->attr_init)
-        {
-            assert(!pthread_attr_destroy(&thread->attr));
-        }
-#endif
-        delete thread;
+class SoundIoOsMutex
+{
+    std::mutex mutex_;
+
+public:
+    void lock();
+
+    void unlock();
+
+    std::mutex& get()
+    {
+        return mutex_;
     }
 };
 
-struct SoundIoOsCond
+class SoundIoOsCond
 {
-#ifdef SOUNDIO_OS_KQUEUE
-    int kq_id;
-#elif defined(_WIN32)
-    CONDITION_VARIABLE id;
-    CRITICAL_SECTION default_cs_id;
-#else
-    pthread_cond_t id;
-    bool id_init;
+    std::condition_variable cond_;
+    std::mutex default_mutex_;
 
-    pthread_condattr_t attr;
-    bool attr_init;
+public:
+    void signal(std::unique_lock<std::mutex>* locked_mutex);
 
-    pthread_mutex_t default_mutex_id;
-    bool default_mutex_init;
-#endif
+    void wait(std::unique_lock<std::mutex>* locked_mutex);
 
-    ~SoundIoOsCond()
-    {
-#ifdef SOUNDIO_OS_KQUEUE
-        close(kq_id);
-#elif defined(SOUNDIO_OS_WINDOWS)
-        DeleteCriticalSection(&default_cs_id);
-#else
-        if (id_init)
-        {
-            assert(!pthread_cond_destroy(&id));
-        }
-
-        if (attr_init)
-        {
-            assert(!pthread_condattr_destroy(&attr));
-        }
-        if (default_mutex_init)
-        {
-            assert(!pthread_mutex_destroy(&default_mutex_id));
-        }
-#endif
-    }
+    void timed_wait(std::unique_lock<std::mutex>* locked_mutex, double seconds);
 };
 
 // struct SoundIoRingBuffer;
@@ -201,25 +119,17 @@ struct SoundIoOsCond
 // safe to call from any thread(s) multiple times, but
 // must be called at least once before calling any other os functions
 // soundio_create calls this function.
-int soundio_os_init(void);
+int soundio_os_init();
 
-double soundio_os_get_time(void);
+double soundio_os_get_time();
 
 
-int soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared_ptr<void> arg, void (*emit_rtprio_warning)(void),
-                             std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter>* out_thread);
+// std::unique_ptr<SoundIoOsThread> soundio_os_thread_create(void (*run)(std::shared_ptr<void> arg), std::shared_ptr<void> arg);
 
 // void soundio_os_thread_destroy(std::shared_ptr<SoundIoOsThread> thread);
 
 
 std::unique_ptr<SoundIoOsMutex> soundio_os_mutex_create();
-
-// void soundio_os_mutex_destroy(struct SoundIoOsMutex* mutex);
-
-void soundio_os_mutex_lock(std::unique_ptr<SoundIoOsMutex>& mutex);
-
-void soundio_os_mutex_unlock(std::unique_ptr<SoundIoOsMutex>& mutex);
-
 
 std::unique_ptr<SoundIoOsCond> soundio_os_cond_create();
 
@@ -230,14 +140,14 @@ std::unique_ptr<SoundIoOsCond> soundio_os_cond_create();
 // that do not use mutexes for conditions, no mutex handling is necessary. If
 // you already have a locked mutex available, pass it; this will be better on
 // systems that use mutexes for conditions.
-void soundio_os_cond_signal(SoundIoOsCond* cond, SoundIoOsMutex* locked_mutex);
+void soundio_os_cond_signal(std::unique_ptr<SoundIoOsCond> cond, std::unique_ptr<SoundIoOsMutex> locked_mutex);
 
-void soundio_os_cond_timed_wait(SoundIoOsCond* cond, SoundIoOsMutex* locked_mutex, double seconds);
+void soundio_os_cond_timed_wait(std::unique_ptr<SoundIoOsCond> cond, std::unique_ptr<SoundIoOsMutex> locked_mutex, double seconds);
 
-void soundio_os_cond_wait(SoundIoOsCond* cond, SoundIoOsMutex* locked_mutex);
+void soundio_os_cond_wait(std::unique_ptr<SoundIoOsCond> cond, std::unique_ptr<SoundIoOsMutex> locked_mutex);
 
 
-int soundio_os_page_size(void);
+int soundio_os_page_size();
 
 // You may rely on the size of this struct as part of the API and ABI.
 struct SoundIoOsMirroredMemory

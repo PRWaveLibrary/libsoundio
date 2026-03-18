@@ -32,7 +32,7 @@ struct SoundIoDeviceDummy
 
 struct SoundIoOutStreamDummy
 {
-    std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter> thread = std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter>(nullptr, SoundIoOsThreadDeleter());
+    std::unique_ptr<SoundIoOsThread> thread = nullptr;
     std::unique_ptr<SoundIoOsCond> cond;
     struct SoundIoAtomicFlag abort_flag;
     double period_duration;
@@ -48,7 +48,7 @@ struct SoundIoOutStreamDummy
 
 struct SoundIoInStreamDummy
 {
-    std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter> thread = std::unique_ptr<SoundIoOsThread, SoundIoOsThreadDeleter>(nullptr, SoundIoOsThreadDeleter());
+    std::unique_ptr<SoundIoOsThread> thread = nullptr;
     std::unique_ptr<SoundIoOsCond> cond;
     struct SoundIoAtomicFlag abort_flag;
     double period_duration;

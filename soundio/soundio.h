@@ -13,6 +13,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include "logger/logger.h"
 
 /// \cond
 #ifdef __cplusplus
@@ -699,7 +700,7 @@ struct SoundIo
     /// a message instructing the user how to configure their system to allow
     /// real-time priority threads. This must be set to a function not NULL.
     /// To silence the warning, assign this to a function that does nothing.
-    void (*emit_rtprio_warning)(void);
+    void (*emit_rtprio_warning)();
 
     /// Optional: JACK info callback.
     /// By default, libsoundio sets this to an empty function in order to
@@ -716,22 +717,22 @@ struct SoundIo
 
 
 /// See also ::soundio_version_major, ::soundio_version_minor, ::soundio_version_patch
-SOUNDIO_EXPORT const char* soundio_version_string(void);
+SOUNDIO_EXPORT const char* soundio_version_string();
 
 /// See also ::soundio_version_string, ::soundio_version_minor, ::soundio_version_patch
-SOUNDIO_EXPORT int soundio_version_major(void);
+SOUNDIO_EXPORT int soundio_version_major();
 
 /// See also ::soundio_version_major, ::soundio_version_string, ::soundio_version_patch
-SOUNDIO_EXPORT int soundio_version_minor(void);
+SOUNDIO_EXPORT int soundio_version_minor();
 
 /// See also ::soundio_version_major, ::soundio_version_minor, ::soundio_version_string
-SOUNDIO_EXPORT int soundio_version_patch(void);
+SOUNDIO_EXPORT int soundio_version_patch();
 
 /// Create a SoundIo context. You may create multiple instances of this to
 /// connect to multiple backends. Sets all fields to defaults.
 /// Returns `NULL` if and only if memory could not be allocated.
 /// See also ::soundio_destroy
-SOUNDIO_EXPORT std::shared_ptr<SoundIo> soundio_create(void);
+SOUNDIO_EXPORT std::shared_ptr<SoundIo> soundio_create();
 
 SOUNDIO_EXPORT void soundio_destroy(std::shared_ptr<SoundIo> soundio);
 
