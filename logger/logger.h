@@ -7,7 +7,7 @@
 
 #include <string>
 #include <string_view>
-#include <format> // 修复 1：你的 FormatLog 无条件使用了 std::format，所以这里必须全局引入，不能只限制在 Apple 平台
+#include <format>
 
 #define LOG_TAG "WaveAudio"
 
@@ -27,11 +27,16 @@ inline const char* GetLogLevelString(LogLevel level)
 {
     switch (level)
     {
-        case Debug: return "DEBUG";
-        case Info:  return "INFO";
-        case Warn:  return "WARN";
-        case Error: return "ERROR";
-        default:    return "UNKNOWN";
+        case Debug:
+            return "DEBUG";
+        case Info:
+            return "INFO";
+        case Warn:
+            return "WARN";
+        case Error:
+            return "ERROR";
+        default:
+            return "UNKNOWN";
     }
 }
 
@@ -55,9 +60,7 @@ inline std::string FormatLog(LogLevel level, const char* file, int line, std::fo
 #ifdef _WIN32
 #include <windows.h>
 #include <cstdio>
-#include <cstring>
 
-// 🌟 修复 3：外层包装函数的 format 参数也必须是 std::format_string，否则会在此处退化报错
 template<typename... Args>
 inline void PlatformLog(LogLevel level, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
 {
@@ -86,10 +89,18 @@ inline void PlatformLog(LogLevel level, const char* file, int line, std::format_
     android_LogPriority priority = ANDROID_LOG_DEFAULT;
     switch (level)
     {
-        case Debug: priority = ANDROID_LOG_DEBUG; break;
-        case Info:  priority = ANDROID_LOG_INFO; break;
-        case Warn:  priority = ANDROID_LOG_WARN; break;
-        case Error: priority = ANDROID_LOG_ERROR; break;
+        case Debug:
+            priority = ANDROID_LOG_DEBUG;
+            break;
+        case Info:
+            priority = ANDROID_LOG_INFO;
+            break;
+        case Warn:
+            priority = ANDROID_LOG_WARN;
+            break;
+        case Error:
+            priority = ANDROID_LOG_ERROR;
+            break;
     }
 
     auto s = FormatLog(level, file, line, fmt, std::forward<Args>(args)...);
