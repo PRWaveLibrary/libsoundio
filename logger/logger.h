@@ -41,8 +41,7 @@ inline const char* GetLogLevelString(LogLevel level)
 }
 
 // 🌟 修复 2：将 const char* fmt 替换为 std::format_string<Args...>
-template<typename... Args>
-inline std::string FormatLog(LogLevel level, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+inline std::string FormatLog(LogLevel level, const char* file, int line, std::string_view fmt, std::format_args args)
 {
     // 1. 获取文件名 (使用 std::string_view 零拷贝，更高效)
     std::string_view filePath(file);
@@ -50,7 +49,7 @@ inline std::string FormatLog(LogLevel level, const char* file, int line, std::fo
     std::string_view fileName = (lastSlash == std::string_view::npos) ? filePath : filePath.substr(lastSlash + 1);
 
     // 3. 格式化真实的业务数据 (使用 std::forward 完美转发参数，性能更好)
-    std::string msgBuffer = std::format(fmt, std::forward<Args>(args)...);
+    std::string msgBuffer = std::vformat(fmt, args);
 
     // 4. 拼接最终的控制台输出格式
     return std::format("[{}][{}][{}:{}] {}\n", LOG_TAG, GetLogLevelString(level), fileName, line, msgBuffer);
@@ -64,7 +63,7 @@ inline std::string FormatLog(LogLevel level, const char* file, int line, std::fo
 template<typename... Args>
 inline void PlatformLog(LogLevel level, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
 {
-    auto s = FormatLog(level, file, line, fmt, std::forward<Args>(args)...);
+    auto s = FormatLog(level, file, line, fmt.get(), std::make_format_args(args...));
 
     if (IsDebuggerPresent())
     {
@@ -103,7 +102,7 @@ inline void PlatformLog(LogLevel level, const char* file, int line, std::format_
             break;
     }
 
-    auto s = FormatLog(level, file, line, fmt, std::forward<Args>(args)...);
+    std::string s = FormatLog(level, file, line, fmt, std::forward<Args>(args)...);
     __android_log_print(priority, LOG_TAG, "%s", s.c_str());
 }
 
@@ -113,7 +112,7 @@ inline void PlatformLog(LogLevel level, const char* file, int line, std::format_
 template<typename... Args>
 inline void PlatformLog(LogLevel level, const char* file_name, int file_line, std::format_string<Args...> fmt, Args&&... args)
 {
-    auto s = FormatLog(level, file_name, file_line, fmt, std::forward<Args>(args)...);
+    std::string s = FormatLog(level, file_name, file_line, fmt, std::forward<Args>(args)...);
     FILE* stream = level >= Error ? stderr : stdout;
     std::fputs(s.c_str(), stream);
     std::fflush(stream);
