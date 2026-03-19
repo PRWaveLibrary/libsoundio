@@ -8,8 +8,13 @@
 #include <string>
 #include <string_view>
 #include <format>
+#include "../libsoundio/common.h"
 
 #define LOG_TAG "WaveAudio"
+
+typedef void (*unity_log_ptr)(int, const char*);
+
+static unity_log_ptr g_unity_log = nullptr;
 
 enum LogLevel
 {
@@ -18,6 +23,15 @@ enum LogLevel
     Warn,
     Error
 };
+
+static inline void LogUnity(LogLevel level, std::string& s)
+{
+    if (g_unity_log == nullptr)
+    {
+        return;
+    }
+    g_unity_log(level, s.c_str());
+}
 
 // =======================================================
 // 底层格式化实现核心
@@ -74,6 +88,7 @@ inline void PlatformLog(LogLevel level, const char* file, int line, std::format_
     {
         OutputDebugStringA(s.c_str());
     }
+    LogUnity(level, s);
 }
 
 #elif defined(__ANDROID__)
@@ -104,6 +119,7 @@ inline void PlatformLog(LogLevel level, const char* file, int line, std::format_
 
     std::string s = FormatLog(level, file, line, fmt, std::forward<Args>(args)...);
     __android_log_print(priority, LOG_TAG, "%s", s.c_str());
+    LogUnity(level, s);
 }
 
 #elif __MACH__
@@ -116,6 +132,7 @@ inline void PlatformLog(LogLevel level, const char* file_name, int file_line, st
     FILE* stream = level >= Error ? stderr : stdout;
     std::fputs(s.c_str(), stream);
     std::fflush(stream);
+    LogUnity(level, s);
 }
 #endif
 
@@ -128,5 +145,11 @@ inline void PlatformLog(LogLevel level, const char* file_name, int file_line, st
 #define LOGI(fmt, ...) PlatformLog(LogLevel::Info,  __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
 #define LOGW(fmt, ...) PlatformLog(LogLevel::Warn,  __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
 #define LOGE(fmt, ...) PlatformLog(LogLevel::Error, __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
+
+
+AR_API inline void ar_set_unity_log(unity_log_ptr ptr)
+{
+    g_unity_log = ptr;
+}
 
 #endif //WAVEAUDIO_LOG_H
