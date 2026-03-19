@@ -189,7 +189,7 @@ set(LIBSOUNDIO_LIBS
 
 if (MSVC)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /Wall")
-    set(LIB_CFLAGS "/TP /W1 /GR /EHs-c- /std:c++20 /Zc:preprocessor /D_SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING")
+    set(LIB_CFLAGS "/TP /W1 /GR /EHs-c- /std:c++20 /Zc:preprocessor")
     set(EXAMPLE_CFLAGS "/W4 /std:c++20")
     set(TEST_CFLAGS "${LIB_CFLAGS}")
     set(TEST_LDFLAGS " ")

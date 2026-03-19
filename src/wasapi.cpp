@@ -21,6 +21,7 @@
 #include <initguid.h>
 #include <audioclient.h>
 #include <endpointvolume.h>
+#include "logger/logger.hpp"
 
 #include <mmdeviceapi.h>
 
