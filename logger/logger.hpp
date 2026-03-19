@@ -14,7 +14,7 @@
 
 typedef void (*unity_log_ptr)(int, const char*);
 
-static unity_log_ptr g_unity_log = nullptr;
+inline unity_log_ptr g_unity_log = nullptr;
 
 enum LogLevel
 {
@@ -146,8 +146,7 @@ inline void PlatformLog(LogLevel level, const char* file_name, int file_line, st
 #define LOGW(fmt, ...) PlatformLog(LogLevel::Warn,  __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
 #define LOGE(fmt, ...) PlatformLog(LogLevel::Error, __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
 
-
-AR_API inline void ar_set_unity_log(unity_log_ptr ptr)
+static void set_unity_log(unity_log_ptr ptr)
 {
     g_unity_log = ptr;
 }
