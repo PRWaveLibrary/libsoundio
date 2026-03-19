@@ -188,6 +188,7 @@ set(LIBSOUNDIO_LIBS
 )
 
 if (MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /Wall")
     set(LIB_CFLAGS "/TP /W1 /GR /EHs-c- /std:c++20 /Zc:preprocessor")
     set(EXAMPLE_CFLAGS "/W4 /std:c++20")
