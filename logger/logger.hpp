@@ -117,7 +117,7 @@ inline void PlatformLog(LogLevel level, const char* file, int line, std::format_
             break;
     }
 
-    std::string s = FormatLog(level, file, line, fmt, std::forward<Args>(args)...);
+    auto s = FormatLog(level, file, line, fmt.get(), std::make_format_args(args...));
     __android_log_print(priority, LOG_TAG, "%s", s.c_str());
     LogUnity(level, s);
 }
@@ -128,7 +128,7 @@ inline void PlatformLog(LogLevel level, const char* file, int line, std::format_
 template<typename... Args>
 inline void PlatformLog(LogLevel level, const char* file_name, int file_line, std::format_string<Args...> fmt, Args&&... args)
 {
-    std::string s = FormatLog(level, file_name, file_line, fmt, std::forward<Args>(args)...);
+    auto s = FormatLog(level, file, line, fmt.get(), std::make_format_args(args...));
     FILE* stream = level >= Error ? stderr : stdout;
     std::fputs(s.c_str(), stream);
     std::fflush(stream);
