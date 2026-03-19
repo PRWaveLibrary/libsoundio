@@ -11,7 +11,7 @@
 #include "soundio_internal.h"
 #include "os.h"
 #include "list.h"
-#include "atomics.h"
+#include <atomic>
 #include <string>
 
 // #define CINTERFACE
@@ -24,10 +24,6 @@
 #include <audioclient.h>
 #include <audiosessiontypes.h>
 #include <audiopolicy.h>
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 
 struct IMMDeviceDeleter
 {
@@ -67,15 +63,15 @@ struct SoundIoOutStreamWasapi
     std::unique_ptr<SoundIoOsMutex> mutex;
     std::unique_ptr<SoundIoOsCond> cond;
     std::unique_ptr<SoundIoOsCond> start_cond;
-    struct SoundIoAtomicFlag thread_exit_flag;
+    std::atomic_flag thread_exit_flag = ATOMIC_FLAG_INIT;
     bool is_raw;
     int writable_frame_count;
     int buffer_frame_count;
     int write_frame_count;
     HANDLE h_event;
-    struct SoundIoAtomicBool desired_pause_state;
-    struct SoundIoAtomicFlag pause_resume_flag;
-    struct SoundIoAtomicFlag clear_buffer_flag;
+    std::atomic<bool> desired_pause_state{false};
+    std::atomic_flag pause_resume_flag = ATOMIC_FLAG_INIT;
+    std::atomic_flag clear_buffer_flag = ATOMIC_FLAG_INIT;
     bool is_paused;
     bool open_complete;
     int open_err;
@@ -95,7 +91,7 @@ struct SoundIoInStreamWasapi
     std::unique_ptr<SoundIoOsMutex> mutex;
     std::unique_ptr<SoundIoOsCond> cond;
     std::unique_ptr<SoundIoOsCond> start_cond;
-    struct SoundIoAtomicFlag thread_exit_flag;
+    std::atomic_flag thread_exit_flag = ATOMIC_FLAG_INIT;
     bool is_raw;
     int readable_frame_count;
     UINT32 buffer_frame_count;
@@ -160,8 +156,4 @@ public:
     IFACEMETHODIMP OnPropertyValueChanged(LPCWSTR pwstrDeviceId, const PROPERTYKEY key);
 };
 
-
-#ifdef __cplusplus
-}
-#endif
 #endif

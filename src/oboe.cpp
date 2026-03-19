@@ -10,8 +10,8 @@
 // static const int INPUT_ELEMENT = 1;
 
 static enum SoundIoDeviceAim aims[] = {
-    SoundIoDeviceAimInput,
-    SoundIoDeviceAimOutput,
+        SoundIoDeviceAimInput,
+        SoundIoDeviceAimOutput,
 };
 
 // static void deinit_sound_io_devices_info(struct SoundIoDevicesInfo** sidi)
@@ -85,7 +85,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate>& si)
     std::unique_lock lock(sio.mutex->get());
 
     sio.ready_devices_info = std::move(devices_info);
-    SOUNDIO_ATOMIC_STORE(sio.have_devices_flag, true);
+    sio.have_devices_flag.store(true);
     sio.cond->signal(&lock);
     si->on_events_signal(si);
     return 0;
@@ -112,7 +112,7 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
     std::unique_lock lock(sio.mutex->get());
 
     // block until have devices
-    while (wait || (!SOUNDIO_ATOMIC_LOAD(sio.have_devices_flag) && !sio.shutdown_err))
+    while (wait || (!sio.have_devices_flag.load() && !sio.shutdown_err))
     {
         sio.cond->wait(&lock);
         wait = false;
@@ -158,15 +158,11 @@ static void device_thread_run(std::shared_ptr<void> arg)
 
     std::unique_lock lock(sio.scan_devices_mutex->get());
 
-    for (;;)
+    while (sio.abort_flag.test_and_set())
     {
-        if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(sio.abort_flag))
+        if (sio.device_scan_queued.load())
         {
-            break;
-        }
-        if (SOUNDIO_ATOMIC_LOAD(sio.device_scan_queued))
-        {
-            SOUNDIO_ATOMIC_STORE(sio.device_scan_queued, false);
+            sio.device_scan_queued.store(false);
             lock.unlock();
 
             refresh_devices(si);
@@ -192,8 +188,8 @@ static void force_device_scan_oboe(std::shared_ptr<SoundIoPrivate> si)
 
     std::unique_lock lock(sio.scan_devices_mutex->get());
 
-    SOUNDIO_ATOMIC_STORE(sio.have_devices_flag, false);
-    SOUNDIO_ATOMIC_STORE(sio.device_scan_queued, true);
+    sio.have_devices_flag.store(false);
+    sio.device_scan_queued.store(true);
     sio.scan_devices_cond->signal(&lock);
 }
 
@@ -413,7 +409,7 @@ static void destroy_oboe(std::shared_ptr<SoundIoPrivate> si)
     if (sio.thread)
     {
         std::unique_lock lock(sio.scan_devices_mutex->get());
-        SOUNDIO_ATOMIC_FLAG_CLEAR(sio.abort_flag);
+        sio.abort_flag.clear();
         sio.scan_devices_cond->signal(&lock);
         lock.unlock();
 
@@ -430,9 +426,9 @@ int soundio_oboe_init(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoOboe& sio = si->backend_data->oboe;
 
-    SOUNDIO_ATOMIC_STORE(sio.have_devices_flag, false);
-    SOUNDIO_ATOMIC_STORE(sio.device_scan_queued, true);
-    SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(sio.abort_flag);
+    sio.have_devices_flag.store(false);
+    sio.device_scan_queued.store(true);
+    sio.abort_flag.test_and_set();
 
     sio.mutex = soundio_os_mutex_create();
     if (!sio.mutex)

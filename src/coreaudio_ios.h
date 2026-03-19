@@ -11,7 +11,7 @@
 #include "soundio_internal.h"
 #include "os.h"
 #include "list.h"
-#include "atomics.h"
+#include <atomic>
 
 #include <AudioToolbox/AudioToolbox.h>
 
@@ -80,24 +80,23 @@ struct SoundIoCoreAudioIOS
     std::unique_ptr<SoundIoOsMutex> mutex;
     std::unique_ptr<SoundIoOsCond> cond;
     std::unique_ptr<SoundIoOsThread> thread = nullptr;
-    struct SoundIoAtomicBool abort_flag;
+    std::atomic<bool> abort_flag{false};
 
     // this one is ready to be read with flush_events. protected by mutex
     std::unique_ptr<SoundIoDevicesInfo> ready_devices_info;
-    struct SoundIoAtomicBool have_devices_flag;
+    std::atomic<bool> have_devices_flag{false};
     std::unique_ptr<SoundIoOsCond> scan_devices_cond;
     std::unique_ptr<SoundIoOsMutex> scan_devices_mutex;
 
-    struct SoundIoAtomicBool device_scan_queued;
-    struct SoundIoAtomicBool service_restarted;
+    std::atomic<bool> device_scan_queued{false};
+    std::atomic<bool> service_restarted{false};
     int shutdown_err;
     bool emitted_shutdown_cb;
 };
 
 struct SoundIoOutStreamCoreAudioIOS
 {
-    std::unique_ptr<OpaqueAudioComponentInstance, CoreAudioInstanceDeleter> instance = std::unique_ptr<OpaqueAudioComponentInstance, CoreAudioInstanceDeleter>(
-        nullptr, CoreAudioInstanceDeleter());
+    std::unique_ptr<OpaqueAudioComponentInstance, CoreAudioInstanceDeleter> instance = std::unique_ptr<OpaqueAudioComponentInstance, CoreAudioInstanceDeleter>(nullptr, CoreAudioInstanceDeleter());
     AudioBufferList* io_data;
     int buffer_index;
     int frames_left;
@@ -109,8 +108,7 @@ struct SoundIoOutStreamCoreAudioIOS
 
 struct SoundIoInStreamCoreAudioIOS
 {
-    std::unique_ptr<OpaqueAudioComponentInstance, CoreAudioInstanceDeleter> instance = std::unique_ptr<OpaqueAudioComponentInstance, CoreAudioInstanceDeleter>(
-        nullptr, CoreAudioInstanceDeleter());
+    std::unique_ptr<OpaqueAudioComponentInstance, CoreAudioInstanceDeleter> instance = std::unique_ptr<OpaqueAudioComponentInstance, CoreAudioInstanceDeleter>(nullptr, CoreAudioInstanceDeleter());
     std::unique_ptr<AudioBufferList, decltype(&std::free)> buffer_list = std::unique_ptr<AudioBufferList, decltype(&std::free)>(nullptr, std::free);
     int frames_left;
     double hardware_latency;

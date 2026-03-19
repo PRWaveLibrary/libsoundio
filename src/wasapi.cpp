@@ -1,3 +1,6 @@
+// ==============================================================================
+// 1. Macros, Constants and Types
+// ==============================================================================
 
 /*
  * Copyright (c) 2015 Andrew Kelley
@@ -67,89 +70,89 @@ static const CLSID CLSID_MMDeviceEnumerator = __uuidof(MMDeviceEnumerator);
 
 // MIDL_INTERFACE("7ED4EE07-8E67-4CD4-8C1A-2B7A5987AD42")
 static const IID IID_IAudioClient3 = {
-    0x7ed4ee07,
-    0x8e67,
-    0x4cd4,
-    {0x8c, 0x1a, 0x2b, 0x7a, 0x59, 0x87, 0xad, 0x42}
+        0x7ed4ee07,
+        0x8e67,
+        0x4cd4,
+        {0x8c, 0x1a, 0x2b, 0x7a, 0x59, 0x87, 0xad, 0x42}
 };
 
 // MIDL_INTERFACE("CD63314F-3FBA-4a1b-812C-EF96358728E7")
 static const IID IID_IAudioClock = {
-    0xcd63314f,
-    0x3fba,
-    0x4a1b,
-    {0x81, 0x2c, 0xef, 0x96, 0x35, 0x87, 0x28, 0xe7}
+        0xcd63314f,
+        0x3fba,
+        0x4a1b,
+        {0x81, 0x2c, 0xef, 0x96, 0x35, 0x87, 0x28, 0xe7}
 };
 
 static const IID IID_IMMDeviceEnumerator = {
-    // MIDL_INTERFACE("A95664D2-9614-4F35-A746-DE8DB63617E6")
-    0xa95664d2,
-    0x9614,
-    0x4f35,
-    {0xa7, 0x46, 0xde, 0x8d, 0xb6, 0x36, 0x17, 0xe6}
+        // MIDL_INTERFACE("A95664D2-9614-4F35-A746-DE8DB63617E6")
+        0xa95664d2,
+        0x9614,
+        0x4f35,
+        {0xa7, 0x46, 0xde, 0x8d, 0xb6, 0x36, 0x17, 0xe6}
 };
 static const IID IID_IMMNotificationClient = {
-    // MIDL_INTERFACE("7991EEC9-7E89-4D85-8390-6C703CEC60C0")
-    0x7991eec9,
-    0x7e89,
-    0x4d85,
-    {0x83, 0x90, 0x6c, 0x70, 0x3c, 0xec, 0x60, 0xc0}
+        // MIDL_INTERFACE("7991EEC9-7E89-4D85-8390-6C703CEC60C0")
+        0x7991eec9,
+        0x7e89,
+        0x4d85,
+        {0x83, 0x90, 0x6c, 0x70, 0x3c, 0xec, 0x60, 0xc0}
 };
 static const IID IID_IAudioClient = {
-    // MIDL_INTERFACE("1CB9AD4C-DBFA-4c32-B178-C2F568A703B2")
-    0x1cb9ad4c,
-    0xdbfa,
-    0x4c32,
-    {0xb1, 0x78, 0xc2, 0xf5, 0x68, 0xa7, 0x03, 0xb2}
+        // MIDL_INTERFACE("1CB9AD4C-DBFA-4c32-B178-C2F568A703B2")
+        0x1cb9ad4c,
+        0xdbfa,
+        0x4c32,
+        {0xb1, 0x78, 0xc2, 0xf5, 0x68, 0xa7, 0x03, 0xb2}
 };
 static const IID IID_IAudioRenderClient = {
-    // MIDL_INTERFACE("F294ACFC-3146-4483-A7BF-ADDCA7C260E2")
-    0xf294acfc,
-    0x3146,
-    0x4483,
-    {0xa7, 0xbf, 0xad, 0xdc, 0xa7, 0xc2, 0x60, 0xe2}
+        // MIDL_INTERFACE("F294ACFC-3146-4483-A7BF-ADDCA7C260E2")
+        0xf294acfc,
+        0x3146,
+        0x4483,
+        {0xa7, 0xbf, 0xad, 0xdc, 0xa7, 0xc2, 0x60, 0xe2}
 };
 static const IID IID_IAudioSessionControl = {
-    // MIDL_INTERFACE("F4B1A599-7266-4319-A8CA-E70ACB11E8CD")
-    0xf4b1a599,
-    0x7266,
-    0x4319,
-    {0xa8, 0xca, 0xe7, 0x0a, 0xcb, 0x11, 0xe8, 0xcd}
+        // MIDL_INTERFACE("F4B1A599-7266-4319-A8CA-E70ACB11E8CD")
+        0xf4b1a599,
+        0x7266,
+        0x4319,
+        {0xa8, 0xca, 0xe7, 0x0a, 0xcb, 0x11, 0xe8, 0xcd}
 };
 static const IID IID_IAudioSessionEvents = {
-    // MIDL_INTERFACE("24918ACC-64B3-37C1-8CA9-74A66E9957A8")
-    0x24918acc,
-    0x64b3,
-    0x37c1,
-    {0x8c, 0xa9, 0x74, 0xa6, 0x6e, 0x99, 0x57, 0xa8}
+        // MIDL_INTERFACE("24918ACC-64B3-37C1-8CA9-74A66E9957A8")
+        0x24918acc,
+        0x64b3,
+        0x37c1,
+        {0x8c, 0xa9, 0x74, 0xa6, 0x6e, 0x99, 0x57, 0xa8}
 };
 static const IID IID_IMMEndpoint = {
-    // MIDL_INTERFACE("1BE09788-6894-4089-8586-9A2A6C265AC5")
-    0x1be09788,
-    0x6894,
-    0x4089,
-    {0x85, 0x86, 0x9a, 0x2a, 0x6c, 0x26, 0x5a, 0xc5}
+        // MIDL_INTERFACE("1BE09788-6894-4089-8586-9A2A6C265AC5")
+        0x1be09788,
+        0x6894,
+        0x4089,
+        {0x85, 0x86, 0x9a, 0x2a, 0x6c, 0x26, 0x5a, 0xc5}
 };
 static const IID IID_IAudioClockAdjustment = {
-    // MIDL_INTERFACE("f6e4c0a0-46d9-4fb8-be21-57a3ef2b626c")
-    0xf6e4c0a0,
-    0x46d9,
-    0x4fb8,
-    {0xbe, 0x21, 0x57, 0xa3, 0xef, 0x2b, 0x62, 0x6c}
+        // MIDL_INTERFACE("f6e4c0a0-46d9-4fb8-be21-57a3ef2b626c")
+        0xf6e4c0a0,
+        0x46d9,
+        0x4fb8,
+        {0xbe, 0x21, 0x57, 0xa3, 0xef, 0x2b, 0x62, 0x6c}
 };
 static const IID IID_IAudioCaptureClient = {
-    // MIDL_INTERFACE("C8ADBD64-E71E-48a0-A4DE-185C395CD317")
-    0xc8adbd64,
-    0xe71e,
-    0x48a0,
-    {0xa4, 0xde, 0x18, 0x5c, 0x39, 0x5c, 0xd3, 0x17}
+        // MIDL_INTERFACE("C8ADBD64-E71E-48a0-A4DE-185C395CD317")
+        0xc8adbd64,
+        0xe71e,
+        0x48a0,
+        {0xa4, 0xde, 0x18, 0x5c, 0x39, 0x5c, 0xd3, 0x17}
 };
 static const IID IID_ISimpleAudioVolume = {
-    // MIDL_INTERFACE("87ce5498-68d6-44e5-9215-6da47ef883d8")
-    0x87ce5498,
-    0x68d6,
-    0x44e5,
-    {0x92, 0x15, 0x6d, 0xa4, 0x7e, 0xf8, 0x83, 0xd8}
+        // MIDL_INTERFACE("87ce5498-68d6-44e5-9215-6da47ef883d8")
+        0x87ce5498,
+        0x68d6,
+        0x44e5,
+        {0x92, 0x15, 0x6d, 0xa4, 0x7e, 0xf8, 0x83, 0xd8}
 };
 #endif
 
@@ -176,129 +179,49 @@ static const IID IID_ISimpleAudioVolume = {
 // Attempting to use the Windows-supplied versions of these constants resulted
 // in `undefined reference` linker errors.
 const static GUID SOUNDIO_KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {
-    0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}
+        0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}
 };
 
 const static GUID SOUNDIO_KSDATAFORMAT_SUBTYPE_PCM = {
-    0x00000001, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}
+        0x00000001, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}
 };
 
 // Adding more common sample rates helps the heuristics; feel free to do that.
 static int test_sample_rates[] = {
-    8000, 11025, 16000, 22050, 32000, 37800, 44056, 44100, 47250, 48000,
-    50000, 50400, 88200, 96000, 176400, 192000, 352800, 2822400, 5644800,
+        8000, 11025, 16000, 22050, 32000, 37800, 44056, 44100, 47250, 48000,
+        50000, 50400, 88200, 96000, 176400, 192000, 352800, 2822400, 5644800,
 };
 
 // If you modify this list, also modify `to_wave_format_format` appropriately.
 static enum SoundIoFormat test_formats[] = {
-    SoundIoFormatU8, SoundIoFormatS16LE, SoundIoFormatS24LE,
-    SoundIoFormatS32LE, SoundIoFormatFloat32LE, SoundIoFormatFloat64LE,
+        SoundIoFormatU8, SoundIoFormatS16LE, SoundIoFormatS24LE,
+        SoundIoFormatS32LE, SoundIoFormatFloat32LE, SoundIoFormatFloat64LE,
 };
 
 // If you modify this list, also modify `to_wave_format_layout` appropriately.
 static enum SoundIoChannelLayoutId test_layouts[] = {
-    SoundIoChannelLayoutIdMono, SoundIoChannelLayoutIdStereo, SoundIoChannelLayoutIdQuad,
-    SoundIoChannelLayoutId4Point0, SoundIoChannelLayoutId5Point1, SoundIoChannelLayoutId7Point1,
-    SoundIoChannelLayoutId5Point1Back,
+        SoundIoChannelLayoutIdMono, SoundIoChannelLayoutIdStereo, SoundIoChannelLayoutIdQuad,
+        SoundIoChannelLayoutId4Point0, SoundIoChannelLayoutId5Point1, SoundIoChannelLayoutId7Point1,
+        SoundIoChannelLayoutId5Point1Back,
 };
 
-/*
-// useful for debugging but no point in compiling into binary
-static const char *hresult_to_str(HRESULT hr) {
-    switch (hr) {
-        default: return "(unknown)";
-        case AUDCLNT_E_NOT_INITIALIZED: return "AUDCLNT_E_NOT_INITIALIZED";
-        case AUDCLNT_E_ALREADY_INITIALIZED: return "AUDCLNT_E_ALREADY_INITIALIZED";
-        case AUDCLNT_E_WRONG_ENDPOINT_TYPE: return "AUDCLNT_E_WRONG_ENDPOINT_TYPE";
-        case AUDCLNT_E_DEVICE_INVALIDATED: return "AUDCLNT_E_DEVICE_INVALIDATED";
-        case AUDCLNT_E_NOT_STOPPED: return "AUDCLNT_E_NOT_STOPPED";
-        case AUDCLNT_E_BUFFER_TOO_LARGE: return "AUDCLNT_E_BUFFER_TOO_LARGE";
-        case AUDCLNT_E_OUT_OF_ORDER: return "AUDCLNT_E_OUT_OF_ORDER";
-        case AUDCLNT_E_UNSUPPORTED_FORMAT: return "AUDCLNT_E_UNSUPPORTED_FORMAT";
-        case AUDCLNT_E_INVALID_SIZE: return "AUDCLNT_E_INVALID_SIZE";
-        case AUDCLNT_E_DEVICE_IN_USE: return "AUDCLNT_E_DEVICE_IN_USE";
-        case AUDCLNT_E_BUFFER_OPERATION_PENDING: return "AUDCLNT_E_BUFFER_OPERATION_PENDING";
-        case AUDCLNT_E_THREAD_NOT_REGISTERED: return "AUDCLNT_E_THREAD_NOT_REGISTERED";
-        case AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED: return "AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED";
-        case AUDCLNT_E_ENDPOINT_CREATE_FAILED: return "AUDCLNT_E_ENDPOINT_CREATE_FAILED";
-        case AUDCLNT_E_SERVICE_NOT_RUNNING: return "AUDCLNT_E_SERVICE_NOT_RUNNING";
-        case AUDCLNT_E_EVENTHANDLE_NOT_EXPECTED: return "AUDCLNT_E_EVENTHANDLE_NOT_EXPECTED";
-        case AUDCLNT_E_EXCLUSIVE_MODE_ONLY: return "AUDCLNT_E_EXCLUSIVE_MODE_ONLY";
-        case AUDCLNT_E_BUFDURATION_PERIOD_NOT_EQUAL: return "AUDCLNT_E_BUFDURATION_PERIOD_NOT_EQUAL";
-        case AUDCLNT_E_EVENTHANDLE_NOT_SET: return "AUDCLNT_E_EVENTHANDLE_NOT_SET";
-        case AUDCLNT_E_INCORRECT_BUFFER_SIZE: return "AUDCLNT_E_INCORRECT_BUFFER_SIZE";
-        case AUDCLNT_E_BUFFER_SIZE_ERROR: return "AUDCLNT_E_BUFFER_SIZE_ERROR";
-        case AUDCLNT_E_CPUUSAGE_EXCEEDED: return "AUDCLNT_E_CPUUSAGE_EXCEEDED";
-        case AUDCLNT_E_BUFFER_ERROR: return "AUDCLNT_E_BUFFER_ERROR";
-        case AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED: return "AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED";
-        case AUDCLNT_E_INVALID_DEVICE_PERIOD: return "AUDCLNT_E_INVALID_DEVICE_PERIOD";
-        case AUDCLNT_E_INVALID_STREAM_FLAG: return "AUDCLNT_E_INVALID_STREAM_FLAG";
-        case AUDCLNT_E_ENDPOINT_OFFLOAD_NOT_CAPABLE: return "AUDCLNT_E_ENDPOINT_OFFLOAD_NOT_CAPABLE";
-        case AUDCLNT_E_OUT_OF_OFFLOAD_RESOURCES: return "AUDCLNT_E_OUT_OF_OFFLOAD_RESOURCES";
-        case AUDCLNT_E_OFFLOAD_MODE_ONLY: return "AUDCLNT_E_OFFLOAD_MODE_ONLY";
-        case AUDCLNT_E_NONOFFLOAD_MODE_ONLY: return "AUDCLNT_E_NONOFFLOAD_MODE_ONLY";
-        case AUDCLNT_E_RESOURCES_INVALIDATED: return "AUDCLNT_E_RESOURCES_INVALIDATED";
-        case AUDCLNT_S_BUFFER_EMPTY: return "AUDCLNT_S_BUFFER_EMPTY";
-        case AUDCLNT_S_THREAD_ALREADY_REGISTERED: return "AUDCLNT_S_THREAD_ALREADY_REGISTERED";
-        case AUDCLNT_S_POSITION_STALLED: return "AUDCLNT_S_POSITION_STALLED";
+// ==============================================================================
+// 2. Utility & Format Conversion
+// ==============================================================================
 
-        case E_POINTER: return "E_POINTER";
-        case E_INVALIDARG: return "E_INVALIDARG";
-        case E_OUTOFMEMORY: return "E_OUTOFMEMORY";
-    }
+#ifdef DEBUG
+static std::wstring GetDeviceName(IMMDevice* device)
+{
+    IPropertyStore* pProps = nullptr;
+    device->OpenPropertyStore(STGM_READ, &pProps);
+
+    PROPVARIANT varName;
+    PropVariantInit(&varName);
+
+    pProps->GetValue(PKEY_Device_FriendlyName, &varName);
+    return varName.pwszVal;
 }
-*/
-
-// converts a windows wide string to a UTF-8 encoded char *
-// Possible errors:
-//  * SoundIoErrorNoMem
-//  * SoundIoErrorEncodingString
-// static int from_lpwstr(LPWSTR lpwstr, char** out_str, int* out_str_len)
-// {
-//     DWORD flags = 0;
-//     int buf_size = WideCharToMultiByte(CP_UTF8, flags, lpwstr, -1, NULL, 0, NULL, NULL);
-//
-//     if (buf_size == 0)
-//         return SoundIoErrorEncodingString;
-//
-//     char* buf = ALLOCATE(char, buf_size);
-//     if (!buf)
-//     {
-//         return SoundIoErrorNoMem;
-//     }
-//
-//     if (WideCharToMultiByte(CP_UTF8, flags, lpwstr, -1, buf, buf_size, NULL, NULL) != buf_size)
-//     {
-//         free(buf);
-//         return SoundIoErrorEncodingString;
-//     }
-//
-//     *out_str = buf;
-//     *out_str_len = buf_size - 1;
-//
-//     return 0;
-// }
-
-// static int to_lpwstr(const char* str, int str_len, LPWSTR* out_lpwstr)
-// {
-//     DWORD flags = 0;
-//     int w_len = MultiByteToWideChar(CP_UTF8, flags, str, str_len, NULL, 0);
-//     if (w_len <= 0)
-//         return SoundIoErrorEncodingString;
-//
-//     LPWSTR buf = ALLOCATE(wchar_t, w_len + 1);
-//     if (!buf)
-//         return SoundIoErrorNoMem;
-//
-//     if (MultiByteToWideChar(CP_UTF8, flags, str, str_len, buf, w_len) != w_len)
-//     {
-//         free(buf);
-//         return SoundIoErrorEncodingString;
-//     }
-//
-//     *out_lpwstr = buf;
-//     return 0;
-// }
+#endif
 
 static void from_channel_mask_layout(UINT channel_mask, struct SoundIoChannelLayout* layout)
 {
@@ -513,13 +436,17 @@ static enum SoundIoDeviceAim data_flow_to_aim(EDataFlow data_flow)
 
 static double from_reference_time(REFERENCE_TIME rt)
 {
-    return ((double) rt) / 10000000.0;
+    return static_cast<double>(rt) / 10000000.0;
 }
 
 static REFERENCE_TIME to_reference_time(double seconds)
 {
-    return (REFERENCE_TIME)(seconds * 10000000.0 + 0.5);
+    return static_cast<REFERENCE_TIME>(seconds * 10000000.0 + 0.5);
 }
+
+// ==============================================================================
+// 3. Device Scanning & Enumeration
+// ==============================================================================
 
 struct RefreshDevices
 {
@@ -560,58 +487,13 @@ struct RefreshDevices
     }
 };
 
-// static void deinit_refresh_devices(std::shared_ptr<RefreshDevices> rd)
-// {
-//     // soundio_destroy_devices_info(rd->devices_info);
-//     if (rd->mm_device)
-//     {
-//         rd->mm_device->Release();
-//     }
-//     if (rd->default_render_device)
-//     {
-//         rd->default_render_device->Release();
-//     }
-//     if (rd->default_capture_device)
-//     {
-//         rd->default_capture_device->Release();
-//     }
-//     if (rd->collection)
-//     {
-//         rd->collection->Release();
-//     }
-//     if (rd->lpwstr)
-//     {
-//         CoTaskMemFree(rd->lpwstr);
-//     }
-//     if (rd->endpoint)
-//     {
-//         rd->endpoint->Release();
-//     }
-//     if (rd->prop_store)
-//     {
-//         rd->prop_store->Release();
-//     }
-//     if (rd->prop_variant_value_inited)
-//     {
-//         PropVariantClear(&rd->prop_variant_value);
-//     }
-//     if (rd->wave_format)
-//     {
-//         CoTaskMemFree(rd->wave_format);
-//     }
-//     if (rd->audio_client)
-//     {
-//         rd->audio_client->Release();
-//     }
-// }
-
 static int detect_valid_layouts(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEXTENSIBLE* wave_format,
                                 std::shared_ptr<SoundIoDevicePrivate> dev, AUDCLNT_SHAREMODE share_mode)
 {
     std::shared_ptr<SoundIoDevice> device = dev;
     HRESULT hr;
 
-    WAVEFORMATEX* closest_match = NULL;
+    WAVEFORMATEX* closest_match = nullptr;
     WAVEFORMATEXTENSIBLE orig_wave_format = *wave_format;
 
     for (size_t i = 0; i < std::size(test_formats); i += 1)
@@ -621,11 +503,11 @@ static int detect_valid_layouts(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEX
         to_wave_format_layout(test_layout, wave_format);
         complete_wave_format_data(wave_format);
 
-        hr = rd->audio_client->IsFormatSupported(share_mode, reinterpret_cast<WAVEFORMATEX *>(wave_format), &closest_match);
+        hr = rd->audio_client->IsFormatSupported(share_mode, reinterpret_cast<WAVEFORMATEX*>(wave_format), &closest_match);
         if (closest_match)
         {
             CoTaskMemFree(closest_match);
-            closest_match = NULL;
+            closest_match = nullptr;
         }
         if (hr == S_OK)
         {
@@ -657,7 +539,7 @@ static int detect_valid_formats(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEX
     // if (!device->formats)
     //     return SoundIoErrorNoMem;
 
-    WAVEFORMATEX* closest_match = NULL;
+    WAVEFORMATEX* closest_match = nullptr;
     WAVEFORMATEXTENSIBLE orig_wave_format = *wave_format;
 
     for (size_t i = 0; i < std::size(test_formats); i += 1)
@@ -666,11 +548,11 @@ static int detect_valid_formats(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEX
         to_wave_format_format(test_format, wave_format);
         complete_wave_format_data(wave_format);
 
-        hr = rd->audio_client->IsFormatSupported(share_mode, (WAVEFORMATEX *) wave_format, &closest_match);
+        hr = rd->audio_client->IsFormatSupported(share_mode, (WAVEFORMATEX*) wave_format, &closest_match);
         if (closest_match)
         {
             CoTaskMemFree(closest_match);
-            closest_match = NULL;
+            closest_match = nullptr;
         }
         if (hr == S_OK)
         {
@@ -704,14 +586,14 @@ static int do_sample_rate_test(std::shared_ptr<RefreshDevices> rd, std::shared_p
                                WAVEFORMATEXTENSIBLE* wave_format, int test_sample_rate, AUDCLNT_SHAREMODE share_mode,
                                int* current_min, int* last_success_rate)
 {
-    WAVEFORMATEX* closest_match = NULL;
+    WAVEFORMATEX* closest_match = nullptr;
 
     wave_format->Format.nSamplesPerSec = test_sample_rate;
-    HRESULT hr = rd->audio_client->IsFormatSupported(share_mode, (WAVEFORMATEX *) wave_format, &closest_match);
+    HRESULT hr = rd->audio_client->IsFormatSupported(share_mode, (WAVEFORMATEX*) wave_format, &closest_match);
     if (closest_match)
     {
         CoTaskMemFree(closest_match);
-        closest_match = NULL;
+        closest_match = nullptr;
     }
     if (hr == S_OK)
     {
@@ -796,8 +678,8 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         LPWSTR lpwstr;
         if (FAILED(hr = rd->default_render_device->GetId(&lpwstr)))
         {
-            // MSDN states the IMMDevice_GetId can fail if the device is NULL, or if we're out of memory
-            // We know the device point isn't NULL so we're necessarily out of memory
+            // MSDN states the IMMDevice_GetId can fail if the device is nullptr, or if we're out of memory
+            // We know the device point isn't nullptr so we're necessarily out of memory
             return SoundIoErrorNoMem;
         }
         rd->default_render_id = lpwstr;
@@ -846,7 +728,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
     if (FAILED(hr = rd->collection->GetCount(&unsigned_count)))
     {
         // In theory this shouldn't happen since the only documented failure case is that
-        // rd.collection is NULL, but then EnumAudioEndpoints should have failed.
+        // rd.collection is nullptr, but then EnumAudioEndpoints should have failed.
         return SoundIoErrorOpeningDevice;
     }
 
@@ -958,7 +840,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             rd->audio_client->Release();
             rd->audio_client = nullptr;
         }
-        if (FAILED(hr = rd->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, (void **) &rd->audio_client)))
+        if (FAILED(hr = rd->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, nullptr, (void **) &rd->audio_client)))
         {
             rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
             rd->device_raw->probe_error = SoundIoErrorOpeningDevice;
@@ -1046,46 +928,56 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             rd->device_raw = nullptr;
             continue;
         }
-        WAVEFORMATEXTENSIBLE* valid_wave_format = reinterpret_cast<WAVEFORMATEXTENSIBLE *>(rd->prop_variant_value.blob.pBlobData);
+        WAVEFORMATEXTENSIBLE* valid_wave_format = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(rd->prop_variant_value.blob.pBlobData);
         if (valid_wave_format->Format.wFormatTag != WAVE_FORMAT_EXTENSIBLE)
         {
             rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
             rd->device_raw->probe_error = SoundIoErrorOpeningDevice;
-            rd->device_shared = NULL;
-            rd->device_raw = NULL;
+            rd->device_shared = nullptr;
+            rd->device_raw = nullptr;
             continue;
         }
-        if ((err = detect_valid_sample_rates(rd, valid_wave_format, raw_w, AUDCLNT_SHAREMODE_EXCLUSIVE)))
+
+        err = detect_valid_sample_rates(rd, valid_wave_format, raw_w, AUDCLNT_SHAREMODE_EXCLUSIVE);
+        if (err != SoundIoErrorNone)
         {
             rd->device_raw->probe_error = err;
-            rd->device_raw = NULL;
+            rd->device_raw = nullptr;
         }
-        if (rd->device_raw && (err = detect_valid_formats(rd, valid_wave_format, raw_w, AUDCLNT_SHAREMODE_EXCLUSIVE)))
+        if (rd->device_raw)
         {
-            rd->device_raw->probe_error = err;
-            rd->device_raw = NULL;
+            err = detect_valid_formats(rd, valid_wave_format, raw_w, AUDCLNT_SHAREMODE_EXCLUSIVE);
+            if (err != SoundIoErrorNone)
+            {
+                rd->device_raw->probe_error = err;
+                rd->device_raw = nullptr;
+            }
         }
-        if (rd->device_raw && (err = detect_valid_layouts(rd, valid_wave_format, raw_w, AUDCLNT_SHAREMODE_EXCLUSIVE)))
+        if (rd->device_raw)
         {
-            rd->device_raw->probe_error = err;
-            rd->device_raw = NULL;
+            err = detect_valid_layouts(rd, valid_wave_format, raw_w, AUDCLNT_SHAREMODE_EXCLUSIVE);
+            if (err != SoundIoErrorNone)
+            {
+                rd->device_raw->probe_error = err;
+                rd->device_raw = nullptr;
+            }
         }
 
         if (rd->wave_format)
         {
             CoTaskMemFree(rd->wave_format);
-            rd->wave_format = NULL;
+            rd->wave_format = nullptr;
         }
         if (FAILED(hr = rd->audio_client->GetMixFormat(reinterpret_cast<WAVEFORMATEX **>(&rd->wave_format))))
         {
             // According to MSDN GetMixFormat only applies to shared-mode devices.
             rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd->device_shared = NULL;
+            rd->device_shared = nullptr;
         }
-        else if (rd->wave_format && (rd->wave_format->Format.wFormatTag != WAVE_FORMAT_EXTENSIBLE))
+        else if (rd->wave_format && rd->wave_format->Format.wFormatTag != WAVE_FORMAT_EXTENSIBLE)
         {
             rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd->device_shared = NULL;
+            rd->device_shared = nullptr;
         }
 
         if (rd->device_shared)
@@ -1118,7 +1010,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             if ((err = detect_valid_formats(rd, rd->wave_format, shared_w, AUDCLNT_SHAREMODE_SHARED)))
             {
                 rd->device_shared->probe_error = err;
-                rd->device_shared = NULL;
+                rd->device_shared = nullptr;
             }
             else
             {
@@ -1130,9 +1022,9 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         shared_w->backend_data.wasapi->mm_device = rd->mm_device;
         raw_w->backend_data.wasapi->mm_device = rd->mm_device;
 
-        rd->mm_device = NULL;
-        rd->device_shared = NULL;
-        rd->device_raw = NULL;
+        rd->mm_device = nullptr;
+        rd->device_shared = nullptr;
+        rd->device_raw = nullptr;
     }
 
     std::unique_lock lock(siw.mutex->get());
@@ -1144,6 +1036,9 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
     return 0;
 }
 
+// ==============================================================================
+// 4. Backend Context & Event Dispatch
+// ==============================================================================
 
 static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
 {
@@ -1211,7 +1106,7 @@ static void device_thread_run(std::shared_ptr<void> arg)
     std::shared_ptr<SoundIoPrivate> si = std::static_pointer_cast<SoundIoPrivate>(arg);
     SoundIoWasapi& siw = si->backend_data->wasapi;
 
-    HRESULT hr = CoCreateInstance(CLSID_MMDEVICEENUMERATOR, nullptr, CLSCTX_ALL, IID_IMMDEVICEENUMERATOR, reinterpret_cast<void **>(&siw.device_enumerator));
+    HRESULT hr = CoCreateInstance(CLSID_MMDEVICEENUMERATOR, nullptr, CLSCTX_ALL, IID_IMMDEVICEENUMERATOR, reinterpret_cast<void**>(&siw.device_enumerator));
     if (FAILED(hr))
     {
         shutdown_backend(si, SoundIoErrorSystemResources);
@@ -1248,7 +1143,7 @@ static void device_thread_run(std::shared_ptr<void> arg)
 
     siw.device_enumerator->UnregisterEndpointNotificationCallback(siw.device_events.get());
     siw.device_enumerator->Release();
-    siw.device_enumerator = NULL;
+    siw.device_enumerator = nullptr;
 }
 
 static void wakeup_wasapi(std::shared_ptr<SoundIoPrivate> si)
@@ -1270,6 +1165,10 @@ static void force_device_scan_wasapi(std::shared_ptr<SoundIoPrivate> si)
     siw.device_scan_queued = true;
     siw.scan_devices_cond->signal(&scan_lock);
 }
+
+// ==============================================================================
+// 5. OutStream (Output & Playback)
+// ==============================================================================
 
 static void outstream_thread_deinit(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
@@ -1314,7 +1213,7 @@ static void outstream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::sh
 
     if (osw.thread)
     {
-        SOUNDIO_ATOMIC_FLAG_CLEAR(osw.thread_exit_flag);
+        osw.thread_exit_flag.clear();
         if (osw.h_event)
         {
             SetEvent(osw.h_event);
@@ -1338,19 +1237,6 @@ static void outstream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::sh
     osw.start_cond = nullptr;
     osw.mutex = nullptr;
 }
-#ifdef DEBUG
-static std::wstring GetDeviceName(IMMDevice* device)
-{
-    IPropertyStore* pProps = nullptr;
-    device->OpenPropertyStore(STGM_READ, &pProps);
-
-    PROPVARIANT varName;
-    PropVariantInit(&varName);
-
-    pProps->GetValue(PKEY_Device_FriendlyName, &varName);
-    return varName.pwszVal;
-}
-#endif
 
 static IAudioClient3* open_audio_client3(std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format)
 {
@@ -1361,7 +1247,7 @@ static IAudioClient3* open_audio_client3(std::shared_ptr<SoundIoOutStreamPrivate
 
     WAVEFORMATEXTENSIBLE* mix_format;
     HRESULT hr;
-    if (!osw.is_raw && FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT3, CLSCTX_ALL, NULL, reinterpret_cast<void **>(&audio_client3))))
+    if (!osw.is_raw && FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT3, CLSCTX_ALL, nullptr, reinterpret_cast<void **>(&audio_client3))))
     {
         audio_client3->Release();
         return nullptr;
@@ -1393,7 +1279,7 @@ static IAudioClient3* open_audio_client3(std::shared_ptr<SoundIoOutStreamPrivate
 
 static IAudioClient* open_audio_client(std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format)
 {
-    IAudioClient* audio_client = NULL;
+    IAudioClient* audio_client = nullptr;
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
     std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(os->device);
     std::shared_ptr<SoundIoDeviceWasapi> dw = dev->backend_data.wasapi;
@@ -1401,9 +1287,9 @@ static IAudioClient* open_audio_client(std::shared_ptr<SoundIoOutStreamPrivate> 
 
     WAVEFORMATEXTENSIBLE* mix_format;
 
-    if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, reinterpret_cast<void **>(&audio_client))))
+    if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, nullptr, reinterpret_cast<void **>(&audio_client))))
     {
-        return NULL;
+        return nullptr;
     }
 
     if (!osw.is_raw)
@@ -1411,32 +1297,32 @@ static IAudioClient* open_audio_client(std::shared_ptr<SoundIoOutStreamPrivate> 
         if (FAILED(hr = audio_client->GetMixFormat(reinterpret_cast<WAVEFORMATEX **>(&mix_format))))
         {
             audio_client->Release();
-            return NULL;
+            return nullptr;
         }
         // wave_format->Format.nSamplesPerSec = mix_format->Format.nSamplesPerSec;
         // outstream->sample_rate = mix_format->Format.nSamplesPerSec;
         osw.need_resample = mix_format->Format.nSamplesPerSec != static_cast<DWORD>(os->sample_rate);
         CoTaskMemFree(mix_format);
-        mix_format = NULL;
+        mix_format = nullptr;
     }
     return audio_client;
 }
 
 static void deinit_mix_format(WAVEFORMATEXTENSIBLE** mix_format)
 {
-    if (*mix_format != NULL)
+    if (*mix_format != nullptr)
     {
         CoTaskMemFree(*mix_format);
-        *mix_format = NULL;
+        *mix_format = nullptr;
     }
 }
 
 static void deinit_client3_and_callback(IAudioClient3** client3, IAudioClient** client, std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format)
 {
-    if (*client3 != NULL)
+    if (*client3 != nullptr)
     {
         (*client3)->Release();
-        *client3 = NULL;
+        *client3 = nullptr;
     }
     *client = open_audio_client(os, wave_format);
 }
@@ -1451,7 +1337,7 @@ static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3
     std::shared_ptr<SoundIoDeviceWasapi> dw = dev->backend_data.wasapi;
     HRESULT hr;
 
-    if (*audio_client3 != NULL)
+    if (*audio_client3 != nullptr)
     {
         if (osw.need_resample)
         {
@@ -1480,11 +1366,12 @@ static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3
         UINT32 periodicity_in_frames = default_period;
         if (os->software_latency < 1.0)
         {
-            periodicity_in_frames = fundamental_period * (UINT32)(mix_format->Format.nSamplesPerSec * os->software_latency / fundamental_period);
+            periodicity_in_frames = fundamental_period * (UINT32) (mix_format->Format.nSamplesPerSec * os->software_latency / fundamental_period);
             periodicity_in_frames = soundio_uint_clamp(min_period, periodicity_in_frames, max_period);
         }
 
-        if (!osw.need_resample && SUCCEEDED(hr = (*audio_client3)->InitializeSharedAudioStream(flags, periodicity_in_frames, reinterpret_cast<WAVEFORMATEX *>(wave_format), NULL)))
+        if (!osw.need_resample && SUCCEEDED(
+                    hr = (*audio_client3)->InitializeSharedAudioStream(flags, periodicity_in_frames, reinterpret_cast<WAVEFORMATEX *>(wave_format), nullptr)))
         {
             deinit_mix_format(&mix_format);
             return SoundIoErrorNone;
@@ -1492,7 +1379,7 @@ static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3
     }
 
 NEXT:
-    if (FAILED(hr = (*audio_client)->Initialize(share_mode, flags, buffer_duration, periodicity, reinterpret_cast<WAVEFORMATEX *>(wave_format), NULL)))
+    if (FAILED(hr = (*audio_client)->Initialize(share_mode, flags, buffer_duration, periodicity, reinterpret_cast<WAVEFORMATEX *>(wave_format), nullptr)))
     {
         if (hr == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED)
         {
@@ -1501,17 +1388,17 @@ NEXT:
             if (FAILED(hr = (*audio_client)->GetBufferSize(&buffer_size)))
             {
                 (*audio_client)->Release();
-                *audio_client = NULL;
+                *audio_client = nullptr;
                 return SoundIoErrorOpeningDevice;
             }
 
             osw.buffer_frame_count = static_cast<int>(buffer_size);
 
             (*audio_client)->Release();
-            *audio_client = NULL;
+            *audio_client = nullptr;
 
 
-            if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, reinterpret_cast<void **>(audio_client))))
+            if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, nullptr, reinterpret_cast<void **>(audio_client))))
             {
                 return SoundIoErrorOpeningDevice;
             }
@@ -1537,7 +1424,7 @@ NEXT:
             buffer_duration = to_reference_time(osw.buffer_frame_count / static_cast<double>(os->sample_rate));
             if (osw.is_raw)
                 periodicity = buffer_duration;
-            if (FAILED(hr = (*audio_client)->Initialize(share_mode, flags, buffer_duration, periodicity, reinterpret_cast<WAVEFORMATEX *>(wave_format), NULL)))
+            if (FAILED(hr = (*audio_client)->Initialize(share_mode, flags, buffer_duration, periodicity, reinterpret_cast<WAVEFORMATEX *>(wave_format), nullptr)))
             {
                 if (hr == AUDCLNT_E_UNSUPPORTED_FORMAT)
                 {
@@ -1588,12 +1475,12 @@ static int outstream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     wave_format.Format.nSamplesPerSec = os->sample_rate;
 
     IAudioClient3* audio_client3 = open_audio_client3(os, &wave_format);
-    IAudioClient* audio_client = NULL;
+    IAudioClient* audio_client = nullptr;
 
-    if (audio_client3 == NULL)
+    if (audio_client3 == nullptr)
     {
         audio_client = open_audio_client(os, &wave_format);
-        if (audio_client == NULL)
+        if (audio_client == nullptr)
         {
             return SoundIoErrorOpeningDevice;
         }
@@ -1603,7 +1490,7 @@ static int outstream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
         if (FAILED(hr = audio_client3->QueryInterface(IID_IAUDIOCLIENT, reinterpret_cast<void **>(&audio_client))))
         {
             audio_client3->Release();
-            audio_client3 = NULL;
+            audio_client3 = nullptr;
             return SoundIoErrorOpeningDevice;
         }
     }
@@ -1689,7 +1576,7 @@ static int outstream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
         }
 
         osw.stream_name = os->name;
-        if (FAILED(hr = osw.audio_session_control->SetDisplayName(osw.stream_name.c_str(), NULL)))
+        if (FAILED(hr = osw.audio_session_control->SetDisplayName(osw.stream_name.c_str(), nullptr)))
         {
             return SoundIoErrorOpeningDevice;
         }
@@ -1755,13 +1642,13 @@ static void outstream_shared_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
             return;
         }
         osw.writable_frame_count = osw.buffer_frame_count - frames_used;
-        if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osw.thread_exit_flag))
+        if (!osw.thread_exit_flag.test_and_set())
         {
             return;
         }
-        if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osw.pause_resume_flag))
+        if (!osw.pause_resume_flag.test_and_set())
         {
-            bool pause = SOUNDIO_ATOMIC_LOAD(osw.desired_pause_state);
+            bool pause = osw.desired_pause_state.load();
             if (pause && !osw.is_paused)
             {
                 if (FAILED(hr = osw.audio_client->Stop()))
@@ -1808,11 +1695,11 @@ static void outstream_raw_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
     for (;;)
     {
         WaitForSingleObject(osw.h_event, INFINITE);
-        if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osw.thread_exit_flag))
+        if (!osw.thread_exit_flag.test_and_set())
             return;
-        if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osw.pause_resume_flag))
+        if (!osw.pause_resume_flag.test_and_set())
         {
-            bool pause = SOUNDIO_ATOMIC_LOAD(osw.desired_pause_state);
+            bool pause = osw.desired_pause_state.load();
             if (pause && !osw.is_paused)
             {
                 if (FAILED(hr = osw.audio_client->Stop()))
@@ -1860,7 +1747,7 @@ static void outstream_thread_run(std::shared_ptr<void> arg)
     osw.cond->signal(&lock);
     for (;;)
     {
-        if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osw.thread_exit_flag))
+        if (!osw.thread_exit_flag.test_and_set())
         {
             outstream_thread_deinit(si, os);
             return;
@@ -1893,9 +1780,9 @@ static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
     std::shared_ptr<SoundIoDevice> device = os->device;
     std::shared_ptr<SoundIo> soundio = si;
 
-    SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osw.pause_resume_flag);
-    SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osw.clear_buffer_flag);
-    SOUNDIO_ATOMIC_STORE(osw.desired_pause_state, false);
+    osw.pause_resume_flag.test_and_set();
+    osw.clear_buffer_flag.test_and_set();
+    osw.desired_pause_state.store(false);
 
     // All the COM functions are supposed to be called from the same thread. libsoundio API does not
     // restrict the calling thread context in this way. Furthermore, the user might have called
@@ -1931,7 +1818,7 @@ static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
         return SoundIoErrorOpeningDevice;
     }
 
-    SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osw.thread_exit_flag);
+    osw.thread_exit_flag.test_and_set();
     osw.thread = SoundIoOsThread::create(outstream_thread_run, os);
 
     std::unique_lock lock(osw.mutex->get());
@@ -1954,8 +1841,8 @@ static int outstream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::share
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
 
-    SOUNDIO_ATOMIC_STORE(osw.desired_pause_state, pause);
-    SOUNDIO_ATOMIC_FLAG_CLEAR(osw.pause_resume_flag);
+    osw.desired_pause_state.store(pause);
+    osw.pause_resume_flag.clear();
     if (osw.h_event)
     {
         SetEvent(osw.h_event);
@@ -2025,7 +1912,7 @@ static int outstream_clear_buffer_wasapi(std::shared_ptr<SoundIoPrivate> si, std
     }
     else
     {
-        SOUNDIO_ATOMIC_FLAG_CLEAR(osw.clear_buffer_flag);
+        osw.clear_buffer_flag.clear();
         std::unique_lock lock(osw.mutex->get());
         osw.cond->signal(&lock);
     }
@@ -2073,7 +1960,7 @@ static int outstream_set_volume_wasapi(std::shared_ptr<SoundIoPrivate> si, std::
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
 
     HRESULT hr;
-    if (FAILED(hr = osw.audio_volume_control->SetMasterVolume(volume, NULL)))
+    if (FAILED(hr = osw.audio_volume_control->SetMasterVolume(volume, nullptr)))
     {
         return SoundIoErrorIncompatibleDevice;
     }
@@ -2081,6 +1968,10 @@ static int outstream_set_volume_wasapi(std::shared_ptr<SoundIoPrivate> si, std::
     os->volume = volume;
     return 0;
 }
+
+// ==============================================================================
+// 6. InStream (Input & Capture)
+// ==============================================================================
 
 static void instream_thread_deinit(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
@@ -2105,7 +1996,7 @@ static void instream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::sha
 
     if (isw->thread)
     {
-        SOUNDIO_ATOMIC_FLAG_CLEAR(isw->thread_exit_flag);
+        isw->thread_exit_flag.clear();
         if (isw->h_event)
         {
             SetEvent(isw->h_event);
@@ -2137,7 +2028,7 @@ static int instream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
     std::shared_ptr<SoundIoDeviceWasapi> dw = dev->backend_data.wasapi;
     HRESULT hr;
 
-    if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, reinterpret_cast<void **>(&isw.audio_client))))
+    if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, nullptr, reinterpret_cast<void **>(&isw.audio_client))))
     {
         return SoundIoErrorOpeningDevice;
     }
@@ -2166,7 +2057,7 @@ static int instream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
         }
         wave_format.Format.nSamplesPerSec = mix_format->Format.nSamplesPerSec;
         CoTaskMemFree(mix_format);
-        mix_format = NULL;
+        mix_format = nullptr;
         if (wave_format.Format.nSamplesPerSec != static_cast<DWORD>(is->sample_rate))
         {
             return SoundIoErrorIncompatibleDevice;
@@ -2180,7 +2071,7 @@ static int instream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
     to_wave_format_format(is->format, &wave_format);
     complete_wave_format_data(&wave_format);
 
-    if (FAILED(hr = isw.audio_client->Initialize(share_mode, flags, buffer_duration, periodicity, reinterpret_cast<WAVEFORMATEX *>(&wave_format), NULL)))
+    if (FAILED(hr = isw.audio_client->Initialize(share_mode, flags, buffer_duration, periodicity, reinterpret_cast<WAVEFORMATEX *>(&wave_format), nullptr)))
     {
         if (hr == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED)
         {
@@ -2189,8 +2080,8 @@ static int instream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
                 return SoundIoErrorOpeningDevice;
             }
             isw.audio_client->Release();
-            isw.audio_client = NULL;
-            if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, NULL, reinterpret_cast<void **>(&isw.audio_client))))
+            isw.audio_client = nullptr;
+            if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, nullptr, reinterpret_cast<void **>(&isw.audio_client))))
             {
                 return SoundIoErrorOpeningDevice;
             }
@@ -2203,7 +2094,7 @@ static int instream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
                 }
                 wave_format.Format.nSamplesPerSec = mix_format->Format.nSamplesPerSec;
                 CoTaskMemFree(mix_format);
-                mix_format = NULL;
+                mix_format = nullptr;
                 flags = 0;
                 to_wave_format_layout(&is->layout, &wave_format);
                 to_wave_format_format(is->format, &wave_format);
@@ -2213,7 +2104,7 @@ static int instream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
             buffer_duration = to_reference_time(isw.buffer_frame_count / static_cast<double>(is->sample_rate));
             if (isw.is_raw)
                 periodicity = buffer_duration;
-            if (FAILED(hr = isw.audio_client->Initialize(share_mode, flags, buffer_duration, periodicity, reinterpret_cast<WAVEFORMATEX *>(&wave_format), NULL)))
+            if (FAILED(hr = isw.audio_client->Initialize(share_mode, flags, buffer_duration, periodicity, reinterpret_cast<WAVEFORMATEX *>(&wave_format), nullptr)))
             {
                 if (hr == AUDCLNT_E_UNSUPPORTED_FORMAT)
                 {
@@ -2270,7 +2161,7 @@ static int instream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
         }
 
         isw.stream_name = is->name;
-        if (FAILED(hr = isw.audio_session_control->SetDisplayName(isw.stream_name.c_str(), NULL)))
+        if (FAILED(hr = isw.audio_session_control->SetDisplayName(isw.stream_name.c_str(), nullptr)))
         {
             return SoundIoErrorOpeningDevice;
         }
@@ -2299,7 +2190,7 @@ static void instream_raw_run(std::shared_ptr<SoundIoInStreamPrivate> is)
     for (;;)
     {
         WaitForSingleObject(isw.h_event, INFINITE);
-        if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(isw.thread_exit_flag))
+        if (!isw.thread_exit_flag.test_and_set())
         {
             return;
         }
@@ -2323,7 +2214,7 @@ static void instream_shared_run(std::shared_ptr<SoundIoInStreamPrivate> is)
     for (;;)
     {
         WaitForSingleObject(isw.h_event, INFINITE);
-        if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(isw.thread_exit_flag))
+        if (!isw.thread_exit_flag.test_and_set())
         {
             return;
         }
@@ -2369,7 +2260,7 @@ static void instream_thread_run(std::shared_ptr<void> arg)
     isw.cond->signal(&lock);
     for (;;)
     {
-        if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(isw.thread_exit_flag))
+        if (!isw.thread_exit_flag.test_and_set())
         {
             return;
         }
@@ -2437,7 +2328,7 @@ static int instream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_
         }
     }
 
-    SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(isw.thread_exit_flag);
+    isw.thread_exit_flag.test_and_set();
     isw.thread = SoundIoOsThread::create(instream_thread_run, is);
 
     std::unique_lock lock(isw.mutex->get());
@@ -2567,6 +2458,10 @@ static int instream_get_latency_wasapi(std::shared_ptr<SoundIoPrivate> si, std::
     return 0;
 }
 
+// ==============================================================================
+// 7. Backend Initialization & Destruction (Top Level)
+// ==============================================================================
+
 static void destroy_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     LOGI("destroy wasapi");
@@ -2588,14 +2483,6 @@ static void destroy_wasapi(std::shared_ptr<SoundIoPrivate> si)
     siw.mutex = nullptr;
 }
 
-
-// static inline std::shared_ptr<SoundIoPrivate> soundio_MMNotificationClient_si(soundio_NotificationClient* client)
-// {
-//     SoundIoWasapi& siw = (SoundIoWasapi&) (((char*) client) - offsetof(struct SoundIoWasapi, device_events));
-//     std::shared_ptr<SoundIoPrivate> si = (std::shared_ptr<SoundIoPrivate>) (((char*) siw) - offsetof(struct SoundIoPrivate, backend_data));
-//     return si;
-// }
-
 STDMETHODIMP soundio_NotificationClient::QueryInterface(REFIID riid, void** ppv)
 {
     if (IS_EQUAL_IID(riid, IID_IUNKNOWN) || IS_EQUAL_IID(riid, IID_IMMNOTFICATION_CLIENT))
@@ -2606,19 +2493,19 @@ STDMETHODIMP soundio_NotificationClient::QueryInterface(REFIID riid, void** ppv)
     }
     else
     {
-        *ppv = NULL;
+        *ppv = nullptr;
         return E_NOINTERFACE;
     }
 }
 
-STDMETHODIMP_ (ULONG) soundio_NotificationClient::AddRef()
+STDMETHODIMP_(ULONG) soundio_NotificationClient::AddRef()
 {
     // SoundIoWasapi& siw = &si.lock()->backend_data.wasapi;
     // return InterlockedIncrement(&siw->device_events_refs);
     return S_OK;
 }
 
-STDMETHODIMP_ (ULONG) soundio_NotificationClient::Release()
+STDMETHODIMP_(ULONG) soundio_NotificationClient::Release()
 {
     // SoundIoWasapi& siw = &si.lock()->backend_data.wasapi;
     // return InterlockedDecrement(&siw->device_events_refs);

@@ -17,27 +17,27 @@ static const int INPUT_ELEMENT = 1;
 printf("%s:%d: [ERROR] %s\n", __FILE__, __LINE__, msg)
 
 static AudioObjectPropertyAddress device_listen_props[] = {
-    {kAudioDevicePropertyDeviceHasChanged, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain},
-    {kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyDeviceUID, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyStreamConfiguration, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyStreamConfiguration, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyPreferredChannelLayout, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyPreferredChannelLayout, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyAvailableNominalSampleRates, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyAvailableNominalSampleRates, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyBufferFrameSizeRange, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain},
-    {kAudioDevicePropertyBufferFrameSizeRange, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyDeviceHasChanged, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain},
+        {kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyDeviceUID, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyStreamConfiguration, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyStreamConfiguration, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyPreferredChannelLayout, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyPreferredChannelLayout, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyAvailableNominalSampleRates, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyAvailableNominalSampleRates, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyBufferFrameSizeRange, kAudioObjectPropertyScopeInput, kAudioObjectPropertyElementMain},
+        {kAudioDevicePropertyBufferFrameSizeRange, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain},
 };
 
 static enum SoundIoDeviceAim aims[] =
 {
-    SoundIoDeviceAimInput,
-    SoundIoDeviceAimOutput,
+        SoundIoDeviceAimInput,
+        SoundIoDeviceAimOutput,
 };
 
 OSStatus CoreAudioCallback::devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[])
@@ -62,7 +62,7 @@ OSStatus CoreAudioCallback::service_restarted(AudioObjectID in_object_id, UInt32
     }
     SoundIoCoreAudio& sica = s->backend_data->coreaudio;
 
-    SOUNDIO_ATOMIC_STORE(sica.service_restarted, true);
+    sica.service_restarted.store(true);
     sica.scan_devices_cond->signal(nullptr);
 
     return noErr;
@@ -105,34 +105,34 @@ void CoreAudioCallback::unsubscribe_device_listeners() const
 
 OSStatus CoreAudioCallback::on_devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback *>(in_client_data);
+    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->devices_changed(in_object_id, in_number_addresses, in_addresses);
 }
 
 OSStatus CoreAudioCallback::on_service_restarted(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback *>(in_client_data);
+    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->service_restarted(in_object_id, in_number_addresses, in_addresses);
 }
 
 OSStatus CoreAudioCallback::on_outstream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[],
                                                          void* in_client_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback *>(in_client_data);
+    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->outstream_device_overload(in_object_id, in_number_addresses, in_addresses);
 }
 
 OSStatus CoreAudioCallback::on_instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[],
                                                         void* in_client_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback *>(in_client_data);
+    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->instream_device_overload(in_object_id, in_number_addresses, in_addresses);
 }
 
 OSStatus CoreAudioCallback::write_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number,
                                            UInt32 in_number_frames, AudioBufferList* io_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback *>(userdata);
+    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(userdata);
     return callback->write_callback_ca(io_action_flags, in_time_stamp, in_bus_number, in_number_frames, io_data);
 }
 
@@ -171,7 +171,7 @@ static std::wstring from_cf_string(CFStringRef string_ref)
     }
 
     std::wstring wstr(usedBufLen / sizeof(wchar_t), L'\0');
-    CFStringGetBytes(string_ref, range, encoding, '?', false, reinterpret_cast<UInt8 *>(&wstr[0]), usedBufLen, nullptr);
+    CFStringGetBytes(string_ref, range, encoding, '?', false, reinterpret_cast<UInt8*>(&wstr[0]), usedBufLen, nullptr);
     return wstr;
 }
 
@@ -610,7 +610,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             }
 
             std::unique_ptr<AudioBufferList, decltype(&std::free)> buffer_list = std::unique_ptr<AudioBufferList, decltype(&std::free)>(
-                static_cast<AudioBufferList *>(malloc(io_size)), std::free);
+                    static_cast<AudioBufferList*>(malloc(io_size)), std::free);
             os_err = AudioObjectGetPropertyData(device_id, &prop_address, 0, nullptr, &io_size, buffer_list.get());
             if (os_err != noErr)
             {
@@ -652,7 +652,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
             if (os_err == noErr)
             {
-                std::unique_ptr<AudioChannelLayout, decltype(&std::free)> layout_buf(static_cast<AudioChannelLayout *>(std::malloc(io_size)), std::free);
+                std::unique_ptr<AudioChannelLayout, decltype(&std::free)> layout_buf(static_cast<AudioChannelLayout*>(std::malloc(io_size)), std::free);
 
                 if (!layout_buf)
                 {
@@ -733,7 +733,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
                 UInt32 avr_array_len = io_size / sizeof(AudioValueRange);
                 std::unique_ptr<AudioValueRange[], decltype(&std::free)> avr_buf = std::unique_ptr<AudioValueRange[], decltype(&std::free)>(
-                    static_cast<AudioValueRange *>(std::malloc(io_size)), std::free);
+                        static_cast<AudioValueRange*>(std::malloc(io_size)), std::free);
 
                 if (!avr_buf)
                 {
@@ -821,7 +821,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
     std::unique_lock lock(sica.mutex->get());
 
     sica.ready_devices_info = std::move(rd.devices_info);
-    SOUNDIO_ATOMIC_STORE(sica.have_devices_flag, true);
+    sica.have_devices_flag.store(true);
     sica.cond->signal(&lock);
     si->on_events_signal(si);
 
@@ -850,7 +850,7 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
     std::unique_lock lock(sica.mutex->get());
 
     // block until have devices
-    while (wait || (!SOUNDIO_ATOMIC_LOAD(sica.have_devices_flag) && !sica.shutdown_err))
+    while (wait || (!sica.have_devices_flag.load() && !sica.shutdown_err))
     {
         sica.cond->wait(&lock);
         wait = false;
@@ -899,8 +899,8 @@ static void wakeup_ca(std::shared_ptr<SoundIoPrivate> si)
 static void force_device_scan_ca(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoCoreAudio& sica = si->backend_data->coreaudio;
-    SOUNDIO_ATOMIC_STORE(sica.device_scan_queued, true);
-    SOUNDIO_ATOMIC_STORE(sica.have_devices_flag, false);
+    sica.device_scan_queued.store(true);
+    sica.have_devices_flag.store(false);
 
     std::unique_lock scan_lock(sica.scan_devices_mutex->get());
     sica.scan_devices_cond->signal(&scan_lock);
@@ -913,14 +913,14 @@ static void device_thread_run(std::shared_ptr<void> arg)
 
     std::unique_lock lock(sica.scan_devices_mutex->get());
 
-    while (!SOUNDIO_ATOMIC_LOAD(sica.abort_flag))
+    while (sica.abort_flag.test_and_set())
     {
-        if (SOUNDIO_ATOMIC_LOAD(sica.service_restarted))
+        if (sica.service_restarted.load())
         {
             shutdown_backend(si, SoundIoErrorBackendDisconnected);
             break;
         }
-        if (SOUNDIO_ATOMIC_EXCHANGE(sica.device_scan_queued, false))
+        if (sica.device_scan_queued.exchange(false))
         {
             lock.unlock();
             if (int err = refresh_devices(si))
@@ -1173,7 +1173,7 @@ static int outstream_begin_write_ca(std::shared_ptr<SoundIoPrivate> si, std::sha
     assert((audio_buffer->mDataByteSize % os->bytes_per_frame) == 0);
     for (int ch = 0; ch < os->layout.channel_count; ch += 1)
     {
-        osca.areas[ch].ptr = static_cast<char *>(audio_buffer->mData) + os->bytes_per_sample * ch;
+        osca.areas[ch].ptr = static_cast<char*>(audio_buffer->mData) + os->bytes_per_sample * ch;
         osca.areas[ch].step = os->bytes_per_frame;
     }
     *out_areas = osca.areas;
@@ -1251,7 +1251,7 @@ OSStatus CoreAudioCallback::read_callback(void* userdata, AudioUnitRenderActionF
                                           UInt32 in_number_frames,
                                           AudioBufferList* io_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback *>(userdata);
+    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(userdata);
     return callback->read_callback_ca(io_action_flags, in_time_stamp, in_bus_number, in_number_frames, io_data);
 }
 
@@ -1285,7 +1285,7 @@ OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags* io_acti
         assert(audio_buffer->mDataByteSize == in_number_frames * is->bytes_per_frame);
         for (int ch = 0; ch < is->layout.channel_count; ch += 1)
         {
-            isca.areas[ch].ptr = static_cast<char *>(audio_buffer->mData) + (is->bytes_per_sample * ch);
+            isca.areas[ch].ptr = static_cast<char*>(audio_buffer->mData) + (is->bytes_per_sample * ch);
             isca.areas[ch].step = is->bytes_per_frame;
         }
     }
@@ -1296,7 +1296,7 @@ OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags* io_acti
         {
             AudioBuffer* audio_buffer = &isca.buffer_list->mBuffers[ch];
             assert(audio_buffer->mDataByteSize == in_number_frames * is->bytes_per_sample);
-            isca.areas[ch].ptr = static_cast<char *>(audio_buffer->mData);
+            isca.areas[ch].ptr = static_cast<char*>(audio_buffer->mData);
             isca.areas[ch].step = is->bytes_per_sample;
         }
     }
@@ -1335,7 +1335,7 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
         return SoundIoErrorOpeningDevice;
     }
 
-    isca.buffer_list = std::unique_ptr<AudioBufferList, decltype(&std::free)>(static_cast<AudioBufferList *>(malloc(io_size)), &std::free);
+    isca.buffer_list = std::unique_ptr<AudioBufferList, decltype(&std::free)>(static_cast<AudioBufferList*>(malloc(io_size)), &std::free);
     if (!isca.buffer_list)
     {
         instream_destroy_ca(si, is);
@@ -1534,7 +1534,7 @@ static void destroy_core_audio(std::shared_ptr<SoundIoPrivate> si)
     if (sica.thread)
     {
         std::unique_lock lock(sica.scan_devices_mutex->get());
-        SOUNDIO_ATOMIC_STORE(sica.abort_flag, true);
+        sica.abort_flag.clear();
         sica.scan_devices_cond->signal(&lock);
         lock.unlock();
         sica.thread = nullptr;
@@ -1555,10 +1555,10 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si)
     sica.callback->si = si;
     int err;
 
-    SOUNDIO_ATOMIC_STORE(sica.have_devices_flag, false);
-    SOUNDIO_ATOMIC_STORE(sica.device_scan_queued, true);
-    SOUNDIO_ATOMIC_STORE(sica.service_restarted, false);
-    SOUNDIO_ATOMIC_STORE(sica.abort_flag, false);
+    sica.have_devices_flag.store(false);
+    sica.device_scan_queued.store(true);
+    sica.service_restarted.store(false);
+    sica.abort_flag.test_and_set();
 
     sica.mutex = soundio_os_mutex_create();
     if (!sica.mutex)
