@@ -189,8 +189,8 @@ set(LIBSOUNDIO_LIBS
 
 if (MSVC)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /Wall")
-    set(LIB_CFLAGS "/TP /W1 /GR- /EHs-c-")
-    set(EXAMPLE_CFLAGS "/W4")
+    set(LIB_CFLAGS "/TP /W1 /GR /EHs-c- /std:c++20 /Zc:preprocessor /D_SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING")
+    set(EXAMPLE_CFLAGS "/W4 /std:c++20")
     set(TEST_CFLAGS "${LIB_CFLAGS}")
     set(TEST_LDFLAGS " ")
     set(LIBM " ")
@@ -217,7 +217,7 @@ if (SOUNDIO_BUILD_DYNAMIC_LIBS)
             SOVERSION ${LIBSOUNDIO_VERSION_MAJOR}
             VERSION ${LIBSOUNDIO_VERSION}
             COMPILE_FLAGS ${LIB_CFLAGS}
-            LINKER_LANGUAGE C
+            LINKER_LANGUAGE CXX
     )
     target_link_libraries(libsoundio_shared PUBLIC ${LIBSOUNDIO_LIBS})
     target_link_libraries(libsoundio_shared PRIVATE ${LIBSOUNDIO_EXTEN_INCLUDE_LIB})
@@ -229,7 +229,7 @@ if (SOUNDIO_BUILD_STATIC_LIBS)
     set_target_properties(libsoundio_static PROPERTIES
             OUTPUT_NAME ${SOUNDIO_STATIC_LIBNAME}
             COMPILE_FLAGS ${LIB_CFLAGS}
-            LINKER_LANGUAGE C
+            LINKER_LANGUAGE CXX
     )
     target_link_libraries(libsoundio_static PRIVATE ${LIBSOUNDIO_EXTEN_INCLUDE_LIB})
     if (SOUNDIO_HAVE_OBOE)

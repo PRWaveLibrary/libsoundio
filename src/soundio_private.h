@@ -229,12 +229,12 @@ struct SoundIoPrivate : public SoundIo
 
 struct SoundIoDevicePrivate : SoundIoDevice
 {
-    struct SoundIoDeviceBackendData backend_data;
+    SoundIoDeviceBackendData backend_data;
 
     void (*destruct)(SoundIoDevicePrivate*);
 
     std::vector<SoundIoSampleRateRange> sample_rates;
-    enum SoundIoFormat prealloc_format;
+    SoundIoFormat prealloc_format;
 };
 
 // #ifdef __cplusplus

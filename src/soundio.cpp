@@ -12,6 +12,7 @@
 
 #include <cassert>
 #include <cstdio>
+#include <algorithm>
 
 static const enum SoundIoBackend available_backends[] = {
 #ifdef SOUNDIO_HAVE_JACK
