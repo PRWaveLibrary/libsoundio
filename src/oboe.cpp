@@ -191,7 +191,7 @@ static void device_thread_run(std::shared_ptr<void> arg)
 
     std::unique_lock lock(sio.scan_devices_mutex->get());
 
-    while (sio.abort_flag.test())
+    while (!sio.abort_flag.test())
     {
         if (sio.device_scan_queued.load())
         {
@@ -559,7 +559,7 @@ static void destroy_oboe(std::shared_ptr<SoundIoPrivate> si)
     if (sio.thread)
     {
         std::unique_lock lock(sio.scan_devices_mutex->get());
-        sio.abort_flag.clear();
+        sio.abort_flag.test_and_set();
         sio.scan_devices_cond->signal(&lock);
         lock.unlock();
 
@@ -586,7 +586,7 @@ int soundio_oboe_init(std::shared_ptr<SoundIoPrivate> si)
 
     sio.have_devices_flag.store(false);
     sio.device_scan_queued.store(true);
-    sio.abort_flag.test_and_set();
+    sio.abort_flag.clear();
 
     sio.mutex = soundio_os_mutex_create();
     if (!sio.mutex)

@@ -11,7 +11,6 @@
 #include "soundio_internal.h"
 #include "os.h"
 #include "ring_buffer.h"
-#include "atomics.h"
 #include <memory>
 
 struct SoundIoPrivate;
@@ -34,15 +33,15 @@ struct SoundIoOutStreamDummy
 {
     std::unique_ptr<SoundIoOsThread> thread = nullptr;
     std::unique_ptr<SoundIoOsCond> cond;
-    struct SoundIoAtomicFlag abort_flag;
+    std::atomic_flag abort_flag;
     double period_duration;
     int buffer_frame_count;
     int frames_left;
     int write_frame_count;
     std::unique_ptr<SoundIoRingBuffer> ring_buffer;
     double playback_start_time;
-    struct SoundIoAtomicFlag clear_buffer_flag;
-    struct SoundIoAtomicBool pause_requested;
+    std::atomic_bool clear_buffer;
+    std::atomic_bool pause_requested;
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };
 
@@ -50,14 +49,14 @@ struct SoundIoInStreamDummy
 {
     std::unique_ptr<SoundIoOsThread> thread = nullptr;
     std::unique_ptr<SoundIoOsCond> cond;
-    struct SoundIoAtomicFlag abort_flag;
+    std::atomic_flag abort_flag;
     double period_duration;
     int frames_left;
     int read_frame_count;
     int buffer_frame_count;
     std::unique_ptr<SoundIoRingBuffer> ring_buffer;
-    struct SoundIoAtomicBool pause_requested;
-    struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
+    std::atomic_bool pause_requested;
+    SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };
 
 #endif

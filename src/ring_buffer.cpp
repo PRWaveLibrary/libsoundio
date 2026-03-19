@@ -29,8 +29,8 @@ int SoundIoRingBuffer::init(int requested_capacity)
     {
         return err;
     }
-    SOUNDIO_ATOMIC_STORE(write_offset, 0);
-    SOUNDIO_ATOMIC_STORE(read_offset, 0);
+    write_offset = 0;
+    read_offset = 0;
 
     return 0;
 }
@@ -40,7 +40,8 @@ struct MmapDeleter
     size_t capacity;
     void* priv = nullptr;
 
-    MmapDeleter(size_t capacity, void* priv) : capacity(capacity), priv(priv)
+    MmapDeleter(size_t capacity, void* priv) :
+        capacity(capacity), priv(priv)
     {
     }
 

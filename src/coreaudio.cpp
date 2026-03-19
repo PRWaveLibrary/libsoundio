@@ -988,7 +988,7 @@ static void device_thread_run(std::shared_ptr<void> arg)
 
     std::unique_lock lock(sica.scan_devices_mutex->get());
 
-    while (sica.abort_flag.test())
+    while (!sica.abort_flag.test())
     {
         if (sica.service_restarted.load())
         {
@@ -1681,7 +1681,7 @@ static void destroy_core_audio(std::shared_ptr<SoundIoPrivate> si)
     if (sica.thread)
     {
         std::unique_lock lock(sica.scan_devices_mutex->get());
-        sica.abort_flag.clear();
+        sica.abort_flag.test_and_set();
         sica.scan_devices_cond->signal(&lock);
         lock.unlock();
         sica.thread = nullptr;
@@ -1713,7 +1713,7 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si)
     sica.have_devices_flag.store(false);
     sica.device_scan_queued.store(true);
     sica.service_restarted.store(false);
-    sica.abort_flag.test_and_set();
+    sica.abort_flag.clear();
 
     sica.mutex = soundio_os_mutex_create();
     if (!sica.mutex)

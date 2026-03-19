@@ -1376,7 +1376,7 @@ static void outstream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::sh
 
     if (osw.thread)
     {
-        osw.thread_exit_flag.clear();
+        osw.thread_exit_flag.test_and_set();
         if (osw.h_event)
         {
             SetEvent(osw.h_event);
@@ -1870,12 +1870,13 @@ static void outstream_shared_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
             return;
         }
         osw.writable_frame_count = osw.buffer_frame_count - frames_used;
-        if (!osw.thread_exit_flag.test_and_set())
+        if (osw.thread_exit_flag.test())
         {
             return;
         }
-        if (!osw.pause_resume_flag.test_and_set())
+        if (osw.pause_resume_flag.test())
         {
+            osw.pause_resume_flag.clear();
             bool pause = osw.desired_pause_state.load();
             if (pause && !osw.is_paused)
             {
@@ -1931,10 +1932,13 @@ static void outstream_raw_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
     for (;;)
     {
         WaitForSingleObject(osw.h_event, INFINITE);
-        if (!osw.thread_exit_flag.test_and_set())
-            return;
-        if (!osw.pause_resume_flag.test_and_set())
+        if (osw.thread_exit_flag.test())
         {
+            return;
+        }
+        if (osw.pause_resume_flag.test())
+        {
+            osw.pause_resume_flag.clear();
             bool pause = osw.desired_pause_state.load();
             if (pause && !osw.is_paused)
             {
@@ -1990,7 +1994,7 @@ static void outstream_thread_run(std::shared_ptr<void> arg)
     osw.cond->signal(&lock);
     for (;;)
     {
-        if (!osw.thread_exit_flag.test_and_set())
+        if (osw.thread_exit_flag.test())
         {
             outstream_thread_deinit(si, os);
             return;
@@ -2032,7 +2036,7 @@ static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
     std::shared_ptr<SoundIoDevice> device = os->device;
     std::shared_ptr<SoundIo> soundio = si;
 
-    osw.pause_resume_flag.test_and_set();
+    osw.pause_resume_flag.clear();
     osw.clear_buffer_flag.test_and_set();
     osw.desired_pause_state.store(false);
 
@@ -2070,7 +2074,7 @@ static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
         return SoundIoErrorOpeningDevice;
     }
 
-    osw.thread_exit_flag.test_and_set();
+    osw.thread_exit_flag.clear();
     osw.thread = SoundIoOsThread::create(outstream_thread_run, os);
 
     std::unique_lock lock(osw.mutex->get());
@@ -2104,7 +2108,7 @@ static int outstream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::share
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
 
     osw.desired_pause_state.store(pause);
-    osw.pause_resume_flag.clear();
+    osw.pause_resume_flag.test_and_set();
     if (osw.h_event)
     {
         SetEvent(osw.h_event);
@@ -2211,12 +2215,9 @@ static int outstream_clear_buffer_wasapi(std::shared_ptr<SoundIoPrivate> si, std
     {
         return SoundIoErrorIncompatibleDevice;
     }
-    else
-    {
-        osw.clear_buffer_flag.clear();
-        std::unique_lock lock(osw.mutex->get());
-        osw.cond->signal(&lock);
-    }
+    osw.clear_buffer_flag.clear();
+    std::unique_lock lock(osw.mutex->get());
+    osw.cond->signal(&lock);
 
     return 0;
 }
@@ -2327,7 +2328,7 @@ static void instream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::sha
 
     if (isw->thread)
     {
-        isw->thread_exit_flag.clear();
+        isw->thread_exit_flag.test_and_set();
         if (isw->h_event)
         {
             SetEvent(isw->h_event);
@@ -2521,7 +2522,7 @@ static void instream_raw_run(std::shared_ptr<SoundIoInStreamPrivate> is)
     for (;;)
     {
         WaitForSingleObject(isw.h_event, INFINITE);
-        if (!isw.thread_exit_flag.test_and_set())
+        if (isw.thread_exit_flag.test())
         {
             return;
         }
@@ -2545,7 +2546,7 @@ static void instream_shared_run(std::shared_ptr<SoundIoInStreamPrivate> is)
     for (;;)
     {
         WaitForSingleObject(isw.h_event, INFINITE);
-        if (!isw.thread_exit_flag.test_and_set())
+        if (isw.thread_exit_flag.test())
         {
             return;
         }
@@ -2591,7 +2592,7 @@ static void instream_thread_run(std::shared_ptr<void> arg)
     isw.cond->signal(&lock);
     for (;;)
     {
-        if (!isw.thread_exit_flag.test_and_set())
+        if (isw.thread_exit_flag.test())
         {
             return;
         }
@@ -2669,7 +2670,7 @@ static int instream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_
         }
     }
 
-    isw.thread_exit_flag.test_and_set();
+    isw.thread_exit_flag.clear();
     isw.thread = SoundIoOsThread::create(instream_thread_run, is);
 
     std::unique_lock lock(isw.mutex->get());

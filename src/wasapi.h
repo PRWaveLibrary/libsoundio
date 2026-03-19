@@ -10,7 +10,6 @@
 
 #include "soundio_internal.h"
 #include "os.h"
-#include "list.h"
 #include <atomic>
 #include <string>
 
@@ -140,9 +139,9 @@ public:
 
     IFACEMETHODIMP QueryInterface(REFIID riid, void** ppv);
 
-    IFACEMETHODIMP_ (ULONG) AddRef();
+    IFACEMETHODIMP_(ULONG) AddRef();
 
-    IFACEMETHODIMP_ (ULONG) Release();
+    IFACEMETHODIMP_(ULONG) Release();
 
     // IMMNotificationClient methods
     IFACEMETHODIMP OnDeviceStateChanged(LPCWSTR pwstrDeviceId, DWORD dwNewState);

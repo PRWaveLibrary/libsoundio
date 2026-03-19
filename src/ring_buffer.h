@@ -9,13 +9,13 @@
 #define SOUNDIO_RING_BUFFER_H
 
 #include "os.h"
-#include "atomics.h"
 
 struct SoundIoRingBuffer
 {
     std::shared_ptr<SoundIoOsMirroredMemory> mem;
-    struct SoundIoAtomicULong write_offset;
-    struct SoundIoAtomicULong read_offset;
+
+    std::atomic<unsigned long> write_offset;
+    std::atomic<unsigned long> read_offset;
 
     int init(int requested_capacity);
 
@@ -30,8 +30,6 @@ struct SoundIoRingBuffer
 
     int fill_count() const
     {
-        unsigned long read_offset = SOUNDIO_ATOMIC_LOAD(this->read_offset);
-        unsigned long write_offset = SOUNDIO_ATOMIC_LOAD(this->write_offset);
         int count = static_cast<int>(write_offset - read_offset);
         assert(count >= 0);
         assert(count <= capacity());
@@ -40,26 +38,24 @@ struct SoundIoRingBuffer
 
     char* write_ptr()
     {
-        unsigned long write_offset = SOUNDIO_ATOMIC_LOAD(this->write_offset);
         return mem->address.get() + (write_offset % capacity());
     }
 
     char* read_ptr()
     {
-        unsigned long read_offset = SOUNDIO_ATOMIC_LOAD(this->read_offset);
         return mem->address.get() + (read_offset % capacity());
     }
 
 
     void advance_write_ptr(int count)
     {
-        SOUNDIO_ATOMIC_FETCH_ADD(this->write_offset, count);
+        write_offset.fetch_add(count);
         assert(fill_count() >= 0);
     }
 
     void advance_read_ptr(int count)
     {
-        SOUNDIO_ATOMIC_FETCH_ADD(read_offset, count);
+        read_offset.fetch_add(count);
         assert(fill_count() >= 0);
     }
 
@@ -70,8 +66,7 @@ struct SoundIoRingBuffer
 
     void clear()
     {
-        unsigned long read_offset = SOUNDIO_ATOMIC_LOAD(this->read_offset);
-        SOUNDIO_ATOMIC_STORE(write_offset, read_offset);
+        write_offset.store(read_offset);
     }
 
 private:
@@ -80,6 +75,5 @@ private:
 
 int soundio_ring_buffer_init(std::shared_ptr<SoundIoRingBuffer> rb, int requested_capacity);
 
-// void soundio_ring_buffer_deinit(std::shared_ptr<SoundIoRingBuffer> rb);
 
 #endif

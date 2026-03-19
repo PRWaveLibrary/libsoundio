@@ -12,7 +12,6 @@
 
 #include "soundio_internal.h"
 #include "config.h"
-#include "list.h"
 #include <vector>
 
 #ifdef SOUNDIO_HAVE_JACK

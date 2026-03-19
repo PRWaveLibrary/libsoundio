@@ -15,76 +15,76 @@
 
 static const enum SoundIoBackend available_backends[] = {
 #ifdef SOUNDIO_HAVE_JACK
-    SoundIoBackendJack,
+        SoundIoBackendJack,
 #endif
 #ifdef SOUNDIO_HAVE_PULSEAUDIO
-    SoundIoBackendPulseAudio,
+        SoundIoBackendPulseAudio,
 #endif
 #ifdef SOUNDIO_HAVE_ALSA
-    SoundIoBackendAlsa,
+        SoundIoBackendAlsa,
 #endif
 #ifdef SOUNDIO_HAVE_COREAUDIO
-    SoundIoBackendCoreAudio,
+        SoundIoBackendCoreAudio,
 #endif
 #ifdef SOUNDIO_HAVE_COREAUDIO_IOS
-    SoundIoBackendCoreAudioIOS,
+        SoundIoBackendCoreAudioIOS,
 #endif
 #ifdef SOUNDIO_HAVE_OBOE
-    SoundIoBackendAndroid,
+        SoundIoBackendAndroid,
 #endif
 #ifdef SOUNDIO_HAVE_WASAPI
-    SoundIoBackendWasapi,
+        SoundIoBackendWasapi,
 #endif
-    SoundIoBackendDummy,
+        SoundIoBackendDummy,
 };
 
 typedef int (*backend_init_t)(std::shared_ptr<SoundIoPrivate>);
 
 static backend_init_t backend_init_fns[] = {
-    NULL, // None backend
+        NULL, // None backend
 
 #ifdef SOUNDIO_HAVE_JACK
-    &soundio_jack_init,
+        &soundio_jack_init,
 #else
-    NULL,
+        NULL,
 #endif
 
 #ifdef SOUNDIO_HAVE_PULSEAUDIO
-    &soundio_pulseaudio_init,
+        &soundio_pulseaudio_init,
 #else
-    NULL,
+        NULL,
 #endif
 
 #ifdef SOUNDIO_HAVE_ALSA
-    &soundio_alsa_init,
+        &soundio_alsa_init,
 #else
-    NULL,
+        NULL,
 #endif
 
 #ifdef SOUNDIO_HAVE_COREAUDIO
-    &soundio_coreaudio_init,
+        &soundio_coreaudio_init,
 #else
-    NULL,
+        NULL,
 #endif
 
 #ifdef SOUNDIO_HAVE_COREAUDIO_IOS
-    &soundio_coreaudio_init,
+        &soundio_coreaudio_init,
 #else
-    NULL,
+        NULL,
 #endif
 
 #ifdef SOUNDIO_HAVE_OBOE
-    &soundio_oboe_init,
+        &soundio_oboe_init,
 #else
-    NULL,
+        NULL,
 #endif
 
 #ifdef SOUNDIO_HAVE_WASAPI
-    soundio_wasapi_init,
+        soundio_wasapi_init,
 #else
-    NULL,
+        NULL,
 #endif
-    &soundio_dummy_init,
+        &soundio_dummy_init,
 };
 
 // SOUNDIO_MAKE_LIST_DEF(struct SoundIoDevice*, SoundIoListDevicePtr, SOUNDIO_LIST_NOT_STATIC)
@@ -256,20 +256,24 @@ void soundio_destroy(std::shared_ptr<SoundIo> soundio)
     soundio_disconnect(soundio);
 }
 
-static void do_nothing_cb(std::shared_ptr<SoundIo> soundio) {}
+static void do_nothing_cb(std::shared_ptr<SoundIo> soundio)
+{
+}
 
-static void default_msg_callback(const char* msg) {}
+static void default_msg_callback(const char* msg)
+{
+}
 
 static void default_backend_disconnect_cb(std::shared_ptr<SoundIo> soundio, int err)
 {
     soundio_panic("libsoundio: backend disconnected: %s", soundio_strerror(err));
 }
 
-static struct SoundIoAtomicFlag rtprio_seen = SOUNDIO_ATOMIC_FLAG_INIT;
+static std::atomic_flag rtprio_seen = ATOMIC_FLAG_INIT;
 
 static void default_emit_rtprio_warning(void)
 {
-    if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(rtprio_seen))
+    if (!rtprio_seen.test_and_set())
     {
         wprintf(L"warning: unable to set high priority thread: Operation not permitted\n");
         wprintf(L"See https://github.com/andrewrk/genesis/wiki/warning:-unable-to-set-high-priority-thread:-Operation-not-permitted\n");
@@ -586,7 +590,9 @@ static void default_outstream_error_callback(std::shared_ptr<SoundIoOutStream> o
     soundio_panic("libsoundio: %s", soundio_strerror(err));
 }
 
-static void default_underflow_callback(std::shared_ptr<SoundIoOutStream> outstream) {}
+static void default_underflow_callback(std::shared_ptr<SoundIoOutStream> outstream)
+{
+}
 
 std::shared_ptr<SoundIoOutStream> soundio_outstream_create(std::shared_ptr<SoundIoDevice> device)
 {
@@ -726,7 +732,9 @@ static void default_instream_error_callback(std::shared_ptr<SoundIoInStream> is,
     soundio_panic("libsoundio: %s", soundio_strerror(err));
 }
 
-static void default_overflow_callback(std::shared_ptr<SoundIoInStream> instream) {}
+static void default_overflow_callback(std::shared_ptr<SoundIoInStream> instream)
+{
+}
 
 std::shared_ptr<SoundIoInStream> soundio_instream_create(std::shared_ptr<SoundIoDevice> device)
 {
@@ -895,8 +903,8 @@ static bool layout_contains(const struct SoundIoChannelLayout* available_layouts
 }
 
 const struct SoundIoChannelLayout* soundio_best_matching_channel_layout(
-    const struct SoundIoChannelLayout* preferred_layouts, int preferred_layouts_count,
-    const struct SoundIoChannelLayout* available_layouts, int available_layouts_count)
+        const struct SoundIoChannelLayout* preferred_layouts, int preferred_layouts_count,
+        const struct SoundIoChannelLayout* available_layouts, int available_layouts_count)
 {
     for (int i = 0; i < preferred_layouts_count; i += 1)
     {

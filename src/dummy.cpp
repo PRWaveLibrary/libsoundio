@@ -9,7 +9,7 @@
 #include "soundio_private.h"
 
 #include <stdio.h>
-#include <string.h>
+#include "util.h"
 
 static void playback_thread_run(std::shared_ptr<void> arg)
 {
@@ -27,19 +27,19 @@ static void playback_thread_run(std::shared_ptr<void> arg)
     }
     double start_time = soundio_os_get_time();
     long frames_consumed = 0;
+    bool expected = true;
 
-    while (SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osd->abort_flag))
+    while (!osd->abort_flag.test())
     {
         double now = soundio_os_get_time();
         double time_passed = now - start_time;
-        double next_period = start_time +
-                             ceil_dbl(time_passed / osd->period_duration) * osd->period_duration;
+        double next_period = start_time + ceil_dbl(time_passed / osd->period_duration) * osd->period_duration;
         double relative_time = next_period - now;
 
+
         osd->cond->timed_wait(nullptr, relative_time);
-        if (!SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osd->clear_buffer_flag))
+        if (osd->clear_buffer.compare_exchange_strong(expected, false))
         {
-            osd->ring_buffer->clear();
             int free_bytes = osd->ring_buffer->capacity();
             int free_frames = free_bytes / outstream->bytes_per_frame;
             osd->frames_left = free_frames;
@@ -50,7 +50,7 @@ static void playback_thread_run(std::shared_ptr<void> arg)
             continue;
         }
 
-        if (SOUNDIO_ATOMIC_LOAD(osd->pause_requested))
+        if (osd->pause_requested)
         {
             start_time = now;
             frames_consumed = 0;
@@ -96,7 +96,7 @@ static void capture_thread_run(std::shared_ptr<void> arg)
 
     long frames_consumed = 0;
     double start_time = soundio_os_get_time();
-    while (SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(isd->abort_flag))
+    while (!isd->abort_flag.test())
     {
         double now = soundio_os_get_time();
         double time_passed = now - start_time;
@@ -105,7 +105,7 @@ static void capture_thread_run(std::shared_ptr<void> arg)
         double relative_time = next_period - now;
         isd->cond->timed_wait(nullptr, relative_time);
 
-        if (SOUNDIO_ATOMIC_LOAD(isd->pause_requested))
+        if (isd->pause_requested)
         {
             start_time = now;
             frames_consumed = 0;
@@ -188,7 +188,7 @@ static void outstream_destroy_dummy(std::shared_ptr<SoundIoPrivate> si, std::sha
 
     if (osd->thread)
     {
-        SOUNDIO_ATOMIC_FLAG_CLEAR(osd->abort_flag);
+        osd->abort_flag.test_and_set();
         osd->cond->signal(nullptr);
         osd->thread = nullptr;
     }
@@ -202,14 +202,13 @@ static int outstream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_
     struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
     std::shared_ptr<SoundIoOutStream> outstream = os;
     std::shared_ptr<SoundIoDevice> device = outstream->device;
-
-    SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osd->clear_buffer_flag);
-    SOUNDIO_ATOMIC_STORE(osd->pause_requested, false);
+    osd->clear_buffer = false;
+    osd->pause_requested = false;
 
     if (outstream->software_latency == 0.0)
     {
         outstream->software_latency = soundio_double_clamp(
-            device->software_latency_min, 1.0, device->software_latency_max);
+                device->software_latency_min, 1.0, device->software_latency_max);
     }
 
     osd->period_duration = outstream->software_latency / 2.0;
@@ -246,7 +245,7 @@ static int outstream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_
 static int outstream_pause_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause)
 {
     struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
-    SOUNDIO_ATOMIC_STORE(osd->pause_requested, pause);
+    osd->pause_requested = pause;
     return 0;
 }
 
@@ -255,7 +254,7 @@ static int outstream_start_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared
     struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
     std::shared_ptr<SoundIo> soundio = si;
     assert(!osd->thread);
-    SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(osd->abort_flag);
+    osd->abort_flag.clear();
     osd->thread = SoundIoOsThread::create(playback_thread_run, os);
     return 0;
 }
@@ -295,7 +294,7 @@ static int outstream_end_write_dummy(std::shared_ptr<SoundIoPrivate> si, std::sh
 static int outstream_clear_buffer_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
-    SOUNDIO_ATOMIC_FLAG_CLEAR(osd->clear_buffer_flag);
+    osd->clear_buffer = true;
     osd->cond->signal(nullptr);
     return 0;
 }
@@ -323,7 +322,7 @@ static void instream_destroy_dummy(std::shared_ptr<SoundIoPrivate> si, std::shar
 
     if (isd->thread)
     {
-        SOUNDIO_ATOMIC_FLAG_CLEAR(isd->abort_flag);
+        isd->abort_flag.test_and_set();
         isd->cond->signal(nullptr);
         // soundio_os_thread_destroy(isd->thread);
         isd->thread = NULL;
@@ -340,13 +339,12 @@ static int instream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_p
     struct SoundIoInStreamDummy* isd = &is->backend_data.dummy;
     std::shared_ptr<SoundIoInStream> instream = is;
     std::shared_ptr<SoundIoDevice> device = instream->device;
-
-    SOUNDIO_ATOMIC_STORE(isd->pause_requested, false);
+    isd->pause_requested = false;
 
     if (instream->software_latency == 0.0)
     {
         instream->software_latency = soundio_double_clamp(
-            device->software_latency_min, 1.0, device->software_latency_max);
+                device->software_latency_min, 1.0, device->software_latency_max);
     }
 
     isd->period_duration = instream->software_latency;
@@ -384,7 +382,7 @@ static int instream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_p
 static int instream_pause_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, bool pause)
 {
     struct SoundIoInStreamDummy* isd = &is->backend_data.dummy;
-    SOUNDIO_ATOMIC_STORE(isd->pause_requested, pause);
+    isd->pause_requested = pause;
     return 0;
 }
 
@@ -393,7 +391,7 @@ static int instream_start_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_
     struct SoundIoInStreamDummy* isd = &is->backend_data.dummy;
     std::shared_ptr<SoundIo> soundio = si;
     assert(!isd->thread);
-    SOUNDIO_ATOMIC_FLAG_TEST_AND_SET(isd->abort_flag);
+    isd->abort_flag.clear();
     isd->thread = SoundIoOsThread::create(capture_thread_run, is);
     return 0;
 }
