@@ -14,8 +14,7 @@ set(CMAKE_OBJCXX_EXTENSIONS OFF)
 include(GNUInstallDirs)
 
 if (NOT CMAKE_SOUNDIO_BUILD_TYPE)
-    set(CMAKE_SOUNDIO_BUILD_TYPE "Debug" CACHE STRING
-            "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
+    set(CMAKE_SOUNDIO_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
 endif ()
 
 set(LIBSOUNDIO_VERSION_MAJOR 1)
@@ -184,70 +183,60 @@ set(LIBSOUNDIO_HEADERS
 )
 
 if (SOUNDIO_HAVE_JACK)
-    set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES}
-            "${libsoundio_SOURCE_DIR}/src/jack.c"
-    )
+    list(APPEND LIBSOUNDIO_SOURCES "${libsoundio_SOURCE_DIR}/src/jack.c")
 endif ()
+
 if (SOUNDIO_HAVE_PULSEAUDIO)
-    set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES}
-            "${libsoundio_SOURCE_DIR}/src/pulseaudio.c"
-    )
+    list(APPEND LIBSOUNDIO_SOURCES "${libsoundio_SOURCE_DIR}/src/pulseaudio.c")
 endif ()
+
 if (SOUNDIO_HAVE_ALSA)
-    set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES}
-            "${libsoundio_SOURCE_DIR}/src/alsa.c"
-    )
+    list(APPEND LIBSOUNDIO_SOURCES "${libsoundio_SOURCE_DIR}/src/alsa.c")
 endif ()
+
 if (SOUNDIO_HAVE_COREAUDIO)
-    set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES}
-            "${libsoundio_SOURCE_DIR}/src/coreaudio.cpp"
-    )
+    list(APPEND LIBSOUNDIO_SOURCES "${libsoundio_SOURCE_DIR}/src/coreaudio.cpp")
 endif ()
 
 if (SOUNDIO_HAVE_COREAUDIO_IOS)
-    set(LIBSOUNDIO_HEADERS ${LIBSOUNDIO_HEADERS}
+    list(APPEND LIBSOUNDIO_HEADERS
             "${libsoundio_SOURCE_DIR}/src/soundio_internal.h"
             "${libsoundio_SOURCE_DIR}/src/soundio_private.h"
             "${libsoundio_SOURCE_DIR}/src/coreaudio_ios.h"
     )
-    set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES} ${LIBSOUNDIO_HEADERS} ${CONFIGURE_OUT_FILE}
+    list(APPEND LIBSOUNDIO_SOURCES
+            ${LIBSOUNDIO_HEADERS}
+            ${CONFIGURE_OUT_FILE}
             "${libsoundio_SOURCE_DIR}/src/coreaudio_ios.mm"
     )
 
     find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox REQUIRED)
     find_library(AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
     find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
-    set(LIBSOUNDIO_EXTEN_INCLUDE_LIB ${LIBSOUNDIO_EXTEN_INCLUDE_LIB}
+    list(APPEND LIBSOUNDIO_EXTEN_INCLUDE_LIB
             ${AUDIOTOOLBOX_FRAMEWORK}
             ${AVFOUNDATION_FRAMEWORK}
             ${FOUNDATION_FRAMEWORK}
     )
-
 endif ()
 
 if (SOUNDIO_HAVE_OBOE)
-    set(LIBSOUNDIO_HEADERS ${LIBSOUNDIO_HEADERS}
+    list(APPEND LIBSOUNDIO_HEADERS
             "${libsoundio_SOURCE_DIR}/src/soundio_internal.h"
             "${libsoundio_SOURCE_DIR}/src/soundio_private.h"
             "${libsoundio_SOURCE_DIR}/src/oboe_callback.h"
             "${libsoundio_SOURCE_DIR}/src/oboe.h"
     )
-
-    set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES} ${CONFIGURE_OUT_FILE}
+    list(APPEND LIBSOUNDIO_SOURCES
+            ${CONFIGURE_OUT_FILE}
             "${libsoundio_SOURCE_DIR}/src/oboe_callback.cpp"
             "${libsoundio_SOURCE_DIR}/src/oboe.cpp"
     )
-
-    set(LIBSOUNDIO_EXTEN_INCLUDE_LIB ${LIBSOUNDIO_EXTEN_INCLUDE_LIB}
-            ${OBOE_LIBRARY}
-    )
-
+    list(APPEND LIBSOUNDIO_EXTEN_INCLUDE_LIB ${OBOE_LIBRARY})
 endif ()
 
 if (SOUNDIO_HAVE_WASAPI)
-    set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES}
-            "${libsoundio_SOURCE_DIR}/src/wasapi.cpp"
-    )
+    list(APPEND LIBSOUNDIO_SOURCES "${libsoundio_SOURCE_DIR}/src/wasapi.cpp")
 endif ()
 
 include_directories(
@@ -289,10 +278,7 @@ configure_file(
         ${CONFIGURE_OUT_FILE}
 )
 set(DOXYGEN_CONF_FILE "${libsoundio_BINARY_DIR}/doxygen.conf")
-configure_file(
-        "${libsoundio_SOURCE_DIR}/doc/doxygen.conf.in"
-        ${DOXYGEN_CONF_FILE}
-)
+configure_file("${libsoundio_SOURCE_DIR}/doc/doxygen.conf.in" ${DOXYGEN_CONF_FILE})
 
 if (SOUNDIO_BUILD_DYNAMIC_LIBS)
     add_library(libsoundio_shared SHARED ${LIBSOUNDIO_SOURCES})
@@ -329,49 +315,18 @@ install(FILES
 # Example Programs
 
 if (SOUNDIO_BUILD_EXAMPLE_PROGRAMS)
-    add_executable(sio_sine example/sio_sine.c)
-    set_target_properties(sio_sine PROPERTIES
-            LINKER_LANGUAGE C
-            COMPILE_FLAGS ${EXAMPLE_CFLAGS})
-    if (SOUNDIO_BUILD_DYNAMIC_LIBS)
-        target_link_libraries(sio_sine libsoundio_shared ${LIBM})
-    else ()
-        target_link_libraries(sio_sine libsoundio_static ${LIBSOUNDIO_LIBS} ${LIBM})
-    endif ()
-    install(TARGETS sio_sine DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-    add_executable(sio_list_devices example/sio_list_devices.c)
-    set_target_properties(sio_list_devices PROPERTIES
-            LINKER_LANGUAGE C
-            COMPILE_FLAGS ${EXAMPLE_CFLAGS})
-    if (SOUNDIO_BUILD_DYNAMIC_LIBS)
-        target_link_libraries(sio_list_devices libsoundio_shared)
-    else ()
-        target_link_libraries(sio_list_devices libsoundio_static ${LIBSOUNDIO_LIBS})
-    endif ()
-    install(TARGETS sio_list_devices DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-    add_executable(sio_microphone example/sio_microphone.c)
-    set_target_properties(sio_microphone PROPERTIES
-            LINKER_LANGUAGE C
-            COMPILE_FLAGS ${EXAMPLE_CFLAGS})
-    if (SOUNDIO_BUILD_DYNAMIC_LIBS)
-        target_link_libraries(sio_microphone libsoundio_shared)
-    else ()
-        target_link_libraries(sio_microphone libsoundio_static ${LIBSOUNDIO_LIBS})
-    endif ()
-    install(TARGETS sio_microphone DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-    add_executable(sio_record example/sio_record.c)
-    set_target_properties(sio_record PROPERTIES
-            LINKER_LANGUAGE C
-            COMPILE_FLAGS ${EXAMPLE_CFLAGS})
-    if (SOUNDIO_BUILD_DYNAMIC_LIBS)
-        target_link_libraries(sio_record libsoundio_shared)
-    else ()
-        target_link_libraries(sio_record libsoundio_static ${LIBSOUNDIO_LIBS})
-    endif ()
-    install(TARGETS sio_record DESTINATION ${CMAKE_INSTALL_BINDIR})
+    foreach (example_name sio_sine sio_list_devices sio_microphone sio_record)
+        add_executable(${example_name} "example/${example_name}.c")
+        set_target_properties(${example_name} PROPERTIES
+                LINKER_LANGUAGE C
+                COMPILE_FLAGS ${EXAMPLE_CFLAGS})
+        if (SOUNDIO_BUILD_DYNAMIC_LIBS)
+            target_link_libraries(${example_name} libsoundio_shared ${LIBM})
+        else ()
+            target_link_libraries(${example_name} libsoundio_static ${LIBSOUNDIO_LIBS} ${LIBM})
+        endif ()
+        install(TARGETS ${example_name} DESTINATION ${CMAKE_INSTALL_BINDIR})
+    endforeach ()
 endif ()
 
 if (SOUNDIO_BUILD_TESTS)
@@ -390,36 +345,17 @@ if (SOUNDIO_BUILD_TESTS)
             COMPILE_FLAGS ${LIB_CFLAGS}
     )
 
-    add_executable(underflow test/underflow.c)
-    set_target_properties(underflow PROPERTIES
-            LINKER_LANGUAGE C
-            COMPILE_FLAGS ${EXAMPLE_CFLAGS})
-    if (SOUNDIO_BUILD_DYNAMIC_LIBS)
-        target_link_libraries(underflow libsoundio_shared ${LIBM})
-    else ()
-        target_link_libraries(underflow libsoundio_static ${LIBSOUNDIO_LIBS} ${LIBM})
-    endif ()
-
-    add_executable(backend_disconnect_recover test/backend_disconnect_recover.c
-    )
-    set_target_properties(backend_disconnect_recover PROPERTIES
-            LINKER_LANGUAGE C
-            COMPILE_FLAGS ${EXAMPLE_CFLAGS})
-    if (SOUNDIO_BUILD_DYNAMIC_LIBS)
-        target_link_libraries(backend_disconnect_recover libsoundio_shared)
-    else ()
-        target_link_libraries(backend_disconnect_recover libsoundio_static ${LIBSOUNDIO_LIBS})
-    endif ()
-
-    add_executable(overflow test/overflow.c)
-    set_target_properties(overflow PROPERTIES
-            LINKER_LANGUAGE C
-            COMPILE_FLAGS ${EXAMPLE_CFLAGS})
-    if (SOUNDIO_BUILD_DYNAMIC_LIBS)
-        target_link_libraries(overflow libsoundio_shared)
-    else ()
-        target_link_libraries(overflow libsoundio_static ${LIBSOUNDIO_LIBS})
-    endif ()
+    foreach (test_name underflow backend_disconnect_recover overflow)
+        add_executable(${test_name} "test/${test_name}.c")
+        set_target_properties(${test_name} PROPERTIES
+                LINKER_LANGUAGE C
+                COMPILE_FLAGS ${EXAMPLE_CFLAGS})
+        if (SOUNDIO_BUILD_DYNAMIC_LIBS)
+            target_link_libraries(${test_name} libsoundio_shared ${LIBM})
+        else ()
+            target_link_libraries(${test_name} libsoundio_static ${LIBSOUNDIO_LIBS} ${LIBM})
+        endif ()
+    endforeach ()
 
 
     add_custom_target(coverage
