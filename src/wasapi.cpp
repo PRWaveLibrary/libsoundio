@@ -29,6 +29,7 @@
 
 #include <cstdio>
 #include <thread>
+#include "util.h"
 
 #ifdef _MSC_VER
 #include <propkeydef.h>
@@ -210,6 +211,14 @@ static enum SoundIoChannelLayoutId test_layouts[] = {
 // ==============================================================================
 
 #ifdef DEBUG
+/**
+ * @brief 从 IMMDevice 获取 user-friendly 的设备名
+ * 
+ * 访问 device 的 PKEY_Device_FriendlyName 属性，将其转换为 wstring 返回。
+ * 
+ * @param device 目标 IMMDevice 的指针
+ * @return std::wstring 设备的 friendly name
+ */
 static std::wstring GetDeviceName(IMMDevice* device)
 {
     IPropertyStore* pProps = nullptr;
@@ -223,6 +232,14 @@ static std::wstring GetDeviceName(IMMDevice* device)
 }
 #endif
 
+/**
+ * @brief 从 channel mask 解析并构建 SoundIoChannelLayout
+ * 
+ * 根据 mask 定义的 bit 位图解析出对应的音频 channels（如 front left, front right 等）。
+ * 
+ * @param channel_mask WASAPI 或 Windows 标准的 channel_mask
+ * @param layout 用于接收解析结果的 SoundIoChannelLayout 指针
+ */
 static void from_channel_mask_layout(UINT channel_mask, struct SoundIoChannelLayout* layout)
 {
     layout->channel_count = 0;
@@ -266,6 +283,14 @@ static void from_channel_mask_layout(UINT channel_mask, struct SoundIoChannelLay
     soundio_channel_layout_detect_builtin(layout);
 }
 
+/**
+ * @brief 从 WAVEFORMATEXTENSIBLE 获取 SoundIoChannelLayout
+ * 
+ * 使用 from_channel_mask_layout 提取并识别 channels。
+ * 
+ * @param wave_format 包含 channel mask 的 wave_format 指针
+ * @param layout 输出的 layout 数据
+ */
 static void from_wave_format_layout(WAVEFORMATEXTENSIBLE* wave_format, struct SoundIoChannelLayout* layout)
 {
     assert(wave_format->Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE);
@@ -273,6 +298,14 @@ static void from_wave_format_layout(WAVEFORMATEXTENSIBLE* wave_format, struct So
     from_channel_mask_layout(wave_format->dwChannelMask, layout);
 }
 
+/**
+ * @brief 从 WAVEFORMATEXTENSIBLE 解析出对应的 SoundIoFormat
+ * 
+ * 识别 bits_per_sample 和 subtype 来判断音频的具体格式 (如 Float32LE, S16LE).
+ * 
+ * @param wave_format 包含 format 参数的数据结构
+ * @return enum SoundIoFormat 如果支持则返回有效格式，否则返回 Invalid
+ */
 static enum SoundIoFormat from_wave_format_format(WAVEFORMATEXTENSIBLE* wave_format)
 {
     assert(wave_format->Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE);
@@ -312,7 +345,14 @@ static enum SoundIoFormat from_wave_format_format(WAVEFORMATEXTENSIBLE* wave_for
     return SoundIoFormatInvalid;
 }
 
-// only needs to support the layouts in test_layouts
+/**
+ * @brief 将 SoundIoChannelLayout 编码成对应的 channel mask
+ * 
+ * 仅需要支持 test_layouts 中覆盖的布局并写入 WAVEFORMATEXTENSIBLE 结构。
+ * 
+ * @param layout 要转换的 soundio 定义的 channel layout
+ * @param wave_format 用于接收生成的 channel mask 的指向目标
+ */
 static void to_wave_format_layout(const struct SoundIoChannelLayout* layout, WAVEFORMATEXTENSIBLE* wave_format)
 {
     wave_format->dwChannelMask = 0;
@@ -382,7 +422,14 @@ static void to_wave_format_layout(const struct SoundIoChannelLayout* layout, WAV
     }
 }
 
-// only needs to support the formats in test_formats
+/**
+ * @brief 按照指定的 SoundIoFormat 写入相应的格式到 WAVEFORMATEXTENSIBLE
+ * 
+ * 将内部音频 formats 结构翻译为 Windows 接口可识别的 SubFormat 等类型。
+ * 
+ * @param format 要被翻译的 SoundIoFormat 形式
+ * @param wave_format 目标被写入的 struct 
+ */
 static void to_wave_format_format(enum SoundIoFormat format, WAVEFORMATEXTENSIBLE* wave_format)
 {
     switch (format)
@@ -422,23 +469,48 @@ static void to_wave_format_format(enum SoundIoFormat format, WAVEFORMATEXTENSIBL
     }
 }
 
+/**
+ * @brief 补全 WAVEFORMATEXTENSIBLE 中的衍生数据
+ * 
+ * 根据当前填入的 channels 数和 bits 等基础信息来计算并补全 block align 和 byte rates。
+ * 
+ * @param wave_format 将被自动补全的目标 format 参数
+ */
 static void complete_wave_format_data(WAVEFORMATEXTENSIBLE* wave_format)
 {
     wave_format->Format.nBlockAlign = (wave_format->Format.wBitsPerSample * wave_format->Format.nChannels) / 8;
     wave_format->Format.nAvgBytesPerSec = wave_format->Format.nSamplesPerSec * wave_format->Format.nBlockAlign;
 }
 
+/**
+ * @brief 将 WASAPI 的 data flow 枚举转换为 soundio 设备目的(Input/Output)
+ * 
+ * @param data_flow eRender 或 eCapture
+ * @return enum SoundIoDeviceAim 输出或捕获 aim
+ */
 static enum SoundIoDeviceAim data_flow_to_aim(EDataFlow data_flow)
 {
     return (data_flow == eRender) ? SoundIoDeviceAimOutput : SoundIoDeviceAimInput;
 }
 
 
+/**
+ * @brief 从 REFERENCE_TIME 转换为双精度秒单位
+ * 
+ * @param rt 100 纳秒为单位的时间
+ * @return double 对应的 seconds
+ */
 static double from_reference_time(REFERENCE_TIME rt)
 {
     return static_cast<double>(rt) / 10000000.0;
 }
 
+/**
+ * @brief 将秒数时间转换为 REFERENCE_TIME
+ * 
+ * @param seconds 要被转换的时间 (秒)
+ * @return REFERENCE_TIME 对应的 100 纳秒精度的整型时间
+ */
 static REFERENCE_TIME to_reference_time(double seconds)
 {
     return static_cast<REFERENCE_TIME>(seconds * 10000000.0 + 0.5);
@@ -487,6 +559,18 @@ struct RefreshDevices
     }
 };
 
+/**
+ * @brief 检测并筛选出设备支持的有效 sound channel layouts
+ * 
+ * 使用指定的 share_mode 尝试调用设备接口进行 format 初始化，
+ * 将满足规则的 layout 加入到 dev->layouts 中。
+ * 
+ * @param rd RefreshDevices 状态的 shared_ptr
+ * @param wave_format 将用于测试的 WAVEFORMATEXTENSIBLE 配置
+ * @param dev 需要探测属性的 SoundIoDevicePrivate 实例
+ * @param share_mode 指定测试是使用 shared 还是 exclusive mode
+ * @return int 成功返回 0，错误返回对应 error code
+ */
 static int detect_valid_layouts(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEXTENSIBLE* wave_format,
                                 std::shared_ptr<SoundIoDevicePrivate> dev, AUDCLNT_SHAREMODE share_mode)
 {
@@ -528,6 +612,18 @@ static int detect_valid_layouts(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEX
     return 0;
 }
 
+/**
+ * @brief 探测设备支持的可行 sound formats
+ * 
+ * 遍历内部给定的 sound formats 列表并对指定的设备及 share_mode 进行检测，
+ * 如果支持，就加入该 device 的可用 formats 列表。
+ * 
+ * @param rd RefreshDevices 实例的 shared_ptr
+ * @param wave_format 指向当前 WAVEFORMATEXTENSIBLE 的指针
+ * @param dev 需要更新参数的 SoundIoDevicePrivate
+ * @param share_mode 指定验证所使用的共享模式
+ * @return int 探测完成或错误时的对应 code
+ */
 static int detect_valid_formats(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEXTENSIBLE* wave_format,
                                 std::shared_ptr<SoundIoDevicePrivate> dev, AUDCLNT_SHAREMODE share_mode)
 {
@@ -654,6 +750,16 @@ static int detect_valid_sample_rates(std::shared_ptr<RefreshDevices> rd, WAVEFOR
 }
 
 
+/**
+ * @brief 执行完整的设备枚举与属性更新操作
+ * 
+ * 获取目前所有的 audio render devices 和 capture devices，构建 collection。
+ * 为每个有效的 device 挖掘相应的 formats、layouts 和 sample rates 等 properties。
+ * 此操作可能很耗时，通常在 background thread 中运行。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @return int 完成设备的 refresh 则返回 0
+ */
 static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
@@ -663,12 +769,12 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
     if (FAILED(hr = siw.device_enumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, &rd->default_render_device)))
     {
+        if (hr == E_OUTOFMEMORY)
+        {
+            return SoundIoErrorNoMem;
+        }
         if (hr != E_NOTFOUND)
         {
-            if (hr == E_OUTOFMEMORY)
-            {
-                return SoundIoErrorNoMem;
-            }
             return SoundIoErrorOpeningDevice;
         }
     }
@@ -689,24 +795,25 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
     if (FAILED(hr = siw.device_enumerator->GetDefaultAudioEndpoint(eCapture, eMultimedia, &rd->default_capture_device)))
     {
+        if (hr == E_OUTOFMEMORY)
+        {
+            return SoundIoErrorNoMem;
+        }
         if (hr != E_NOTFOUND)
         {
-            if (hr == E_OUTOFMEMORY)
-            {
-                return SoundIoErrorNoMem;
-            }
             return SoundIoErrorOpeningDevice;
         }
     }
+
     if (rd->default_capture_device)
     {
         LPWSTR lpwstr;
+        if (hr == E_OUTOFMEMORY)
+        {
+            return SoundIoErrorNoMem;
+        }
         if (FAILED(hr = rd->default_capture_device->GetId(&lpwstr)))
         {
-            if (hr == E_OUTOFMEMORY)
-            {
-                return SoundIoErrorNoMem;
-            }
             return SoundIoErrorOpeningDevice;
         }
         rd->default_capture_id = lpwstr;
@@ -717,11 +824,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
     if (FAILED(hr = siw.device_enumerator->EnumAudioEndpoints(eAll, DEVICE_STATE_ACTIVE, &rd->collection)))
     {
-        if (hr == E_OUTOFMEMORY)
-        {
-            return SoundIoErrorNoMem;
-        }
-        return SoundIoErrorOpeningDevice;
+        return hr == E_OUTOFMEMORY ? SoundIoErrorNoMem : SoundIoErrorOpeningDevice;
     }
 
     UINT unsigned_count;
@@ -732,7 +835,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         return SoundIoErrorOpeningDevice;
     }
 
-    if (unsigned_count > (UINT) INT_MAX)
+    if (unsigned_count > static_cast<UINT>(INT_MAX))
     {
         return SoundIoErrorIncompatibleDevice;
     }
@@ -1040,6 +1143,14 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 // 4. Backend Context & Event Dispatch
 // ==============================================================================
 
+/**
+ * @brief 关闭正在运行的 backend 服务并分发错误事件
+ * 
+ * 用于在发生了不可恢复的错误后安全终止 background routines 和回调 error 函数。
+ * 
+ * @param si 当前的 SoundIoPrivate instance
+ * @param err 触发 backend shutdown 的对应 error code
+ */
 static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
@@ -1051,6 +1162,14 @@ static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
 }
 
 
+/**
+ * @brief 内部 flush events 方法
+ * 
+ * 判断 events 当前的触发情况并将它们 emit，使用 mutex 同步设备 scan 的最新状态。
+ * 
+ * @param si 此前初始化的 SoundIoPrivate 对象
+ * @param wait 指定如果没有 event 可用时是否需要进行 wait 阻塞
+ */
 static void my_flush_events(std::shared_ptr<SoundIoPrivate> si, bool wait)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
@@ -1090,6 +1209,13 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate> si, bool wait)
     }
 }
 
+/**
+ * @brief 暴露给公共接口的非阻塞 event flush
+ * 
+ * 发送事件更新而不去强制 wait。
+ * 
+ * @param si SoundIoPrivate 初始化对象
+ */
 static void flush_events_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     my_flush_events(si, false);
@@ -1101,6 +1227,13 @@ static void wait_events_wasapi(std::shared_ptr<SoundIoPrivate> si)
 }
 
 
+/**
+ * @brief 专用于维护设备变化的 background thread 主循环
+ * 
+ * 监听 scan_devices_cond 并触发实际的 refresh_devices 以获取 devices 列表。
+ * 
+ * @param arg 用户传递的 SoundIoPrivate pointer 参数
+ */
 static void device_thread_run(std::shared_ptr<void> arg)
 {
     std::shared_ptr<SoundIoPrivate> si = std::static_pointer_cast<SoundIoPrivate>(arg);
@@ -1146,6 +1279,13 @@ static void device_thread_run(std::shared_ptr<void> arg)
     siw.device_enumerator = nullptr;
 }
 
+/**
+ * @brief 主动唤醒处于 wait state 的 WASAPI event loop
+ * 
+ * 给 cond 变量发送 signal，从而使得通过 wait_events_wasapi block 的 thread 获取执行权。
+ * 
+ * @param si 顶层的 SoundIoPrivate 的 shared_ptr
+ */
 static void wakeup_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
@@ -1153,6 +1293,13 @@ static void wakeup_wasapi(std::shared_ptr<SoundIoPrivate> si)
     siw.cond->signal(&lock);
 }
 
+/**
+ * @brief 强行触发设备的 scan 解析流程
+ * 
+ * 通知 background 的 device 处理 thread 认为存在 device change 并重新获取 endpoint list。
+ * 
+ * @param si 顶层的 SoundIoPrivate 的 shared_ptr
+ */
 static void force_device_scan_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
@@ -1170,6 +1317,14 @@ static void force_device_scan_wasapi(std::shared_ptr<SoundIoPrivate> si)
 // 5. OutStream (Output & Playback)
 // ==============================================================================
 
+/**
+ * @brief 在 backend thread 关闭时执行的清理操作
+ * 
+ * 释放 audio_render_client, audio_client, clock 等 COM 对象资源。
+ * 
+ * @param si 当前 SoundIoPrivate 实例
+ * @param os 输出流内部数据对象 SoundIoOutStreamPrivate
+ */
 static void outstream_thread_deinit(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1206,6 +1361,14 @@ static void outstream_thread_deinit(std::shared_ptr<SoundIoPrivate> si, std::sha
     }
 }
 
+/**
+ * @brief 从主线程调用的输出流销毁逻辑
+ * 
+ * 设置 thread_exit_flag 以通知工作线程安全退出，随后清理系统分配的各类 events 和 sync primitives。
+ * 
+ * @param si 根级别 SoundIoPrivate context
+ * @param os 即将销毁的输出流指针
+ */
 static void outstream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     LOGI("destroy wasapi");
@@ -1238,6 +1401,15 @@ static void outstream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::sh
     osw.mutex = nullptr;
 }
 
+/**
+ * @brief 尝试使用较低 latency 或 hardware 特性的 IAudioClient3 初始化并打开设备
+ * 
+ * 配置共享模式的 parameters 并在必要时设定 periodicity 属性。
+ * 
+ * @param os 输出流组件
+ * @param wave_format 用户配置的音频波形格式
+ * @return IAudioClient3* 如果创建失败则返回 nullptr
+ */
 static IAudioClient3* open_audio_client3(std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format)
 {
     IAudioClient3* audio_client3 = nullptr;
@@ -1277,6 +1449,15 @@ static IAudioClient3* open_audio_client3(std::shared_ptr<SoundIoOutStreamPrivate
     return audio_client3;
 }
 
+/**
+ * @brief 传统版本 IAudioClient 实例的获取逻辑
+ * 
+ * 直接尝试激活对应的 device client。作为 client3 失败或不支持情况下的备用手段。
+ * 
+ * @param os 需要获取 client 实例的输出流对象
+ * @param wave_format 指定的格式
+ * @return IAudioClient* 返回激活的 client 组件，否则为空
+ */
 static IAudioClient* open_audio_client(std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format)
 {
     IAudioClient* audio_client = nullptr;
@@ -1308,6 +1489,13 @@ static IAudioClient* open_audio_client(std::shared_ptr<SoundIoOutStreamPrivate> 
     return audio_client;
 }
 
+/**
+ * @brief 安全释放 mix format 结构体内存
+ * 
+ * 使用 CoTaskMemFree 进行对应的操作。
+ * 
+ * @param mix_format 从系统获取需要释放的格式配置的指针引用
+ */
 static void deinit_mix_format(WAVEFORMATEXTENSIBLE** mix_format)
 {
     if (*mix_format != nullptr)
@@ -1317,6 +1505,14 @@ static void deinit_mix_format(WAVEFORMATEXTENSIBLE** mix_format)
     }
 }
 
+/**
+ * @brief 回退或中断时集中进行的 COM 组件释放操作
+ * 
+ * @param client3 audio client 3
+ * @param client fallback 的传统 audio client 
+ * @param os 输出流对象
+ * @param wave_format 相关格式信息
+ */
 static void deinit_client3_and_callback(IAudioClient3** client3, IAudioClient** client, std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format)
 {
     if (*client3 != nullptr)
@@ -1328,9 +1524,23 @@ static void deinit_client3_and_callback(IAudioClient3** client3, IAudioClient** 
 }
 
 
-static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3, std::shared_ptr<SoundIoOutStreamPrivate> os,
-                      WAVEFORMATEXTENSIBLE* wave_format, DWORD flags, AUDCLNT_SHAREMODE share_mode,
-                      REFERENCE_TIME buffer_duration, REFERENCE_TIME periodicity)
+/**
+ * @brief 为获取到的 audio_client 统一步骤调用 Initialize
+ * 
+ * 调用前根据所拥有的 client / client3 分别执行初始化，包括校验和重分配。
+ * 
+ * @param audio_client 指向 audio_client 的内存指针的引用
+ * @param audio_client3 指向 audio_client3 的引用
+ * @param os 流私有数据
+ * @param wave_format 即将被初始化的对应 format 配置
+ * @param flags 初始化修饰标识符
+ * @param share_mode 指定访问时为 exclusive 或 shared
+ * @param buffer_duration 期望的 buffer 大小时间长度
+ * @param periodicity 请求的调度的 period
+ * @return int 返回错误代码定义，如果是 OK 则返回 0
+ */
+static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3, std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format, DWORD flags, AUDCLNT_SHAREMODE share_mode, REFERENCE_TIME buffer_duration,
+                      REFERENCE_TIME periodicity)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
     std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(os->device);
@@ -1366,7 +1576,7 @@ static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3
         UINT32 periodicity_in_frames = default_period;
         if (os->software_latency < 1.0)
         {
-            periodicity_in_frames = fundamental_period * (UINT32)(mix_format->Format.nSamplesPerSec * os->software_latency / fundamental_period);
+            periodicity_in_frames = fundamental_period * static_cast<UINT32>(mix_format->Format.nSamplesPerSec * os->software_latency / fundamental_period);
             periodicity_in_frames = soundio_uint_clamp(min_period, periodicity_in_frames, max_period);
         }
 
@@ -1454,6 +1664,16 @@ NEXT:
 }
 
 
+/**
+ * @brief 处理底层打开输出流设备的实际逻辑
+ * 
+ * 此方法根据 shared 或者 raw 的配置以及是否指定 fallback，设置正确的 latency 和缓冲区。
+ * 主要完成 WAVEFORMAT 的校准及 AUDIOCLIENT 的启动配置。
+ * 
+ * @param si 管理全局行为的 SoundIoPrivate 对象
+ * @param os 需要被启动的输出流实例
+ * @return int 如果无法符合设备支持则返回报错代码
+ */
 static int outstream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1606,6 +1826,14 @@ static int outstream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     return 0;
 }
 
+/**
+ * @brief WASAPI 输出流的 Shared mode event loop 执行框架
+ * 
+ * 依照设备的调度频率计算 buffer 可用的 frames，并唤醒 user thread 补充音频数据。
+ * 处理 play state, pause state 及 clear events。
+ * 
+ * @param os 被驱动处理的 stream
+ */
 static void outstream_shared_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1673,11 +1901,19 @@ static void outstream_shared_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
         {
             os->underflow_callback(os);
         }
+
         frame_count_min = soundio_uint_max(0U, osw.min_padding_frames - frames_used);
         os->write_callback(os, frame_count_min, osw.writable_frame_count);
     }
 }
 
+/**
+ * @brief WASAPI 输出流的 Raw mode (Exclusive) 事件循环
+ * 
+ * 无中介直写给硬件，确保最小 latency，等待事件触发完成 frame 处理。
+ * 
+ * @param os 需要驱动操作的流对象引用
+ */
 static void outstream_raw_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1724,6 +1960,13 @@ static void outstream_raw_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
     }
 }
 
+/**
+ * @brief OutStream 的 background thread 入口点
+ * 
+ * 执行前期做必要的 setup 并向主线程反馈结果，随后依照 device mode 进入具体的 run-loop 流程。
+ * 
+ * @param arg 从底层传递入内部的 thread argument，代表 stream instance
+ */
 static void outstream_thread_run(std::shared_ptr<void> arg)
 {
     std::shared_ptr<SoundIoOutStreamPrivate> os = std::static_pointer_cast<SoundIoOutStreamPrivate>(arg);
@@ -1773,6 +2016,15 @@ static void outstream_thread_run(std::shared_ptr<void> arg)
     outstream_thread_deinit(si, os);
 }
 
+/**
+ * @brief 打开 WASAPI OutStream (Output & Playback)
+ * 
+ * 初始化 WASAPI 的 playback 功能。包括创建 conditions、mutexes 以及启动 backend thread。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param os SoundIoOutStreamPrivate 的 shared_ptr
+ * @return int 返回错误码，成功则返回 0
+ */
 static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     LOGI("open wasapi outstream");
@@ -1837,6 +2089,16 @@ static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
     return 0;
 }
 
+/**
+ * @brief 暂停或恢复 WASAPI OutStream 的 playback
+ * 
+ * 设置 desired_pause_state 标志位并发送 signal，等待 background thread 处理流的 stop 或 start。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param os SoundIoOutStreamPrivate 的 shared_ptr
+ * @param pause 为 true 则暂停，false 则恢复
+ * @return int 成功返回 0
+ */
 static int outstream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1856,6 +2118,15 @@ static int outstream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::share
     return 0;
 }
 
+/**
+ * @brief 启动 WASAPI OutStream 流处理
+ * 
+ * 向 background thread 发送 signal 等待它开始推送 output frames。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param os SoundIoOutStreamPrivate 的 shared_ptr
+ * @return int 成功返回 0
+ */
 static int outstream_start_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
@@ -1866,6 +2137,18 @@ static int outstream_start_wasapi(std::shared_ptr<SoundIoPrivate> si, std::share
     return 0;
 }
 
+/**
+ * @brief 准备向 WASAPI OutStream 写入音频 frames
+ * 
+ * 从 audio_render_client 获取指定 frame_count 大小的 buffer 以供写入。
+ * 并初始化各个 channel 的 layout area 供上层填充数据。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param os SoundIoOutStreamPrivate 的 shared_ptr
+ * @param out_areas 返回被成功映射的音频数据区域通道 layout
+ * @param frame_count 希望写入的 frame 数量
+ * @return int 成功返回 0
+ */
 static int outstream_begin_write_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, SoundIoChannelArea** out_areas, int* frame_count)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1891,6 +2174,15 @@ static int outstream_begin_write_wasapi(std::shared_ptr<SoundIoPrivate> si, std:
     return 0;
 }
 
+/**
+ * @brief 结束在 WASAPI OutStream 的写入操作
+ * 
+ * 调用 ReleaseBuffer 将填充好的数据提交给 WASAPI render 引擎。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param os SoundIoOutStreamPrivate 的 shared_ptr
+ * @return int 成功返回 0
+ */
 static int outstream_end_write_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1902,6 +2194,15 @@ static int outstream_end_write_wasapi(std::shared_ptr<SoundIoPrivate> si, std::s
     return 0;
 }
 
+/**
+ * @brief 清除 WASAPI OutStream 的内部 buffer 数据
+ * 
+ * 仅对 shared mode 有效。设置 clear_buffer_flag 以清空剩余等待播放的 samples。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param os SoundIoOutStreamPrivate 的 shared_ptr
+ * @return int 成功返回 0，如果在 raw 模式则返回错误码
+ */
 static int outstream_clear_buffer_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1920,6 +2221,16 @@ static int outstream_clear_buffer_wasapi(std::shared_ptr<SoundIoPrivate> si, std
     return 0;
 }
 
+/**
+ * @brief 获取 WASAPI OutStream 当前的软件 latency
+ * 
+ * 查询 audio_client 中等待发送的 frame 数量，并转化为秒数。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param os SoundIoOutStreamPrivate 的 shared_ptr
+ * @param out_latency 返回当前的 latency
+ * @return int 成功返回 0
+ */
 static int outstream_get_latency_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, double* out_latency)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1935,6 +2246,16 @@ static int outstream_get_latency_wasapi(std::shared_ptr<SoundIoPrivate> si, std:
     return 0;
 }
 
+/**
+ * @brief 获取 WASAPI OutStream 关联的 time clock 当前的播放时间
+ * 
+ * 通过 audio_clock 接口获取设备级别的主时钟位置。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param os SoundIoOutStreamPrivate 的 shared_ptr
+ * @param out_time 输出当前播放时间的时间戳参数 (精确到秒)
+ * @return int 成功返回 0，未找到时间戳信息则返回 -1
+ */
 static int outstream_get_time_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, double* out_time)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1955,6 +2276,16 @@ static int outstream_get_time_wasapi(std::shared_ptr<SoundIoPrivate> si, std::sh
     return -1;
 }
 
+/**
+ * @brief 配置 WASAPI OutStream 特定的 volume 增益水平
+ * 
+ * 使用 audio_volume_control 配置该 stream 的 master volume 进行全局缩放控制。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param os SoundIoOutStreamPrivate 的 shared_ptr
+ * @param volume 范围应在 0.0 ~ 1.0 的音量倍数
+ * @return int 成功返回 0
+ */
 static int outstream_set_volume_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, float volume)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -2285,6 +2616,16 @@ static void instream_thread_run(std::shared_ptr<void> arg)
     instream_thread_deinit(si, is);
 }
 
+/**
+ * @brief 打开 WASAPI InStream (Input & Capture)
+ * 
+ * 初始化 WASAPI 采集流，创建相关的 conditions, mutexes 和 thread_exit_flag。
+ * 如果 device 支持 raw mode，会配置对应的 event handle。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param is SoundIoInStreamPrivate 的 shared_ptr
+ * @return int 返回错误码，成功则返回 0
+ */
 static int instream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
@@ -2347,6 +2688,16 @@ static int instream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_
     return 0;
 }
 
+/**
+ * @brief 暂停或恢复 WASAPI InStream
+ * 
+ * 根据传入的 pause 状态调用 audio_client 的 Stop 或 Start 方法实现流控制。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param is SoundIoInStreamPrivate 的 shared_ptr
+ * @param pause 若为 true 则暂停，false 则恢复
+ * @return int 返回操作结果，成功为 0
+ */
 static int instream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, bool pause)
 {
     SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
@@ -2370,6 +2721,15 @@ static int instream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
     return 0;
 }
 
+/**
+ * @brief 启动 WASAPI InStream 流处理
+ * 
+ * 发送 signal 唤醒工作 thread 以开始捕获音频数据。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param is SoundIoInStreamPrivate 的 shared_ptr
+ * @return int 成功返回 0
+ */
 static int instream_start_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
@@ -2379,6 +2739,18 @@ static int instream_start_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
     return 0;
 }
 
+/**
+ * @brief 开始从 WASAPI InStream 读取音频 frames
+ * 
+ * 请求 audio_capture_client 提供具有指定 frame_count 大小的 buffer 进行读取操作。
+ * 如果检测到 AUDCLNT_BUFFERFLAGS_SILENT，则数据置空表示静音。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param is SoundIoInStreamPrivate 的 shared_ptr
+ * @param out_areas 接收音频数据的通道区域指针
+ * @param frame_count 期望读取的 frame 数量，在此方法中可能会被修改为实际可用数量
+ * @return int 成功返回 0
+ */
 static int instream_begin_read_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is,
                                       struct SoundIoChannelArea** out_areas, int* frame_count)
 {
@@ -2425,6 +2797,15 @@ static int instream_begin_read_wasapi(std::shared_ptr<SoundIoPrivate> si, std::s
     return 0;
 }
 
+/**
+ * @brief 结束从 WASAPI InStream 读取
+ * 
+ * 释放 buffer，告知 audio_capture_client 读取操作完成。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param is SoundIoInStreamPrivate 的 shared_ptr
+ * @return int 成功返回 0
+ */
 static int instream_end_read_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
@@ -2443,6 +2824,16 @@ static int instream_end_read_wasapi(std::shared_ptr<SoundIoPrivate> si, std::sha
     return 0;
 }
 
+/**
+ * @brief 获取 WASAPI InStream 当前的软件 latency
+ * 
+ * 通过 audio_client 获取 frames_used 并转换为 latency 时间。
+ * 
+ * @param si SoundIoPrivate 的 shared_ptr
+ * @param is SoundIoInStreamPrivate 的 shared_ptr
+ * @param out_latency 返回当前的 latency (秒)
+ * @return int 成功返回 0
+ */
 static int instream_get_latency_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, double* out_latency)
 {
     SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
@@ -2462,6 +2853,13 @@ static int instream_get_latency_wasapi(std::shared_ptr<SoundIoPrivate> si, std::
 // 7. Backend Initialization & Destruction (Top Level)
 // ==============================================================================
 
+/**
+ * @brief 执行 WASAPI 系统的顶级 destroy 操作
+ * 
+ * 通知 background thread 退出，并清理同步 primitives 比如 mutexes 和 conditions。
+ * 
+ * @param si 需要被销毁的 SoundIoPrivate 的 shared_ptr
+ */
 static void destroy_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
     LOGI("destroy wasapi");
@@ -2498,26 +2896,34 @@ STDMETHODIMP soundio_NotificationClient::QueryInterface(REFIID riid, void** ppv)
     }
 }
 
-STDMETHODIMP_ (ULONG) soundio_NotificationClient::AddRef()
+STDMETHODIMP_(ULONG) soundio_NotificationClient::AddRef()
 {
     // SoundIoWasapi& siw = &si.lock()->backend_data.wasapi;
     // return InterlockedIncrement(&siw->device_events_refs);
     return S_OK;
 }
 
-STDMETHODIMP_ (ULONG) soundio_NotificationClient::Release()
+STDMETHODIMP_(ULONG) soundio_NotificationClient::Release()
 {
     // SoundIoWasapi& siw = &si.lock()->backend_data.wasapi;
     // return InterlockedDecrement(&siw->device_events_refs);
     return S_OK;
 }
 
+/**
+ * @brief 排队执行设备的 device scan
+ * 
+ * 当 NotificationClient 检测到 device 变化时，调用强制刷新 event。
+ * 
+ * @param client 通知客户端实例
+ * @return HRESULT 返回 S_OK 即不处理异常
+ */
 static HRESULT queue_device_scan(soundio_NotificationClient* client)
 {
     std::shared_ptr<SoundIoPrivate> si = client->si.lock();
     if (si == nullptr)
     {
-        printf("os is nullptr!");
+        LOGE("os is nullptr!");
         return S_OK;
     }
     force_device_scan_wasapi(si);
@@ -2555,6 +2961,15 @@ STDMETHODIMP soundio_NotificationClient::OnPropertyValueChanged(LPCWSTR wid, con
 }
 
 
+/**
+ * @brief 初始化 WASAPI backend (Top Level)
+ * 
+ * 初始化 WASAPI 的事件系统、线程互斥锁、条件变量以及 NotificationClient。
+ * 这是整个 libsoundio WASAPI support 开始工作的入口。
+ * 
+ * @param si SoundIoPrivate 实例关联
+ * @return int 初始化错误码，0 表示成功
+ */
 int soundio_wasapi_init(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;

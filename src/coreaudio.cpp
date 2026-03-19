@@ -40,6 +40,11 @@ static enum SoundIoDeviceAim aims[] =
         SoundIoDeviceAimOutput,
 };
 
+/**
+ * @brief 处理设备层级变动的 CoreAudio 底层通知 hook
+ * 
+ * 当设备列表发生更改时触发。
+ */
 OSStatus CoreAudioCallback::devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[])
 {
     LOGI("on devices changed {}", in_object_id);
@@ -53,6 +58,11 @@ OSStatus CoreAudioCallback::devices_changed(AudioObjectID in_object_id, UInt32 i
     return noErr;
 }
 
+/**
+ * @brief 响应音频系统服务重启的回调
+ * 
+ * 通常在系统层级 daemon crash 并自动拉起时被调用。
+ */
 OSStatus CoreAudioCallback::service_restarted(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[])
 {
     std::shared_ptr<SoundIoPrivate> s = si.lock();
@@ -68,6 +78,9 @@ OSStatus CoreAudioCallback::service_restarted(AudioObjectID in_object_id, UInt32
     return noErr;
 }
 
+/**
+ * @brief 处理由于 hardware 负担过重引起的 stream 超载信息回调
+ */
 OSStatus CoreAudioCallback::outstream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[])
 {
     std::shared_ptr<SoundIoOutStreamPrivate> os = out_stream.lock();
@@ -79,6 +92,9 @@ OSStatus CoreAudioCallback::outstream_device_overload(AudioObjectID in_object_id
     return noErr;
 }
 
+/**
+ * @brief 注销先前订阅的设备级别的 system properties listeners
+ */
 void CoreAudioCallback::unsubscribe_device_listeners() const
 {
     std::shared_ptr<SoundIoPrivate> s = si.lock();
@@ -103,18 +119,27 @@ void CoreAudioCallback::unsubscribe_device_listeners() const
     sica.registered_listeners.clear();
 }
 
+/**
+ * @brief 将基于 C 的回调传递给对应的 C++ instance devices_changed 方法处理
+ */
 OSStatus CoreAudioCallback::on_devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data)
 {
     CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->devices_changed(in_object_id, in_number_addresses, in_addresses);
 }
 
+/**
+ * @brief 将基于 C 的回调传递给对应的 C++ instance service_restarted 处理
+ */
 OSStatus CoreAudioCallback::on_service_restarted(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data)
 {
     CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->service_restarted(in_object_id, in_number_addresses, in_addresses);
 }
 
+/**
+ * @brief 触发 C++ 层级的 outstream_device_overload 调用处理
+ */
 OSStatus CoreAudioCallback::on_outstream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[],
                                                          void* in_client_data)
 {
@@ -122,6 +147,9 @@ OSStatus CoreAudioCallback::on_outstream_device_overload(AudioObjectID in_object
     return callback->outstream_device_overload(in_object_id, in_number_addresses, in_addresses);
 }
 
+/**
+ * @brief 触发实例化对象本身的 instream_device_overload
+ */
 OSStatus CoreAudioCallback::on_instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[],
                                                         void* in_client_data)
 {
@@ -129,6 +157,9 @@ OSStatus CoreAudioCallback::on_instream_device_overload(AudioObjectID in_object_
     return callback->instream_device_overload(in_object_id, in_number_addresses, in_addresses);
 }
 
+/**
+ * @brief CoreAudio AudioUnit 的渲染钩子，用于转发布局请求到 write_callback_ca
+ */
 OSStatus CoreAudioCallback::write_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number,
                                            UInt32 in_number_frames, AudioBufferList* io_data)
 {
@@ -136,6 +167,9 @@ OSStatus CoreAudioCallback::write_callback(void* userdata, AudioUnitRenderAction
     return callback->write_callback_ca(io_action_flags, in_time_stamp, in_bus_number, in_number_frames, io_data);
 }
 
+/**
+ * @brief 解除挂载的 listeners
+ */
 void CoreAudioCallback::unsubscribe_device_listeners(std::shared_ptr<SoundIoPrivate> si)
 {
     si->backend_data->coreaudio.callback->unsubscribe_device_listeners();
@@ -175,11 +209,17 @@ static std::wstring from_cf_string(CFStringRef string_ref)
     return wstr;
 }
 
+/**
+ * @brief 将通用 SoundIoDeviceAim 输入输出类型转换为苹果原生定义的 Scope
+ */
 static int aim_to_scope(enum SoundIoDeviceAim aim)
 {
     return (aim == SoundIoDeviceAimInput) ? kAudioObjectPropertyScopeInput : kAudioObjectPropertyScopeOutput;
 }
 
+/**
+ * @brief 从指定的 AudioChannelDescription 找出其对应于 libsoundio 通用的 channel tag
+ */
 static enum SoundIoChannelId from_channel_descr(const AudioChannelDescription* descr)
 {
     switch (descr->mChannelLabel)
@@ -315,6 +355,11 @@ static enum SoundIoChannelId from_channel_descr(const AudioChannelDescription* d
     }
 }
 
+/**
+ * @brief 将苹果特有的 AudioChannelLayout 枚举转换为通用的 SoundIoChannelLayout 配置数据对象
+ * 
+ * 注意该转换并未覆盖所有布局组合或者是 channel bitmaps。
+ */
 // See https://developer.apple.com/library/mac/documentation/MusicAudio/Reference/CoreAudioDataTypesRef/#//apple_ref/doc/constant_group/Audio_Channel_Layout_Tags
 // Possible Errors:
 // * SoundIoErrorIncompatibleDevice
@@ -441,6 +486,9 @@ static int from_coreaudio_layout(const AudioChannelLayout* ca_layout, struct Sou
     return 0;
 }
 
+/**
+ * @brief 检查 channel layout 是不是包含全无效标示
+ */
 static bool all_channels_invalid(const struct SoundIoChannelLayout* layout)
 {
     for (int i = 0; i < layout->channel_count; i += 1)
@@ -463,6 +511,9 @@ struct RefreshDevices
     bool ok;
 };
 
+/**
+ * @brief 释放并销毁 RefreshDevices 中包裹的资源
+ */
 static void deinit_refresh_devices(struct RefreshDevices* rd)
 {
     if (!rd->ok)
@@ -475,6 +526,9 @@ static void deinit_refresh_devices(struct RefreshDevices* rd)
     rd->device_uid.clear();
 }
 
+/**
+ * @brief 全局刷新设备状态，与 CoreAudio framework 进行同步和轮询
+ */
 static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 {
     std::shared_ptr<SoundIo> soundio = si;
@@ -830,6 +884,9 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
     return 0;
 }
 
+/**
+ * @brief 响应故障进而卸下后端设备并通告主程序断开消息
+ */
 static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
 {
     SoundIoCoreAudio& sica = si->backend_data->coreaudio;
@@ -840,6 +897,9 @@ static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
     si->on_events_signal(si);
 }
 
+/**
+ * @brief 拉取在 device 操作上抛出的 event 队列，处理 disconnect 及 devices_change signals
+ */
 static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
 {
     SoundIoCoreAudio& sica = si->backend_data->coreaudio;
@@ -879,16 +939,25 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
     }
 }
 
+/**
+ * @brief 执行非阻塞刷新 CA events 接口
+ */
 static void flush_events_ca(std::shared_ptr<SoundIoPrivate> si)
 {
     my_flush_events(si, false);
 }
 
+/**
+ * @brief 执行强阻塞挂起用于截获 CA events
+ */
 static void wait_events_ca(std::shared_ptr<SoundIoPrivate> si)
 {
     my_flush_events(si, true);
 }
 
+/**
+ * @brief 主动给 thread 派发结束阻塞挂起的 cond signal 
+ */
 static void wakeup_ca(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoCoreAudio& sica = si->backend_data->coreaudio;
@@ -896,6 +965,9 @@ static void wakeup_ca(std::shared_ptr<SoundIoPrivate> si)
     sica.cond->signal(&lock);
 }
 
+/**
+ * @brief 强制触发 background 开始检索和处理设备的列表改动
+ */
 static void force_device_scan_ca(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoCoreAudio& sica = si->backend_data->coreaudio;
@@ -906,6 +978,9 @@ static void force_device_scan_ca(std::shared_ptr<SoundIoPrivate> si)
     sica.scan_devices_cond->signal(&scan_lock);
 }
 
+/**
+ * @brief CoreAudio devices 检测 background thread 执行框架
+ */
 static void device_thread_run(std::shared_ptr<void> arg)
 {
     std::shared_ptr<SoundIoPrivate> si = std::static_pointer_cast<SoundIoPrivate>(arg);
@@ -939,6 +1014,9 @@ static void device_thread_run(std::shared_ptr<void> arg)
     lock.unlock();
 }
 
+/**
+ * @brief 彻底撤解 output unit 和解除其对外接口封装对象的依赖
+ */
 static void outstream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     LOGI("destroy core audio outstream");
@@ -958,6 +1036,9 @@ static void outstream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared
     }
 }
 
+/**
+ * @brief 具体将框架层缓冲映射交由 user callback 的 CoreAudio implementation 过程实现
+ */
 OSStatus CoreAudioCallback::write_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
                                               AudioBufferList* io_data)
 {
@@ -978,6 +1059,9 @@ OSStatus CoreAudioCallback::write_callback_ca(AudioUnitRenderActionFlags* io_act
     return noErr;
 }
 
+/**
+ * @brief 基于指定的 format 初始化目标 ASBD (AudioStreamBasicDescription) 数据位宽或标示符
+ */
 static int set_ca_desc(enum SoundIoFormat fmt, AudioStreamBasicDescription* desc)
 {
     switch (fmt)
@@ -1008,6 +1092,15 @@ static int set_ca_desc(enum SoundIoFormat fmt, AudioStreamBasicDescription* desc
     return SoundIoErrorNone;
 }
 
+/**
+ * @brief 在 macOS 下以指定的 layout 和 format 激活并初始化 CoreAudio outstream
+ * 
+ * 搜索 AudioDevice 并设置 format 关联到指定的 AudioUnitOutput 单元。
+ * 
+ * @param si CoreAudio system 指针
+ * @param os 输出流上下文封装
+ * @return int 成功则返回 0
+ */
 static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     LOGI("open core audio outstream");
@@ -1124,6 +1217,9 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     return 0;
 }
 
+/**
+ * @brief 通过 AudioOutputUnitStop 达到停止 output 目标数据的处理，反之则开始
+ */
 static int outstream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause)
 {
     SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
@@ -1148,11 +1244,17 @@ static int outstream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_pt
     return 0;
 }
 
+/**
+ * @brief 触发 stream 首播，包装了底层 pause 的逻辑控制
+ */
 static int outstream_start_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     return outstream_pause_ca(si, os, false);
 }
 
+/**
+ * @brief 在回调阶段通过将内存 layout 推给 out_areas 给应用进行后续填入准备
+ */
 static int outstream_begin_write_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, struct SoundIoChannelArea** out_areas, int* frame_count)
 {
     SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
@@ -1180,6 +1282,9 @@ static int outstream_begin_write_ca(std::shared_ptr<SoundIoPrivate> si, std::sha
     return 0;
 }
 
+/**
+ * @brief 数据填充完成时确认并提交缓冲段游标
+ */
 static int outstream_end_write_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
@@ -1189,11 +1294,17 @@ static int outstream_end_write_ca(std::shared_ptr<SoundIoPrivate> si, std::share
     return 0;
 }
 
+/**
+ * @brief Backend 阻挡对清空缓存 buffer 的请求
+ */
 static int outstream_clear_buffer_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
     return SoundIoErrorIncompatibleBackend;
 }
 
+/**
+ * @brief 从系统取 latency，包括 hardware latency 和 system 提供的值
+ */
 static int outstream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os,
                                     double* out_latency)
 {
@@ -1202,6 +1313,9 @@ static int outstream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::sha
     return 0;
 }
 
+/**
+ * @brief 映射音量更改给 CoreAudio device 的 master/channel scope
+ */
 static int outstream_set_volume_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, float volume)
 {
     SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
@@ -1214,6 +1328,9 @@ static int outstream_set_volume_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
     return 0;
 }
 
+/**
+ * @brief 回调转发系统麦克风等 Input overload 过载告警
+ */
 OSStatus CoreAudioCallback::instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]) const
 {
     std::shared_ptr<SoundIoInStreamPrivate> is = in_stream.lock();
@@ -1227,6 +1344,9 @@ OSStatus CoreAudioCallback::instream_device_overload(AudioObjectID in_object_id,
 }
 
 
+/**
+ * @brief 对 HAL 层销毁 instream 并终止系统级 AU 单元服务
+ */
 static void instream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     si->backend_data->coreaudio.callback->in_stream.reset();
@@ -1247,6 +1367,9 @@ static void instream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_
     isca.buffer_list = nullptr;
 }
 
+/**
+ * @brief Instream (捕捉/录音) 期间被系统填充数据触发的 handler entry
+ */
 OSStatus CoreAudioCallback::read_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number,
                                           UInt32 in_number_frames,
                                           AudioBufferList* io_data)
@@ -1255,6 +1378,9 @@ OSStatus CoreAudioCallback::read_callback(void* userdata, AudioUnitRenderActionF
     return callback->read_callback_ca(io_action_flags, in_time_stamp, in_bus_number, in_number_frames, io_data);
 }
 
+/**
+ * @brief 获取渲染数据提供给应用程序提取 input stream 内容
+ */
 OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
                                              AudioBufferList* io_data)
 {
@@ -1307,6 +1433,9 @@ OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags* io_acti
     return noErr;
 }
 
+/**
+ * @brief 解析 macOS DefaultInputDevice 并建立 Input Unit AudioComponent
+ */
 static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     si->backend_data->coreaudio.callback->in_stream = is;
@@ -1453,6 +1582,9 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
     return 0;
 }
 
+/**
+ * @brief 调用 AudioOutputUnit (Input Scope) 的停止操作
+ */
 static int instream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, bool pause)
 {
     SoundIoInStreamCoreAudio& isca = is->backend_data.coreaudio;
@@ -1477,11 +1609,17 @@ static int instream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     return 0;
 }
 
+/**
+ * @brief 绑定读数据回调引用并通知底端开启 capture 过程
+ */
 static int instream_start_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     return instream_pause_ca(si, is, false);
 }
 
+/**
+ * @brief 请求系统内存并绑定指针地址给 instream 以供 app 截获麦克风等设备音频数据
+ */
 static int instream_begin_read_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, struct SoundIoChannelArea** out_areas, int* frame_count)
 {
     SoundIoInStreamCoreAudio& isca = is->backend_data.coreaudio;
@@ -1495,6 +1633,9 @@ static int instream_begin_read_ca(std::shared_ptr<SoundIoPrivate> si, std::share
     return 0;
 }
 
+/**
+ * @brief 完成读取标记，准备让出当前区域
+ */
 static int instream_end_read_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
 {
     struct SoundIoInStreamCoreAudio* isca = &is->backend_data.coreaudio;
@@ -1502,6 +1643,9 @@ static int instream_end_read_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_
     return 0;
 }
 
+/**
+ * @brief 评估 macOS 设备的音频捕捉 latency 时间差
+ */
 static int instream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, double* out_latency)
 {
     SoundIoInStreamCoreAudio& isca = is->backend_data.coreaudio;
@@ -1510,6 +1654,9 @@ static int instream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
 }
 
 
+/**
+ * @brief 通知退出背景更新进程并解除各类全局 system observers 的订阅
+ */
 static void destroy_core_audio(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoCoreAudio& sica = si->backend_data->coreaudio;
@@ -1549,6 +1696,14 @@ static void destroy_core_audio(std::shared_ptr<SoundIoPrivate> si)
     sica.ready_devices_info = nullptr;
 }
 
+/**
+ * @brief SoundIo coreaudio 的模块化总入口
+ * 
+ * 执行 CoreAudio devices 服务挂载、listener 设定，分配 OS resources 给设备扫描 task。
+ * 
+ * @param si libsoundio backend instances
+ * @return int 成功返回 0，无内存报告则报错
+ */
 int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si)
 {
     SoundIoCoreAudio& sica = si->backend_data->coreaudio;

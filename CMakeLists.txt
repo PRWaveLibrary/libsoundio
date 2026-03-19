@@ -31,9 +31,6 @@ option(SOUNDIO_BUILD_STATIC_LIBS "Build static libraries" ON)
 option(SOUNDIO_BUILD_DYNAMIC_LIBS "Build dynamic libraries" ON)
 option(SOUNDIO_BUILD_EXAMPLE_PROGRAMS "Build example programs" ON)
 option(SOUNDIO_BUILD_TESTS "Build tests" ON)
-option(SOUNDIO_ENABLE_JACK "Enable JACK backend" OFF)
-option(SOUNDIO_ENABLE_PULSEAUDIO "Enable PulseAudio backend" OFF)
-option(SOUNDIO_ENABLE_ALSA "Enable ALSA backend" ON)
 option(SOUNDIO_ENABLE_COREAUDIO "Enable CoreAudio backend" ON)
 option(SOUNDIO_ENABLE_COREAUDIO_IOS "Enable CoreAudio iOS backend" ON)
 option(SOUNDIO_ENABLE_OBOE "Enable Android Oboe backend" ON)
@@ -45,58 +42,6 @@ if (Threads_FOUND)
 else (Threads_FOUND)
     set(STATUS_THREADS "not found")
 endif (Threads_FOUND)
-
-if (SOUNDIO_ENABLE_JACK)
-    find_package(JACK)
-    if (JACK_FOUND)
-        set(STATUS_JACK "OK")
-        set(SOUNDIO_HAVE_JACK true)
-        include_directories(${JACK_INCLUDE_DIR})
-    else ()
-        set(STATUS_JACK "not found")
-        set(SOUNDIO_HAVE_JACK false)
-        set(JACK_LIBRARY "")
-    endif ()
-else ()
-    set(STATUS_JACK "disabled")
-    set(SOUNDIO_HAVE_JACK false)
-    set(JACK_LIBRARY "")
-endif ()
-
-if (SOUNDIO_ENABLE_PULSEAUDIO)
-    find_package(PulseAudio)
-    if (PULSEAUDIO_FOUND)
-        set(STATUS_PULSEAUDIO "OK")
-        set(SOUNDIO_HAVE_PULSEAUDIO true)
-        include_directories(${PULSEAUDIO_INCLUDE_DIR})
-    else ()
-        set(STATUS_PULSEAUDIO "not found")
-        set(SOUNDIO_HAVE_PULSEAUDIO false)
-        set(PULSEAUDIO_LIBRARY "")
-    endif ()
-else ()
-    set(STATUS_PULSEAUDIO "disabled")
-    set(SOUNDIO_HAVE_PULSEAUDIO false)
-    set(PULSEAUDIO_LIBRARY "")
-endif ()
-
-if (SOUNDIO_ENABLE_ALSA)
-    find_package(ALSA)
-    if (ALSA_FOUND)
-        set(STATUS_ALSA "OK")
-        set(SOUNDIO_HAVE_ALSA true)
-        include_directories(${ALSA_INCLUDE_DIRS})
-    else ()
-        set(STATUS_ALSA "not found")
-        set(SOUNDIO_HAVE_ALSA false)
-        set(ALSA_LIBRARIES "")
-    endif ()
-else ()
-    set(STATUS_ALSA "disabled")
-    set(SOUNDIO_HAVE_ALSA false)
-    set(ALSA_LIBRARIES "")
-endif ()
-
 
 if (SOUNDIO_ENABLE_COREAUDIO AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
     find_package(COREAUDIO)
@@ -182,18 +127,6 @@ set(LIBSOUNDIO_HEADERS
         "${libsoundio_SOURCE_DIR}/logger/logger.hpp"
 )
 
-if (SOUNDIO_HAVE_JACK)
-    list(APPEND LIBSOUNDIO_SOURCES "${libsoundio_SOURCE_DIR}/src/jack.c")
-endif ()
-
-if (SOUNDIO_HAVE_PULSEAUDIO)
-    list(APPEND LIBSOUNDIO_SOURCES "${libsoundio_SOURCE_DIR}/src/pulseaudio.c")
-endif ()
-
-if (SOUNDIO_HAVE_ALSA)
-    list(APPEND LIBSOUNDIO_SOURCES "${libsoundio_SOURCE_DIR}/src/alsa.c")
-endif ()
-
 if (SOUNDIO_HAVE_COREAUDIO)
     list(APPEND LIBSOUNDIO_SOURCES "${libsoundio_SOURCE_DIR}/src/coreaudio.cpp")
 endif ()
@@ -247,9 +180,6 @@ include_directories(
 )
 
 set(LIBSOUNDIO_LIBS
-        ${JACK_LIBRARY}
-        ${PULSEAUDIO_LIBRARY}
-        ${ALSA_LIBRARIES}
         ${COREAUDIO_LIBRARY}
         ${COREFOUNDATION_LIBRARY}
         ${AUDIOUNIT_LIBRARY}
@@ -391,9 +321,6 @@ message(
         "System Dependencies\n"
         "-------------------\n"
         "* threads                      : ${STATUS_THREADS}\n"
-        "* JACK           (optional)    : ${STATUS_JACK}\n"
-        "* PulseAudio     (optional)    : ${STATUS_PULSEAUDIO}\n"
-        "* ALSA           (optional)    : ${STATUS_ALSA}\n"
         "* CoreAudio      (optional)    : ${STATUS_COREAUDIO}\n"
         "* CoreAudio iOS  (optional)    : ${STATUS_COREAUDIO_IOS}\n"
         "* Oboe           (optional)    : ${STATUS_OBOE}\n"
