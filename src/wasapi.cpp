@@ -1372,7 +1372,7 @@ static void outstream_thread_deinit(std::shared_ptr<SoundIoPrivate> si, std::sha
  */
 static void outstream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
-    LOGI("destroy wasapi");
+    LOGI("destroy wasapi outstream");
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
 
     if (osw.thread)
@@ -2881,6 +2881,10 @@ static void destroy_wasapi(std::shared_ptr<SoundIoPrivate> si)
     siw.scan_devices_cond = nullptr;
     siw.scan_devices_mutex = nullptr;
     siw.mutex = nullptr;
+
+
+    outstream_destroy_wasapi(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
+
 }
 
 STDMETHODIMP soundio_NotificationClient::QueryInterface(REFIID riid, void** ppv)

@@ -359,7 +359,9 @@ void soundio_disconnect(std::shared_ptr<SoundIo> soundio)
     std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
 
     if (!si)
+    {
         return;
+    }
 
     if (si->destroy)
     {
@@ -370,31 +372,32 @@ void soundio_disconnect(std::shared_ptr<SoundIo> soundio)
     soundio->current_backend = SoundIoBackendNone;
 
     // soundio_destroy_devices_info(si->safe_devices_info);
-    si->safe_devices_info = NULL;
+    si->safe_devices_info = nullptr;
 
-    si->destroy = NULL;
-    si->flush_events = NULL;
-    si->wait_events = NULL;
-    si->wakeup = NULL;
-    si->force_device_scan = NULL;
+    si->destroy = nullptr;
+    si->flush_events = nullptr;
+    si->wait_events = nullptr;
+    si->wakeup = nullptr;
+    si->force_device_scan = nullptr;
 
-    si->outstream_open = NULL;
-    si->outstream_destroy = NULL;
-    si->outstream_start = NULL;
-    si->outstream_begin_write = NULL;
-    si->outstream_end_write = NULL;
-    si->outstream_clear_buffer = NULL;
-    si->outstream_pause = NULL;
-    si->outstream_get_latency = NULL;
-    si->outstream_set_volume = NULL;
+    si->outstream_open = nullptr;
+    si->outstream_destroy = nullptr;
+    si->outstream_start = nullptr;
+    si->outstream_begin_write = nullptr;
+    si->outstream_end_write = nullptr;
+    si->outstream_clear_buffer = nullptr;
+    si->outstream_pause = nullptr;
+    si->outstream_get_latency = nullptr;
+    si->outstream_set_volume = nullptr;
+    si->outstream_get_time = nullptr;
 
-    si->instream_open = NULL;
-    si->instream_destroy = NULL;
-    si->instream_start = NULL;
-    si->instream_begin_read = NULL;
-    si->instream_end_read = NULL;
-    si->instream_pause = NULL;
-    si->instream_get_latency = NULL;
+    si->instream_open = nullptr;
+    si->instream_destroy = nullptr;
+    si->instream_start = nullptr;
+    si->instream_begin_read = nullptr;
+    si->instream_end_read = nullptr;
+    si->instream_pause = nullptr;
+    si->instream_get_latency = nullptr;
 }
 
 void soundio_flush_events(std::shared_ptr<SoundIo> soundio)

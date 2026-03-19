@@ -1657,8 +1657,10 @@ static int instream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
 /**
  * @brief 通知退出背景更新进程并解除各类全局 system observers 的订阅
  */
-static void destroy_core_audio(std::shared_ptr<SoundIoPrivate> si)
+static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
 {
+    LOGI("destroy core audio");
+
     SoundIoCoreAudio& sica = si->backend_data->coreaudio;
 
     soundio_outstream_destroy(si->outstream);
@@ -1694,6 +1696,8 @@ static void destroy_core_audio(std::shared_ptr<SoundIoPrivate> si)
     sica.scan_devices_cond = nullptr;
 
     sica.ready_devices_info = nullptr;
+
+    outstream_destroy_ca(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
 }
 
 /**
@@ -1718,28 +1722,28 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si)
     sica.mutex = soundio_os_mutex_create();
     if (!sica.mutex)
     {
-        destroy_core_audio(si);
+        destroy_ca(si);
         return SoundIoErrorNoMem;
     }
 
     sica.cond = soundio_os_cond_create();
     if (!sica.cond)
     {
-        destroy_core_audio(si);
+        destroy_ca(si);
         return SoundIoErrorNoMem;
     }
 
     sica.scan_devices_mutex = soundio_os_mutex_create();
     if (!sica.scan_devices_mutex)
     {
-        destroy_core_audio(si);
+        destroy_ca(si);
         return SoundIoErrorNoMem;
     }
 
     sica.scan_devices_cond = soundio_os_cond_create();
     if (!sica.scan_devices_cond)
     {
-        destroy_core_audio(si);
+        destroy_ca(si);
         return SoundIoErrorNoMem;
     }
 
@@ -1747,7 +1751,7 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si)
     err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si->backend_data->coreaudio.callback.get());
     if (err != noErr)
     {
-        destroy_core_audio(si);
+        destroy_ca(si);
         return SoundIoErrorSystemResources;
     }
 
@@ -1755,7 +1759,7 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si)
     err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si->backend_data->coreaudio.callback.get());
     if (err != noErr)
     {
-        destroy_core_audio(si);
+        destroy_ca(si);
         return SoundIoErrorSystemResources;
     }
 
@@ -1763,7 +1767,7 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si)
     err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si->backend_data->coreaudio.callback.get());
     if (err != noErr)
     {
-        destroy_core_audio(si);
+        destroy_ca(si);
         return SoundIoErrorSystemResources;
     }
 
@@ -1771,13 +1775,13 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si)
     err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_service_restarted, si->backend_data->coreaudio.callback.get());
     if (err != noErr)
     {
-        destroy_core_audio(si);
+        destroy_ca(si);
         return SoundIoErrorSystemResources;
     }
 
     sica.thread = SoundIoOsThread::create(device_thread_run, si);
 
-    si->destroy = destroy_core_audio;
+    si->destroy = destroy_ca;
     si->flush_events = flush_events_ca;
     si->wait_events = wait_events_ca;
     si->wakeup = wakeup_ca;

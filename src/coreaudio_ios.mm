@@ -37,9 +37,10 @@ void CoreAudioInstanceDeleter::operator()(OpaqueAudioComponentInstance* stream) 
  * 
  * @param si Global root 实例的共享指针
  */
-static void destroy_ca(std::shared_ptr<SoundIoPrivate> si) {
+static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
+{
+    LOGI("destroy core audio");
     SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
-
 
     if (sica.thread) {
         std::unique_lock lock(sica.scan_devices_mutex->get());
@@ -54,6 +55,8 @@ static void destroy_ca(std::shared_ptr<SoundIoPrivate> si) {
     sica.scan_devices_cond = nullptr;
     sica.mutex = nullptr;
     sica.ready_devices_info = nullptr;
+
+    outstream_destroy_ca(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
 }
 
 /**
@@ -276,6 +279,7 @@ static void device_thread_run(std::shared_ptr<void> arg) {
  */
 static void outstream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
+    LOGI("destroy core audio outstream");
     os->backend_data.coreaudio_ios.instance = nullptr;
     si->backend_data->coreaudio_ios.callback->out_stream.reset();
 }

@@ -246,10 +246,11 @@ static void force_device_scan_oboe(std::shared_ptr<SoundIoPrivate> si)
  */
 static void outstream_destroy_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
-    struct SoundIoOutStreamOboe* oso = &os->backend_data.oboe;
-    oso->audio_stream = nullptr;
-    oso->callback = nullptr;
-    oso->error_callback = nullptr;
+    LOGI("destroy oboe outstream");
+    SoundIoOutStreamOboe& oso = os->backend_data.oboe;
+    oso.audio_stream = nullptr;
+    oso.callback = nullptr;
+    oso.error_callback = nullptr;
 }
 
 void OboeStreamDeleter::operator()(oboe::AudioStream* stream) const
@@ -570,6 +571,8 @@ static void destroy_oboe(std::shared_ptr<SoundIoPrivate> si)
     sio.mutex = nullptr;
     sio.scan_devices_cond = nullptr;
     sio.scan_devices_mutex = nullptr;
+
+    outstream_destroy_oboe(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
 }
 
 /**
