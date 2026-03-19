@@ -13,7 +13,7 @@
 #include <memory>
 #include <vector>
 #include <string>
-#include "logger/logger.h"
+#include "logger/logger.hpp"
 
 /// \cond
 #ifdef __cplusplus

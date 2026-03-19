@@ -158,7 +158,7 @@ static void device_thread_run(std::shared_ptr<void> arg)
 
     std::unique_lock lock(sio.scan_devices_mutex->get());
 
-    while (sio.abort_flag.test_and_set())
+    while (sio.abort_flag.test())
     {
         if (sio.device_scan_queued.load())
         {

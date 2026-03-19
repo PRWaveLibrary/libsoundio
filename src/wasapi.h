@@ -116,7 +116,7 @@ struct SoundIoWasapi
     std::unique_ptr<SoundIoOsCond> scan_devices_cond;
     std::unique_ptr<SoundIoOsMutex> scan_devices_mutex;
     std::unique_ptr<SoundIoOsThread> thread = nullptr;
-    bool abort_flag;
+    std::atomic_flag abort_flag = ATOMIC_FLAG_INIT;
     // this one is ready to be read with flush_events. protected by mutex
     std::unique_ptr<struct SoundIoDevicesInfo> ready_devices_info;
     bool have_devices_flag;
@@ -140,9 +140,9 @@ public:
 
     IFACEMETHODIMP QueryInterface(REFIID riid, void** ppv);
 
-    IFACEMETHODIMP_(ULONG) AddRef();
+    IFACEMETHODIMP_ (ULONG) AddRef();
 
-    IFACEMETHODIMP_(ULONG) Release();
+    IFACEMETHODIMP_ (ULONG) Release();
 
     // IMMNotificationClient methods
     IFACEMETHODIMP OnDeviceStateChanged(LPCWSTR pwstrDeviceId, DWORD dwNewState);

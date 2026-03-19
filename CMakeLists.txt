@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 4.0)
 project(libsoundio LANGUAGES CXX)
 set(CMAKE_MODULE_PATH ${libsoundio_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 
@@ -11,15 +11,7 @@ set(CMAKE_OBJCXX_STANDARD 20)
 set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
 set(CMAKE_OBJCXX_EXTENSIONS OFF)
 
-if (CMAKE_VERSION VERSION_LESS 3.0.0)
-    set(CMAKE_INSTALL_LIBDIR "lib" CACHE PATH "library install dir (lib)")
-    set(CMAKE_INSTALL_INCLUDEDIR "include" CACHE PATH "header base install dir (include)")
-    set(CMAKE_INSTALL_BINDIR "bin" CACHE PATH "user executables (bin)")
-else ()
-    cmake_policy(SET CMP0042 NEW)
-    cmake_policy(SET CMP0046 NEW)
-    include(GNUInstallDirs)
-endif ()
+include(GNUInstallDirs)
 
 if (NOT CMAKE_SOUNDIO_BUILD_TYPE)
     set(CMAKE_SOUNDIO_BUILD_TYPE "Debug" CACHE STRING
@@ -188,7 +180,7 @@ set(CONFIGURE_OUT_FILE "${libsoundio_BINARY_DIR}/config.h")
 set(LIBSOUNDIO_HEADERS
         "${libsoundio_SOURCE_DIR}/soundio/soundio.h"
         "${libsoundio_SOURCE_DIR}/soundio/endian.h"
-        "${libsoundio_SOURCE_DIR}/logger/logger.h"
+        "${libsoundio_SOURCE_DIR}/logger/logger.hpp"
 )
 
 if (SOUNDIO_HAVE_JACK)

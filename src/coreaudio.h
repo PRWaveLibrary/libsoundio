@@ -16,11 +16,6 @@
 #include <AudioUnit/AudioUnit.h>
 #include <CoreAudio/CoreAudio.h>
 
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 struct SoundIoPrivate;
 struct SoundIoOutStreamPrivate;
 struct SoundIoInStreamPrivate;
@@ -75,11 +70,9 @@ struct CoreAudioCallback
 
     OSStatus instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]) const;
 
-    OSStatus write_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
-                               AudioBufferList* io_data);
+    OSStatus write_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList* io_data);
 
-    OSStatus read_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
-                              AudioBufferList* io_data);
+    OSStatus read_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList* io_data);
 
 
     void unsubscribe_device_listeners() const;
@@ -122,7 +115,5 @@ struct SoundIoInStreamCoreAudio
     double hardware_latency;
     struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };
-#ifdef __cplusplus
-}
-#endif
+
 #endif

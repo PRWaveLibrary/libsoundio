@@ -913,7 +913,7 @@ static void device_thread_run(std::shared_ptr<void> arg)
 
     std::unique_lock lock(sica.scan_devices_mutex->get());
 
-    while (sica.abort_flag.test_and_set())
+    while (sica.abort_flag.test())
     {
         if (sica.service_restarted.load())
         {
