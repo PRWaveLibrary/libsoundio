@@ -10,7 +10,6 @@
 
 #include "soundio_internal.h"
 #include "os.h"
-#include "list.h"
 #include <atomic>
 
 #include <AudioToolbox/AudioToolbox.h>

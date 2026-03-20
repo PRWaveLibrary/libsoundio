@@ -7,8 +7,9 @@
 
 #include "coreaudio_ios.h"
 #include "soundio_private.h"
+#include "util.h"
 
-#include <assert.h>
+#include <cassert>
 #include <AVFoundation/AVFoundation.h>
 
 static const int OUTPUT_ELEMENT = 0;
@@ -29,35 +30,6 @@ void CoreAudioInstanceDeleter::operator()(OpaqueAudioComponentInstance* stream) 
     }
 }
 
-
-/**
- * @brief 回收所有的 Backend 资源以及相关的 system thread
- * 
- * 强制发送停止 event 给 background device 处理线程以确保安全。
- * 
- * @param si Global root 实例的共享指针
- */
-static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
-{
-    LOGI("destroy core audio");
-    SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
-
-    if (sica.thread) {
-        std::unique_lock lock(sica.scan_devices_mutex->get());
-        
-        sica.abort_flag.test_and_set();
-        sica.scan_devices_cond->signal(&lock);
-        lock.unlock();
-        sica.thread = nullptr;
-    }
-
-    sica.cond = nullptr;
-    sica.scan_devices_cond = nullptr;
-    sica.mutex = nullptr;
-    sica.ready_devices_info = nullptr;
-
-    outstream_destroy_ca(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
-}
 
 /**
  * @brief 通过 AVAudioSession 解析 iOS 的 device 并构建 SoundIo 属性信息
@@ -847,6 +819,37 @@ static int instream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
     *out_latency = isca->hardware_latency;
     return 0;
 }
+
+
+/**
+ * @brief 回收所有的 Backend 资源以及相关的 system thread
+ *
+ * 强制发送停止 event 给 background device 处理线程以确保安全。
+ *
+ * @param si Global root 实例的共享指针
+ */
+static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
+{
+    LOGI("destroy core audio");
+    SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
+
+    if (sica.thread) {
+        std::unique_lock lock(sica.scan_devices_mutex->get());
+        
+        sica.abort_flag.test_and_set();
+        sica.scan_devices_cond->signal(&lock);
+        lock.unlock();
+        sica.thread = nullptr;
+    }
+
+    sica.cond = nullptr;
+    sica.scan_devices_cond = nullptr;
+    sica.mutex = nullptr;
+    sica.ready_devices_info = nullptr;
+
+    outstream_destroy_ca(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
+}
+
 
 /**
  * @brief 为 iOS CoreAudio 支持挂载 system primitives, threads 和 callback assignments
