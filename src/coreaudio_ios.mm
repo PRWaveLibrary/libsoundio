@@ -11,6 +11,7 @@
 
 #include <cassert>
 #include <AVFoundation/AVFoundation.h>
+#include "oc_method_swizzling.h"
 
 static const int OUTPUT_ELEMENT = 0;
 static const int INPUT_ELEMENT = 1;
@@ -75,8 +76,8 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si) {
         dev->sample_rates.push_back(SoundIoSampleRateRange{dev->sample_rate_current, dev->sample_rate_current});
         
         dev->software_latency_current = aim == SoundIoDeviceAimOutput ? session.outputLatency : session.inputLatency;
-        dev->software_latency_min = dev->software_latency_current;
-        dev->software_latency_max = dev->software_latency_current;
+        dev->software_latency_min = 0.0001;
+        dev->software_latency_max = 0.02;
         
         std::vector<std::shared_ptr<SoundIoDevice>>* device_list;
         if (dev->aim == SoundIoDeviceAimOutput)
@@ -349,11 +350,30 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
 
     if (os->software_latency == 0.0)
     {
-        os->software_latency = dev->software_latency_current;
+        // 外部未指定则使用五毫秒,48000约256byte
+        os->software_latency = 0.005;
     }
 
     os->software_latency = soundio_double_clamp(dev->software_latency_min, os->software_latency, dev->software_latency_max);
-
+    
+    NSError* ns_err;
+    AVAudioSession* session = AVAudioSession.sharedInstance;
+    BOOL isOk = [session setPreferredIOBufferDuration:os->software_latency error:&ns_err];
+    if(!isOk){
+        LOGE("Audio Session Error: {}", ns_err.localizedDescription.UTF8String);
+        outstream_destroy_ca(si,os);
+        return SoundIoErrorOpeningDevice;
+    }
+    
+    
+    isOk = [session setActive:YES error:&ns_err];
+    if (!isOk) {
+        LOGE("Audio Session Error: {}", ns_err.localizedDescription.UTF8String);
+        outstream_destroy_ca(si,os);
+        return SoundIoErrorOpeningDevice;
+    }
+    
+    
     AudioComponentDescription desc = {0};
     desc.componentType = kAudioUnitType_Output;
     desc.componentSubType = kAudioUnitSubType_RemoteIO;
@@ -422,15 +442,6 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
         outstream_destroy_ca(si, os);
         return SoundIoErrorOpeningDevice;
     }
-
-    // 由unity设置AVAudioSession来设置缓冲区
-//    NSError* ns_err;
-//    BOOL success = [AVAudioSession.sharedInstance setPreferredIOBufferDuration:outstream->software_latency error:&ns_err];
-//    if(!success){
-//        NSLog(@"setPreferredIOBufferDuration failed.");
-//        outstream_destroy_ca(si, os);
-//        return SoundIoErrorOpeningDevice;
-//    }
 
     os->volume = 1.0;
     osca.hardware_latency = dca->latency_frames / static_cast<double>(os->sample_rate);
@@ -831,6 +842,10 @@ static int instream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
 static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
 {
     LOGI("destroy core audio");
+    if(audio_session_guard_is_locked()){
+        audio_session_guard_unlock();
+    }
+    
     SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
 
     if (sica.thread) {
@@ -864,21 +879,33 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
     sica.service_restarted.store(false);
     sica.abort_flag.clear();
     
-    // 这里unity会处理
-//    NSError* ns_err = nil;
-//    AVAudioSession* session = AVAudioSession.sharedInstance;
-//    [session setCategory:AVAudioSessionCategoryPlayback error:&ns_err];
-//    if(ns_err){
-//        NSLog(@"Audio Session Error: %@", ns_err.localizedDescription);
-//        destroy_ca(si);
-//        return SoundIoErrorNoMem;
-//    }
-//    
-//    [session setActive:YES error:&ns_err];
-//    if (ns_err) {
-//        NSLog(@"Audio Session Error: %@", ns_err.localizedDescription);
-//        destroy_ca(si);
-//        return SoundIoErrorNoMem;
+    NSError* ns_err = nil;
+    AVAudioSession* session = AVAudioSession.sharedInstance;
+    
+    AVAudioSessionCategoryOptions options = AVAudioSessionCategoryOptionDefaultToSpeaker | AVAudioSessionCategoryOptionAllowBluetoothHFP | AVAudioSessionCategoryOptionAllowBluetoothA2DP;
+    BOOL isOk = [session setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:options error:&ns_err];
+    if(!isOk){
+        LOGE("Audio setCategory Error: {}", ns_err.localizedDescription.UTF8String);
+        destroy_ca(si);
+        return SoundIoErrorInitAudioBackend;
+    }
+    
+    isOk = [session setMode:AVAudioSessionModeMeasurement error:&ns_err];
+    if(!isOk){
+        LOGE("Audio setMode Error: {}", ns_err.localizedDescription.UTF8String);
+        destroy_ca(si);
+        return SoundIoErrorInitAudioBackend;
+    }
+    
+    isOk = [session setActive:YES error:&ns_err];
+    if (!isOk) {
+        LOGE("Audio Session Error: {}", ns_err.localizedDescription.UTF8String);
+        destroy_ca(si);
+        return SoundIoErrorInitAudioBackend;
+    }
+    
+//    if(!audio_session_guard_is_locked()){
+//        audio_session_guard_lock();
 //    }
     
     

@@ -35,33 +35,33 @@
 
 #import <AVFoundation/AVFoundation.h>
 #import <objc/runtime.h>
-#import <stdatomic.h>
+#import <atomic>
 
-#include "av_audio_session_guard.h"
+#include "oc_method_swizzling.h"
+#include "logger/logger.hpp"
 
 // ---------------------------------------------------------------------------
 // Internal state
 // ---------------------------------------------------------------------------
 
 /// 引用计数（支持嵌套 lock）
-static atomic_int  s_lock_count = 0;
+inline static std::atomic<int>  s_lock_count = 0;
 /// swizzle 是否已安装
-static atomic_bool s_installed  = false;
+inline static std::atomic<bool> s_installed  = false;
 
 /// lock() 时快照的 session 配置
-static AVAudioSessionCategory        s_locked_category = nil;
-static AVAudioSessionCategoryOptions s_locked_options  = 0;
-static AVAudioSessionMode            s_locked_mode     = nil;
+inline static AVAudioSessionCategory        s_locked_category = nil;
+inline static AVAudioSessionCategoryOptions s_locked_options  = 0;
+inline static AVAudioSessionMode            s_locked_mode     = nil;
+
+NSString * const WaveAudioErrorDomain = @"com.prwave.waveaudio.error";
 
 // ---------------------------------------------------------------------------
 // 原始 IMP 的函数指针别名（方便 cast）
 // ---------------------------------------------------------------------------
 typedef BOOL (*SetCategoryErrorIMP)(id, SEL, AVAudioSessionCategory, NSError**);
-typedef BOOL (*SetCategoryOptionsErrorIMP)(id, SEL, AVAudioSessionCategory,
-                                           AVAudioSessionCategoryOptions, NSError**);
-typedef BOOL (*SetCategoryModeOptionsErrorIMP)(id, SEL, AVAudioSessionCategory,
-                                               AVAudioSessionMode,
-                                               AVAudioSessionCategoryOptions, NSError**);
+typedef BOOL (*SetCategoryOptionsErrorIMP)(id, SEL, AVAudioSessionCategory, AVAudioSessionCategoryOptions, NSError**);
+typedef BOOL (*SetCategoryModeOptionsErrorIMP)(id, SEL, AVAudioSessionCategory, AVAudioSessionMode, AVAudioSessionCategoryOptions, NSError**);
 
 static SetCategoryErrorIMP            s_orig_setCategory_error                 = NULL;
 static SetCategoryOptionsErrorIMP     s_orig_setCategory_options_error          = NULL;
@@ -72,7 +72,9 @@ static SetCategoryModeOptionsErrorIMP s_orig_setCategory_mode_options_error     
 // ---------------------------------------------------------------------------
 static void restore_locked_session(void)
 {
-    if (!s_locked_category) return;
+    if (!s_locked_category) {
+        return;
+    }
 
     AVAudioSession* session = AVAudioSession.sharedInstance;
     NSError* err = nil;
@@ -104,7 +106,7 @@ static void restore_locked_session(void)
     }
 
     if (err) {
-        NSLog(@"[WaveAudio] AVAudioSessionGuard restore failed: %@", err.localizedDescription);
+        LOGE("AVAudioSessionGuard restore failed: {}", err.localizedDescription.UTF8String);
     }
 }
 
@@ -113,48 +115,44 @@ static void restore_locked_session(void)
 // ---------------------------------------------------------------------------
 
 /// -[AVAudioSession setCategory:error:]
-static BOOL wav_swizzled_setCategory_error(id self, SEL _cmd,
-                                            AVAudioSessionCategory category,
-                                            NSError** error)
+static BOOL swizzled_setCategory_error(id self, SEL _cmd, AVAudioSessionCategory category, NSError** error)
 {
     if (atomic_load(&s_lock_count) > 0) {
-        NSLog(@"[WaveAudio] AVAudioSessionGuard: intercepted setCategory:%@ — restoring locked config", category);
-        restore_locked_session();
-        if (error) *error = nil;
-        return YES;
+        LOGI("AVAudioSessionGuard: intercepted setCategory:{} — restoring locked config", category.UTF8String);
+        if (error){
+            NSDictionary *userInfo = @{NSLocalizedDescriptionKey: @"category locked."};
+            *error = [NSError errorWithDomain:WaveAudioErrorDomain code:1000 userInfo:userInfo];
+        }
+        return NO;
     }
     return s_orig_setCategory_error(self, _cmd, category, error);
 }
 
 /// -[AVAudioSession setCategory:withOptions:error:]
-static BOOL wav_swizzled_setCategory_options_error(id self, SEL _cmd,
+static BOOL swizzled_setCategory_options_error(id self, SEL _cmd,
                                                     AVAudioSessionCategory category,
                                                     AVAudioSessionCategoryOptions options,
                                                     NSError** error)
 {
     if (atomic_load(&s_lock_count) > 0) {
-        NSLog(@"[WaveAudio] AVAudioSessionGuard: intercepted setCategory:%@ options:%lu — restoring locked config",
-              category, (unsigned long)options);
-        restore_locked_session();
-        if (error) *error = nil;
-        return YES;
+        LOGI("AVAudioSessionGuard: intercepted setCategory:%@ options:%lu — restoring locked config", category.UTF8String, (unsigned long)options);
+        if (error){
+            NSDictionary *userInfo = @{NSLocalizedDescriptionKey: @"category locked."};
+            *error = [NSError errorWithDomain:WaveAudioErrorDomain code:1000 userInfo:userInfo];
+        }
     }
     return s_orig_setCategory_options_error(self, _cmd, category, options, error);
 }
 
 /// -[AVAudioSession setCategory:mode:options:error:]
-static BOOL wav_swizzled_setCategory_mode_options_error(id self, SEL _cmd,
-                                                         AVAudioSessionCategory category,
-                                                         AVAudioSessionMode mode,
-                                                         AVAudioSessionCategoryOptions options,
-                                                         NSError** error)
+static BOOL swizzled_setCategory_mode_options_error(id self, SEL _cmd, AVAudioSessionCategory category, AVAudioSessionMode mode, AVAudioSessionCategoryOptions options, NSError** error)
 {
     if (atomic_load(&s_lock_count) > 0) {
-        NSLog(@"[WaveAudio] AVAudioSessionGuard: intercepted setCategory:%@ mode:%@ options:%lu — restoring locked config",
-              category, mode, (unsigned long)options);
-        restore_locked_session();
-        if (error) *error = nil;
-        return YES;
+        LOGI("AVAudioSessionGuard: intercepted setCategory:{} mode:{} options:{} — restoring locked config", category.UTF8String, mode.UTF8String, (unsigned long)options);
+        if (error){
+            NSDictionary *userInfo = @{NSLocalizedDescriptionKey: @"category locked."};
+            *error = [NSError errorWithDomain:WaveAudioErrorDomain code:1000 userInfo:userInfo];
+        }
     }
     return s_orig_setCategory_mode_options_error(self, _cmd, category, mode, options, error);
 }
@@ -174,7 +172,7 @@ static void do_install(void)
             SEL sel = @selector(setCategory:error:);
             Method m = class_getInstanceMethod(cls, sel);
             if (m) {
-                IMP orig = method_setImplementation(m, (IMP)wav_swizzled_setCategory_error);
+                IMP orig = method_setImplementation(m, (IMP)swizzled_setCategory_error);
                 s_orig_setCategory_error = (SetCategoryErrorIMP)orig;
             }
         }
@@ -184,7 +182,7 @@ static void do_install(void)
             SEL sel = @selector(setCategory:withOptions:error:);
             Method m = class_getInstanceMethod(cls, sel);
             if (m) {
-                IMP orig = method_setImplementation(m, (IMP)wav_swizzled_setCategory_options_error);
+                IMP orig = method_setImplementation(m, (IMP)swizzled_setCategory_options_error);
                 s_orig_setCategory_options_error = (SetCategoryOptionsErrorIMP)orig;
             }
         }
@@ -194,26 +192,22 @@ static void do_install(void)
             SEL sel = @selector(setCategory:mode:options:error:);
             Method m = class_getInstanceMethod(cls, sel);
             if (m) {
-                IMP orig = method_setImplementation(m, (IMP)wav_swizzled_setCategory_mode_options_error);
+                IMP orig = method_setImplementation(m, (IMP)swizzled_setCategory_mode_options_error);
                 s_orig_setCategory_mode_options_error = (SetCategoryModeOptionsErrorIMP)orig;
             }
         }
 
         atomic_store(&s_installed, true);
-        NSLog(@"[WaveAudio] AVAudioSessionGuard: swizzle installed.");
+        LOGI("AVAudioSessionGuard: swizzle installed.");
     });
 }
 
-// ---------------------------------------------------------------------------
-// 公开 C 接口
-// ---------------------------------------------------------------------------
-
-void wav_audio_session_guard_install(void)
+void audio_session_guard_install(void)
 {
     do_install();
 }
 
-void wav_audio_session_guard_lock(void)
+void audio_session_guard_lock(void)
 {
     do_install();  // 保证 swizzle 已安装
 
@@ -224,19 +218,18 @@ void wav_audio_session_guard_lock(void)
         s_locked_category = session.category;
         s_locked_options  = session.categoryOptions;
         s_locked_mode     = session.mode;
-        NSLog(@"[WaveAudio] AVAudioSessionGuard: LOCKED. snapshot: category=%@ mode=%@ options=%lu",
-              s_locked_category, s_locked_mode, (unsigned long)s_locked_options);
+        LOGI("AVAudioSessionGuard: LOCKED. snapshot: category={} mode={} options={}", s_locked_category.UTF8String, s_locked_mode.UTF8String, (unsigned long)s_locked_options);
     } else {
-        NSLog(@"[WaveAudio] AVAudioSessionGuard: lock refcount -> %d", prev + 1);
+        LOGI("AVAudioSessionGuard: lock refcount -> {}", prev + 1);
     }
 }
 
-void wav_audio_session_guard_unlock(void)
+void audio_session_guard_unlock(void)
 {
     int prev = atomic_fetch_sub(&s_lock_count, 1);
     if (prev <= 0) {
         atomic_store(&s_lock_count, 0);
-        NSLog(@"[WaveAudio] AVAudioSessionGuard: unlock underflow ignored.");
+        LOGI("AVAudioSessionGuard: unlock underflow ignored.");
         return;
     }
     if (prev == 1) {
@@ -244,13 +237,13 @@ void wav_audio_session_guard_unlock(void)
         s_locked_category = nil;
         s_locked_mode     = nil;
         s_locked_options  = 0;
-        NSLog(@"[WaveAudio] AVAudioSessionGuard: UNLOCKED. External category changes now allowed.");
+        LOGI("AVAudioSessionGuard: UNLOCKED. External category changes now allowed.");
     } else {
-        NSLog(@"[WaveAudio] AVAudioSessionGuard: lock refcount -> %d", prev - 1);
+        LOGI("AVAudioSessionGuard: lock refcount -> {}", prev - 1);
     }
 }
 
-void wav_audio_session_guard_uninstall(void)
+void audio_session_guard_uninstall(void)
 {
     if (!atomic_load(&s_installed)) return;
 
@@ -275,10 +268,10 @@ void wav_audio_session_guard_uninstall(void)
     atomic_store(&s_installed, false);
     s_install_once = 0;  // 仅测试场景下允许重新安装
 
-    NSLog(@"[WaveAudio] AVAudioSessionGuard: swizzle uninstalled.");
+    LOGI("AVAudioSessionGuard: swizzle uninstalled.");
 }
 
-int wav_audio_session_guard_is_locked(void)
+BOOL audio_session_guard_is_locked(void)
 {
-    return atomic_load(&s_lock_count) > 0 ? 1 : 0;
+    return atomic_load(&s_lock_count) > 0 ? YES : NO;
 }
