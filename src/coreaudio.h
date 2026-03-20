@@ -9,7 +9,6 @@
 #define SOUNDIO_COREAUDIO_H
 
 #include <atomic>
-#include "list.h"
 #include "os.h"
 #include "soundio_internal.h"
 

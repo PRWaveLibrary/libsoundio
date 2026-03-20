@@ -29,4 +29,9 @@
 #endif
 
 
+#if __ANDROID__ || __APPLE__
+#define NO_ATOMIC_SHARED
+#endif
+
+
 #endif //AUDIORENDERER_COMMON_H

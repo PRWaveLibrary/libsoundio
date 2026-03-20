@@ -126,7 +126,7 @@ inline void PlatformLog(LogLevel level, const char* file, int line, std::format_
 #include <cstdio>
 
 template<typename... Args>
-inline void PlatformLog(LogLevel level, const char* file_name, int file_line, std::format_string<Args...> fmt, Args&&... args)
+inline void PlatformLog(LogLevel level, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
 {
     auto s = FormatLog(level, file, line, fmt.get(), std::make_format_args(args...));
     FILE* stream = level >= Error ? stderr : stdout;

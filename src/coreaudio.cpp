@@ -8,7 +8,8 @@
 #include "coreaudio.h"
 #include "soundio_private.h"
 
-#include <assert.h>
+#include <cassert>
+#include "util.h"
 
 static const int OUTPUT_ELEMENT = 0;
 static const int INPUT_ELEMENT = 1;
