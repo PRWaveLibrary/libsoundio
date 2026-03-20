@@ -140,11 +140,13 @@ if (SOUNDIO_HAVE_COREAUDIO_IOS)
             "${libsoundio_SOURCE_DIR}/src/soundio_internal.h"
             "${libsoundio_SOURCE_DIR}/src/soundio_private.h"
             "${libsoundio_SOURCE_DIR}/src/coreaudio_ios.h"
+            "${libsoundio_SOURCE_DIR}/src/oc_method_swizzling.h"
     )
     list(APPEND LIBSOUNDIO_SOURCES
             ${LIBSOUNDIO_HEADERS}
             ${CONFIGURE_OUT_FILE}
             "${libsoundio_SOURCE_DIR}/src/coreaudio_ios.mm"
+            "${libsoundio_SOURCE_DIR}/src/oc_method_swizzling.mm"
     )
 
     find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox REQUIRED)
