@@ -1215,6 +1215,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     }
 
     osca.hardware_latency = dca->latency_frames / static_cast<double>(os->sample_rate);
+    os->paused = false;
     return 0;
 }
 
@@ -1223,6 +1224,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
  */
 static int outstream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause)
 {
+    os->paused = pause;
     SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
     OSStatus os_err;
     if (pause)
