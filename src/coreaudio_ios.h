@@ -96,6 +96,9 @@ struct SoundIoCoreAudioIOS
     std::atomic<bool> service_restarted{false};
     int shutdown_err;
     bool emitted_shutdown_cb;
+#ifdef __OBJC__
+    id notifyCallback;
+#endif
 };
 
 struct SoundIoOutStreamCoreAudioIOS

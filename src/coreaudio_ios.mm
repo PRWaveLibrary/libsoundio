@@ -868,7 +868,6 @@ static int instream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
     return 0;
 }
 
-
 /**
  * @brief 回收所有的 Backend 资源以及相关的 system thread
  *
@@ -900,7 +899,15 @@ static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
     sica.ready_devices_info = nullptr;
 
     outstream_destroy_ca(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
+    if(sica.notifyCallback != nil)
+    {
+        NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
+        [center removeObserver:sica.notifyCallback];
+        sica.notifyCallback = nil;
+    }
 }
+
+
 
 /**
  * @brief 为 iOS CoreAudio 支持挂载 system primitives, threads 和 callback assignments
@@ -972,15 +979,14 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
 
     sica.thread = SoundIoOsThread::create(device_thread_run, si);
     sica.callback->si = si;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
+    
+    if(sica.notifyCallback == nil)
+    {
         NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
-        [center addObserverForName:AVAudioSessionInterruptionNotification object:[AVAudioSession sharedInstance] queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification* note){
+        sica.notifyCallback = [center addObserverForName:AVAudioSessionInterruptionNotification object:[AVAudioSession sharedInstance] queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification* note){
             CoreAudioCallback::on_notification(note,si);
         }];
-    });
-    
-    
+    }
     
     si->destroy = destroy_ca;
     si->flush_events = flush_events_ca;
