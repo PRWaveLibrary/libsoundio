@@ -325,7 +325,7 @@ static int outstream_open_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_p
 
     oso.hardware_latency = static_cast<double>(sdo->latency_frames) / outstream->sample_rate;
     os->backend_data.oboe.volume = 1;
-
+    os->paused = false;
     return 0;
 }
 
@@ -341,8 +341,9 @@ static int outstream_open_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_p
  */
 static int outstream_pause_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause)
 {
-    struct SoundIoOutStreamOboe* osca = &os->backend_data.oboe;
-    std::unique_ptr<oboe::AudioStream, OboeStreamDeleter>& stream = osca->audio_stream;
+    SoundIoOutStreamOboe& osca = os->backend_data.oboe;
+    std::unique_ptr<oboe::AudioStream, OboeStreamDeleter>& stream = osca.audio_stream;
+    os->paused = false;
     oboe::Result result;
     if (pause)
     {
@@ -402,7 +403,7 @@ static int outstream_start_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_
 static int outstream_begin_write_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, struct SoundIoChannelArea** out_areas, int* frame_count)
 {
     std::shared_ptr<SoundIoOutStream> outstream = os;
-    struct SoundIoOutStreamOboe& oso = os->backend_data.oboe;
+    SoundIoOutStreamOboe& oso = os->backend_data.oboe;
 
     oso.write_frame_count = oso.request_num_frames;
     *frame_count = oso.write_frame_count;
@@ -458,11 +459,11 @@ static int outstream_clear_buffer_oboe(std::shared_ptr<SoundIoPrivate> si, std::
  */
 static int outstream_get_latency_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, double* out_latency)
 {
-    struct SoundIoOutStreamOboe* oso = &os->backend_data.oboe;
+    SoundIoOutStreamOboe& oso = os->backend_data.oboe;
 
-    if (oso->audio_stream)
+    if (oso.audio_stream)
     {
-        std::unique_ptr<oboe::AudioStream, OboeStreamDeleter>& stream = oso->audio_stream;
+        std::unique_ptr<oboe::AudioStream, OboeStreamDeleter>& stream = oso.audio_stream;
         // 通过 Oboe 进行实时运算，能测算出真实物理和缓冲折叠造成的完整精确延迟。
         auto result = stream->calculateLatencyMillis();
         if (result.error() == oboe::Result::OK)
@@ -473,7 +474,7 @@ static int outstream_get_latency_oboe(std::shared_ptr<SoundIoPrivate> si, std::s
     }
 
     // 后备方案：如果在未运行等状态下出现错误，则回落到初始化估算结果。
-    *out_latency = oso->hardware_latency;
+    *out_latency = oso.hardware_latency;
     return 0;
 }
 

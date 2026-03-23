@@ -2091,6 +2091,8 @@ static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
         return osw.open_err;
     }
 
+    os->paused = false;
+
     return 0;
 }
 
@@ -2107,6 +2109,7 @@ static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
 static int outstream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
+    os->paused = pause;
 
     osw.desired_pause_state.store(pause);
     osw.pause_resume_flag.test_and_set();
