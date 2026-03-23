@@ -46,7 +46,10 @@ struct CoreAudioCallback
 
     OSStatus read_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
                               AudioBufferList* io_data);
-
+#ifdef __OBJC__
+    void on_notification_ca(NSNotification* note);
+    static void on_notification(NSNotification* note,std::shared_ptr<SoundIoPrivate> si);
+#endif
 
     //    void unsubscribe_device_listeners() const;
 
@@ -64,7 +67,9 @@ struct CoreAudioCallback
     static OSStatus read_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
                                   AudioBufferList* io_data);
 
-    //
+    
+    
+    
     //    static void unsubscribe_device_listeners(std::shared_ptr<SoundIoPrivate> si);
 };
 

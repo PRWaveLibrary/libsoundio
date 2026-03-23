@@ -446,6 +446,10 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     os->volume = 1.0;
     osca.hardware_latency = dca->latency_frames / static_cast<double>(os->sample_rate);
     os->sample_rate = format.mSampleRate;
+    
+    
+    
+    
     return 0;
 }
 
@@ -574,6 +578,39 @@ static void instream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_
     isca.instance = nullptr;
     isca.buffer_list = nullptr;
     si->backend_data->coreaudio_ios.callback->in_stream.reset();
+}
+
+void CoreAudioCallback::on_notification(NSNotification* note,std::shared_ptr<SoundIoPrivate> si)
+{
+    si->backend_data->coreaudio_ios.callback->on_notification_ca(note);
+}
+
+
+void CoreAudioCallback::on_notification_ca(NSNotification* note){
+    auto s = si.lock();
+    if(!s){
+        return;
+    }
+    NSDictionary* userInfo = note.userInfo;
+    AVAudioSessionInterruptionType type = static_cast<AVAudioSessionInterruptionType>([userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue]);
+    if (type == AVAudioSessionInterruptionTypeBegan){
+        // begin
+        
+        LOGI("apple notification pause.");
+        s->outstream_pause(s,std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(s->outstream),true);
+    }
+    else{
+        // end
+        LOGI("apple notification resume begin.");
+        AVAudioSessionInterruptionOptions options = [userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue];
+        if (!(options & AVAudioSessionInterruptionOptionShouldResume))
+        {
+            LOGI("apple notification disable resume.");
+            return;
+        }
+        s->outstream_pause(s,std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(s->outstream),false);
+        LOGI("apple notification resume finished.");
+    }
 }
 
 /**
@@ -865,7 +902,6 @@ static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
     outstream_destroy_ca(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
 }
 
-
 /**
  * @brief 为 iOS CoreAudio 支持挂载 system primitives, threads 和 callback assignments
  * 
@@ -935,7 +971,17 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
     }
 
     sica.thread = SoundIoOsThread::create(device_thread_run, si);
-
+    sica.callback->si = si;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
+        [center addObserverForName:AVAudioSessionInterruptionNotification object:[AVAudioSession sharedInstance] queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification* note){
+            CoreAudioCallback::on_notification(note,si);
+        }];
+    });
+    
+    
+    
     si->destroy = destroy_ca;
     si->flush_events = flush_events_ca;
     si->wait_events = wait_events_ca;
