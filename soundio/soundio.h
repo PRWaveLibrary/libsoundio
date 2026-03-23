@@ -471,6 +471,8 @@ struct SoundIoOutStream
     /// Defaults to Stereo, if available, followed by the first layout
     /// supported.
     struct SoundIoChannelLayout layout;
+    
+    std::atomic_bool paused;
 
     /// Ignoring hardware latency, this is the number of seconds it takes for
     /// the last sample in a full buffer to be played.
