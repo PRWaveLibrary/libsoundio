@@ -347,31 +347,56 @@ static int outstream_pause_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_
     oboe::Result result;
     if (pause)
     {
-        result = stream->requestPause();
+        result = stream->requestStop();
         if (result != oboe::Result::OK)
         {
             return SoundIoErrorStreaming;
         }
+        return SoundIoErrorNone;
     }
     else
     {
-        if (stream->getState() == oboe::StreamState::Paused)
-        {
-            result = stream->requestFlush();
-            if (result != oboe::Result::OK)
-            {
-                return SoundIoErrorStreaming;
+        int64_t timeoutNanos = 1000 * oboe::kNanosPerMillisecond;
+        auto state = stream->getState();
+        bool isExit = false;
+        while (!isExit){
+            switch (state) {
+                case oboe::StreamState::Stopping:
+                {
+                    // 超时直接重启输出流
+                    result = stream->waitForStateChange(oboe::StreamState::Stopping,&state,timeoutNanos);
+                    if (result != oboe::Result::OK)
+                    {
+                        force_device_scan_oboe(si);
+                        return SoundIoErrorNone;
+                    }
+                    break;
+                }
+                case oboe::StreamState::Paused:
+                case oboe::StreamState::Flushed:
+                case oboe::StreamState::Open:
+                case oboe::StreamState::Stopped:
+                {
+                    isExit = true;
+                    break;
+                }
+                default:
+                {
+                    LOGE("unknown state: {}",(int)state);
+                    return SoundIoErrorStreaming;
+                    break;
+                }
             }
         }
 
+        // 先播放音乐->插入耳机->切换到其他音乐软件->拔掉耳机->播放音乐->切回就能触发ErrorIllegalArgument
         result = stream->requestStart();
-        if (result != oboe::Result::OK)
+        if(result != oboe::Result::OK)
         {
-            return SoundIoErrorStreaming;
+            force_device_scan_oboe(si);
         }
+        return SoundIoErrorNone;
     }
-
-    return 0;
 }
 
 /**
