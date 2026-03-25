@@ -451,6 +451,31 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     return 0;
 }
 
+static void ForceAudioToSpeaker(){
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    // 1. 检查当前有没有连接耳机或蓝牙
+    BOOL isHeadsetConnected = NO;
+    AVAudioSessionRouteDescription *route = [session currentRoute];
+    for (AVAudioSessionPortDescription *desc in route.outputs) {
+        if ([desc.portType isEqualToString:AVAudioSessionPortHeadphones] ||
+            [desc.portType isEqualToString:AVAudioSessionPortBluetoothA2DP] ||
+            [desc.portType isEqualToString:AVAudioSessionPortBluetoothHFP] ||
+            [desc.portType isEqualToString:AVAudioSessionPortBluetoothLE]) {
+            isHeadsetConnected = YES;
+            break;
+        }
+    }
+    if (isHeadsetConnected) {
+        [session overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
+        return;
+    }
+    NSError *error = nil;
+    BOOL success = [session overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
+    if (!success) {
+        LOGE("ForceAudioToSpeaker error:", error.localizedDescription.UTF8String);
+    }
+}
+
 /**
  * @brief 执行对于实例层面的 AudioOutputUnitStop 或 AudioOutputUnitStart 播放暂停操作
  * 
@@ -473,14 +498,30 @@ static int outstream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_pt
     }
     else
     {
+        UInt32 isRunning = 0;
+        UInt32 size = sizeof(isRunning);
         os_err = AudioOutputUnitStart(osca.instance.get());
         if (os_err != noErr)
         {
-            return SoundIoErrorStreaming;
+            force_device_scan_ca(si);
+            return SoundIoErrorNone;
+        }
+        ForceAudioToSpeaker();
+        OSStatus status = AudioUnitGetProperty(osca.instance.get(), kAudioOutputUnitProperty_IsRunning, kAudioUnitScope_Global, OUTPUT_ELEMENT, &isRunning, &size);
+        if(status != noErr)
+        {
+            force_device_scan_ca(si);
+            return SoundIoErrorNone;
+        }
+        
+        if(!isRunning)
+        {
+            force_device_scan_ca(si);
+            return SoundIoErrorNone;
         }
     }
 
-    return 0;
+    return SoundIoErrorNone;
 }
 
 /**
@@ -601,6 +642,12 @@ void CoreAudioCallback::on_notification_ca(NSNotification* note){
     else{
         // end
         LOGI("apple notification resume begin.");
+        NSError *error = nil;
+        BOOL success = [[AVAudioSession sharedInstance] setActive:YES error:&error];
+        if (!success) {
+            LOGE("restart session failed.{}", error.localizedDescription.UTF8String);
+            return;
+        }
         AVAudioSessionInterruptionOptions options = [userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue];
         if (!(options & AVAudioSessionInterruptionOptionShouldResume))
         {
@@ -897,7 +944,10 @@ static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
     sica.mutex = nullptr;
     sica.ready_devices_info = nullptr;
 
-    outstream_destroy_ca(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
+    if(si->outstream){
+        outstream_destroy_ca(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
+    }
+    
     if(sica.notifyCallback != nil)
     {
         NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
@@ -905,8 +955,6 @@ static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
         sica.notifyCallback = nil;
     }
 }
-
-
 
 /**
  * @brief 为 iOS CoreAudio 支持挂载 system primitives, threads 和 callback assignments
@@ -924,15 +972,18 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
     NSError* ns_err = nil;
     AVAudioSession* session = AVAudioSession.sharedInstance;
     
-    AVAudioSessionCategoryOptions options = AVAudioSessionCategoryOptionDefaultToSpeaker | AVAudioSessionCategoryOptionAllowBluetoothHFP | AVAudioSessionCategoryOptionAllowBluetoothA2DP;
-    BOOL isOk = [session setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:options error:&ns_err];
+//    AVAudioSessionCategoryOptions options = AVAudioSessionCategoryOptionDefaultToSpeaker | AVAudioSessionCategoryOptionAllowBluetoothHFP | AVAudioSessionCategoryOptionAllowBluetoothA2DP;
+    
+    // 测试录音改为AVAudioSessionCategoryPlayAndRecord
+//    AVAudioSessionCategoryOptions options = AVAudioSessionCategoryOptionMixWithOthers;
+    BOOL isOk = [session setCategory:AVAudioSessionCategoryPlayback withOptions:NULL error:&ns_err];
     if(!isOk){
         LOGE("Audio setCategory Error: {}", ns_err.localizedDescription.UTF8String);
         destroy_ca(si);
         return SoundIoErrorInitAudioBackend;
     }
     
-    isOk = [session setMode:AVAudioSessionModeMeasurement error:&ns_err];
+    isOk = [session setMode:AVAudioSessionModeDefault error:&ns_err];
     if(!isOk){
         LOGE("Audio setMode Error: {}", ns_err.localizedDescription.UTF8String);
         destroy_ca(si);
