@@ -281,7 +281,7 @@ static void default_emit_rtprio_warning(void)
     }
 }
 
-std::shared_ptr<SoundIo> soundio_create(void)
+std::shared_ptr<SoundIoPrivate> soundio_create(void)
 {
     int err;
     if ((err = soundio_os_init()))
@@ -293,15 +293,14 @@ std::shared_ptr<SoundIo> soundio_create(void)
     {
         return NULL;
     }
-    std::shared_ptr<SoundIo> soundio = si;
-    soundio->on_devices_change = do_nothing_cb;
-    soundio->on_backend_disconnect = default_backend_disconnect_cb;
-    soundio->on_events_signal = do_nothing_cb;
-    soundio->app_name = "SoundIo";
-    soundio->emit_rtprio_warning = default_emit_rtprio_warning;
-    soundio->jack_info_callback = default_msg_callback;
-    soundio->jack_error_callback = default_msg_callback;
-    return soundio;
+    si->on_devices_change = do_nothing_cb;
+    si->on_backend_disconnect = default_backend_disconnect_cb;
+    si->on_events_signal = do_nothing_cb;
+    si->app_name = "SoundIo";
+    si->emit_rtprio_warning = default_emit_rtprio_warning;
+    si->jack_info_callback = default_msg_callback;
+    si->jack_error_callback = default_msg_callback;
+    return si;
 }
 
 int soundio_connect(std::shared_ptr<SoundIo> soundio)

@@ -1008,26 +1008,37 @@ static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
     }
 }
 
-/**
- * @brief 为 iOS CoreAudio 支持挂载 system primitives, threads 和 callback assignments
- * 
- * @param si 初始化并设定好的系统级根指针状态
- */
-int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
-    SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
-
-    sica.have_devices_flag.store(false);
-    sica.device_scan_queued.store(true);
-    sica.service_restarted.store(false);
-    sica.abort_flag.clear();
+static int set_record_route(std::shared_ptr<SoundIoPrivate> si){
+    NSError* ns_err = nil;
+    AVAudioSession* session = AVAudioSession.sharedInstance;
+    AVAudioSessionCategoryOptions options = AVAudioSessionCategoryOptionDefaultToSpeaker | AVAudioSessionCategoryOptionAllowBluetoothHFP | AVAudioSessionCategoryOptionAllowBluetoothA2DP;
+    BOOL isOk = [session setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:options error:&ns_err];
+    if(!isOk){
+        LOGE("Audio setCategory Error: {}", ns_err.localizedDescription.UTF8String);
+        destroy_ca(si);
+        return SoundIoErrorInitAudioBackend;
+    }
     
+    isOk = [session setMode:AVAudioSessionModeMeasurement error:&ns_err];
+    if(!isOk){
+        LOGE("Audio setMode Error: {}", ns_err.localizedDescription.UTF8String);
+        destroy_ca(si);
+        return SoundIoErrorInitAudioBackend;
+    }
+    
+    isOk = [session setActive:YES error:&ns_err];
+    if (!isOk) {
+        LOGE("Audio Session Error: {}", ns_err.localizedDescription.UTF8String);
+        destroy_ca(si);
+        return SoundIoErrorInitAudioBackend;
+    }
+    return SoundIoErrorNone;
+}
+
+static int set_playback_route(std::shared_ptr<SoundIoPrivate> si){
     NSError* ns_err = nil;
     AVAudioSession* session = AVAudioSession.sharedInstance;
     
-//    AVAudioSessionCategoryOptions options = AVAudioSessionCategoryOptionDefaultToSpeaker | AVAudioSessionCategoryOptionAllowBluetoothHFP | AVAudioSessionCategoryOptionAllowBluetoothA2DP;
-    
-    // 测试录音改为AVAudioSessionCategoryPlayAndRecord
-//    AVAudioSessionCategoryOptions options = AVAudioSessionCategoryOptionMixWithOthers;
     BOOL isOk = [session setCategory:AVAudioSessionCategoryPlayback withOptions:NULL error:&ns_err];
     if(!isOk){
         LOGE("Audio setCategory Error: {}", ns_err.localizedDescription.UTF8String);
@@ -1048,11 +1059,35 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
         destroy_ca(si);
         return SoundIoErrorInitAudioBackend;
     }
+    return SoundIoErrorNone;
+}
+
+
+/**
+ * @brief 为 iOS CoreAudio 支持挂载 system primitives, threads 和 callback assignments
+ * 
+ * @param si 初始化并设定好的系统级根指针状态
+ */
+int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
+    SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
+
+    sica.have_devices_flag.store(false);
+    sica.device_scan_queued.store(true);
+    sica.service_restarted.store(false);
+    sica.abort_flag.clear();
     
-//    if(!audio_session_guard_is_locked()){
-//        audio_session_guard_lock();
-//    }
+    // 延迟测试把下一行取消注释,否则麦克风不能被打开
+//#define RECORD_MODE
     
+#ifndef RECORD_MODE
+    int err = set_playback_route(si);
+#else
+    int err = set_record_route(si);
+#endif
+    if(err){
+        destroy_ca(si);
+        return err;
+    }
     
     sica.mutex = soundio_os_mutex_create();
     if (!sica.mutex) {

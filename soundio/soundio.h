@@ -316,6 +316,8 @@ enum SoundIoFormat
 
 #define SOUNDIO_MAX_CHANNELS 24
 
+struct SoundIoPrivate;
+
 /// The size of this struct is OK to use.
 struct SoundIoChannelLayout
 {
@@ -736,7 +738,7 @@ SOUNDIO_EXPORT int soundio_version_patch();
 /// connect to multiple backends. Sets all fields to defaults.
 /// Returns `NULL` if and only if memory could not be allocated.
 /// See also ::soundio_destroy
-SOUNDIO_EXPORT std::shared_ptr<SoundIo> soundio_create();
+SOUNDIO_EXPORT std::shared_ptr<SoundIoPrivate> soundio_create();
 
 SOUNDIO_EXPORT void soundio_destroy(std::shared_ptr<SoundIo> soundio);
 
