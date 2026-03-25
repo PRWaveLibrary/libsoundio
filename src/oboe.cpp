@@ -352,19 +352,20 @@ static int outstream_pause_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_
         {
             return SoundIoErrorStreaming;
         }
-        return SoundIoErrorNone;
     }
     else
     {
         int64_t timeoutNanos = 1000 * oboe::kNanosPerMillisecond;
         auto state = stream->getState();
         bool isExit = false;
-        while (!isExit){
-            switch (state) {
+        while (!isExit)
+        {
+            switch (state)
+            {
                 case oboe::StreamState::Stopping:
                 {
                     // 超时直接重启输出流
-                    result = stream->waitForStateChange(oboe::StreamState::Stopping,&state,timeoutNanos);
+                    result = stream->waitForStateChange(oboe::StreamState::Stopping, &state, timeoutNanos);
                     if (result != oboe::Result::OK)
                     {
                         force_device_scan_oboe(si);
@@ -382,21 +383,21 @@ static int outstream_pause_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_
                 }
                 default:
                 {
-                    LOGE("unknown state: {}",(int)state);
+                    LOGE("unknown state: {}", static_cast<int>(state));
                     return SoundIoErrorStreaming;
-                    break;
                 }
             }
         }
 
         // 先播放音乐->插入耳机->切换到其他音乐软件->拔掉耳机->播放音乐->切回就能触发ErrorIllegalArgument
         result = stream->requestStart();
-        if(result != oboe::Result::OK)
+        if (result != oboe::Result::OK)
         {
             force_device_scan_oboe(si);
         }
-        return SoundIoErrorNone;
     }
+
+    return SoundIoErrorNone;
 }
 
 /**
@@ -453,8 +454,7 @@ static int outstream_begin_write_oboe(std::shared_ptr<SoundIoPrivate> si, std::s
  */
 static int outstream_end_write_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
-    struct SoundIoOutStreamOboe* osca = &os->backend_data.oboe;
-    osca->buffer_index += 1;
+    os->backend_data.oboe.buffer_index += 1;
     return 0;
 }
 
@@ -515,8 +515,7 @@ static int outstream_get_latency_oboe(std::shared_ptr<SoundIoPrivate> si, std::s
  */
 static int outstream_set_volume_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, float volume)
 {
-    std::shared_ptr<SoundIoOutStream> outstream = os;
-    outstream->volume = volume;
+    os->volume = volume;
     return 0;
 }
 
