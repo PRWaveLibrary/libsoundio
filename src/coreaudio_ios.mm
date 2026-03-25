@@ -675,12 +675,12 @@ void CoreAudioCallback::on_route_notification_ca(NSNotification* note){
         case AVAudioSessionRouteChangeReasonOldDeviceUnavailable:
         {
             LOGI("AVAudioSessionRouteChangeReasonOldDeviceUnavailable");
-            force_device_scan_ca(s);
+            soundio_outstream_pause(s->outstream, false);
             break;
         }
         case AVAudioSessionRouteChangeReasonNewDeviceAvailable: {
             LOGI("AVAudioSessionRouteChangeReasonNewDeviceAvailable");
-            force_device_scan_ca(s);
+//            force_device_scan_ca(s);
             break;
         }
         case AVAudioSessionRouteChangeReasonCategoryChange: {
