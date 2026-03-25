@@ -49,6 +49,9 @@ struct CoreAudioCallback
 #ifdef __OBJC__
     void on_notification_ca(NSNotification* note);
     static void on_notification(NSNotification* note,std::shared_ptr<SoundIoPrivate> si);
+    
+    void on_route_notification_ca(NSNotification* note);
+    static void on_route_notification(NSNotification* note,std::shared_ptr<SoundIoPrivate> si);
 #endif
 
     //    void unsubscribe_device_listeners() const;
@@ -98,6 +101,7 @@ struct SoundIoCoreAudioIOS
     bool emitted_shutdown_cb;
 #ifdef __OBJC__
     id notifyCallback;
+    id routeCallback;
 #endif
 };
 

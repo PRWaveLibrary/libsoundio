@@ -202,6 +202,7 @@ static void force_device_scan_ca(std::shared_ptr<SoundIoPrivate> si)
     SoundIoCoreAudioIOS& sica = si->backend_data->coreaudio_ios;
     sica.device_scan_queued.store(true);
     sica.have_devices_flag.store(false);
+    soundio_outstream_pause(si->outstream, true);
 
     std::unique_lock scan_lock(sica.scan_devices_mutex->get());
     sica.scan_devices_cond->signal(&scan_lock);
@@ -469,11 +470,7 @@ static void ForceAudioToSpeaker(){
         [session overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
         return;
     }
-    NSError *error = nil;
-    BOOL success = [session overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
-    if (!success) {
-        LOGE("ForceAudioToSpeaker error:", error.localizedDescription.UTF8String);
-    }
+    [session overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
 }
 
 /**
@@ -625,6 +622,10 @@ void CoreAudioCallback::on_notification(NSNotification* note,std::shared_ptr<Sou
     si->backend_data->coreaudio_ios.callback->on_notification_ca(note);
 }
 
+void CoreAudioCallback::on_route_notification(NSNotification* note,std::shared_ptr<SoundIoPrivate> si)
+{
+    si->backend_data->coreaudio_ios.callback->on_route_notification_ca(note);
+}
 
 void CoreAudioCallback::on_notification_ca(NSNotification* note){
     auto s = si.lock();
@@ -633,31 +634,82 @@ void CoreAudioCallback::on_notification_ca(NSNotification* note){
     }
     NSDictionary* userInfo = note.userInfo;
     AVAudioSessionInterruptionType type = static_cast<AVAudioSessionInterruptionType>([userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue]);
-    if (type == AVAudioSessionInterruptionTypeBegan){
-        // begin
-        
-        LOGI("apple notification pause.");
-        s->outstream_pause(s,std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(s->outstream),true);
-    }
-    else{
-        // end
-        LOGI("apple notification resume begin.");
-        NSError *error = nil;
-        BOOL success = [[AVAudioSession sharedInstance] setActive:YES error:&error];
-        if (!success) {
-            LOGE("restart session failed.{}", error.localizedDescription.UTF8String);
-            return;
-        }
-        AVAudioSessionInterruptionOptions options = [userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue];
-        if (!(options & AVAudioSessionInterruptionOptionShouldResume))
+    switch(type){
+        case AVAudioSessionInterruptionTypeBegan:
         {
-            LOGI("apple notification disable resume.");
-            return;
+            LOGI("apple notification pause.");
+            s->outstream_pause(s,std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(s->outstream),true);
         }
-        s->outstream_pause(s,std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(s->outstream),false);
-        LOGI("apple notification resume finished.");
+            break;
+        case AVAudioSessionInterruptionTypeEnded:
+        {
+            LOGI("apple notification resume begin.");
+            NSError *error = nil;
+            BOOL success = [[AVAudioSession sharedInstance] setActive:YES error:&error];
+            if (!success) {
+                LOGE("restart session failed.{}", error.localizedDescription.UTF8String);
+                return;
+            }
+            AVAudioSessionInterruptionOptions options = [userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue];
+            if (!(options & AVAudioSessionInterruptionOptionShouldResume))
+            {
+                LOGI("apple notification disable resume.");
+                return;
+            }
+            s->outstream_pause(s,std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(s->outstream),false);
+            LOGI("apple notification resume finished.");
+        }
+        break;
+            
     }
 }
+
+void CoreAudioCallback::on_route_notification_ca(NSNotification* note){
+    auto s = si.lock();
+    if(!s){
+        return;
+    }
+    NSDictionary* userInfo = note.userInfo;
+    AVAudioSessionRouteChangeReason type = static_cast<AVAudioSessionRouteChangeReason>([userInfo[AVAudioSessionRouteChangeReasonKey] unsignedIntegerValue]);
+    switch(type){
+        case AVAudioSessionRouteChangeReasonOldDeviceUnavailable:
+        {
+            LOGI("AVAudioSessionRouteChangeReasonOldDeviceUnavailable");
+            force_device_scan_ca(s);
+            break;
+        }
+        case AVAudioSessionRouteChangeReasonNewDeviceAvailable: {
+            LOGI("AVAudioSessionRouteChangeReasonNewDeviceAvailable");
+            force_device_scan_ca(s);
+            break;
+        }
+        case AVAudioSessionRouteChangeReasonCategoryChange: {
+            LOGI("AVAudioSessionRouteChangeReasonCategoryChange");
+            break;
+        }
+        case AVAudioSessionRouteChangeReasonOverride: {
+            LOGI("AVAudioSessionRouteChangeReasonOverride");
+            break;
+        }
+        case AVAudioSessionRouteChangeReasonWakeFromSleep: {
+            LOGI("AVAudioSessionRouteChangeReasonWakeFromSleep");
+            break;
+        }
+        case AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory: {
+            LOGI("AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory");
+            break;
+        }
+        case AVAudioSessionRouteChangeReasonRouteConfigurationChange: {
+            LOGI("AVAudioSessionRouteChangeReasonRouteConfigurationChange");
+            break;
+        }
+        case AVAudioSessionRouteChangeReasonUnknown: {
+            LOGI("AVAudioSessionRouteChangeReasonUnknown");
+            break;
+        }
+    }
+}
+
 
 /**
  * @brief C 风格调用签名，负责触发实例底层的方法去获取录制的数据
@@ -1030,13 +1082,20 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si) {
     sica.thread = SoundIoOsThread::create(device_thread_run, si);
     sica.callback->si = si;
     
+    NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
     if(sica.notifyCallback == nil)
     {
-        NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
         sica.notifyCallback = [center addObserverForName:AVAudioSessionInterruptionNotification object:[AVAudioSession sharedInstance] queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification* note){
             CoreAudioCallback::on_notification(note,si);
         }];
     }
+    
+    if(sica.routeCallback == nil){
+        sica.routeCallback = [center addObserverForName:AVAudioSessionRouteChangeNotification object:[AVAudioSession sharedInstance] queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification* note){
+            CoreAudioCallback::on_route_notification(note,si);
+        }];
+    }
+    
     
     si->destroy = destroy_ca;
     si->flush_events = flush_events_ca;
