@@ -7,7 +7,8 @@
 
 #include <string>
 #include <string_view>
-#include <format>
+#include <cstdio>
+#include <cstdarg>
 #include "../libsoundio/common.h"
 
 #define LOG_TAG "WaveAudio"
@@ -54,19 +55,46 @@ inline const char* GetLogLevelString(LogLevel level)
     }
 }
 
-// 🌟 修复 2：将 const char* fmt 替换为 std::format_string<Args...>
-inline std::string FormatLog(LogLevel level, const char* file, int line, std::string_view fmt, std::format_args args)
+// C++17 实现：接受已格式化好的消息字符串，拼接完整日志行
+inline std::string FormatLog(LogLevel level, const char* file, int line, const std::string& msg)
 {
-    // 1. 获取文件名 (使用 std::string_view 零拷贝，更高效)
+    // 获取文件名 (使用 std::string_view 零拷贝，更高效)
     std::string_view filePath(file);
     auto lastSlash = filePath.find_last_of("/\\");
     std::string_view fileName = (lastSlash == std::string_view::npos) ? filePath : filePath.substr(lastSlash + 1);
 
-    // 3. 格式化真实的业务数据 (使用 std::forward 完美转发参数，性能更好)
-    std::string msgBuffer = std::vformat(fmt, args);
+    // 拼接最终的控制台输出格式
+    char header[256];
+    std::snprintf(header, sizeof(header), "[%s][%s][%.*s:%d] ",
+                  LOG_TAG,
+                  GetLogLevelString(level),
+                  static_cast<int>(fileName.size()), fileName.data(),
+                  line);
 
-    // 4. 拼接最终的控制台输出格式
-    return std::format("[{}][{}][{}:{}] {}\n", LOG_TAG, GetLogLevelString(level), fileName, line, msgBuffer);
+    return std::string(header) + msg + "\n";
+}
+
+// C++17 实现：用 vsnprintf 格式化可变参数
+inline std::string FormatArgs(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+
+    // 先计算所需长度
+    va_list args_copy;
+    va_copy(args_copy, args);
+    int len = std::vsnprintf(nullptr, 0, fmt, args_copy);
+    va_end(args_copy);
+
+    std::string result;
+    if (len > 0)
+    {
+        result.resize(static_cast<size_t>(len));
+        std::vsnprintf(result.data(), static_cast<size_t>(len) + 1, fmt, args);
+    }
+
+    va_end(args);
+    return result;
 }
 
 
@@ -74,10 +102,25 @@ inline std::string FormatLog(LogLevel level, const char* file, int line, std::st
 #include <windows.h>
 #include <cstdio>
 
-template<typename... Args>
-inline void PlatformLog(LogLevel level, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+inline void PlatformLogImpl(LogLevel level, const char* file, int line, const char* fmt, ...)
 {
-    auto s = FormatLog(level, file, line, fmt.get(), std::make_format_args(args...));
+    va_list args;
+    va_start(args, fmt);
+
+    va_list args_copy;
+    va_copy(args_copy, args);
+    int len = std::vsnprintf(nullptr, 0, fmt, args_copy);
+    va_end(args_copy);
+
+    std::string msg;
+    if (len > 0)
+    {
+        msg.resize(static_cast<size_t>(len));
+        std::vsnprintf(msg.data(), static_cast<size_t>(len) + 1, fmt, args);
+    }
+    va_end(args);
+
+    auto s = FormatLog(level, file, line, msg);
 
     if (IsDebuggerPresent())
     {
@@ -96,8 +139,7 @@ inline void PlatformLog(LogLevel level, const char* file, int line, std::format_
 #include <cstdio>
 #include <cstring>
 
-template<typename... Args>
-inline void PlatformLog(LogLevel level, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+inline void PlatformLogImpl(LogLevel level, const char* file, int line, const char* fmt, ...)
 {
     // 映射 Android 底层优先级
     android_LogPriority priority = ANDROID_LOG_DEFAULT;
@@ -117,7 +159,23 @@ inline void PlatformLog(LogLevel level, const char* file, int line, std::format_
             break;
     }
 
-    auto s = FormatLog(level, file, line, fmt.get(), std::make_format_args(args...));
+    va_list args;
+    va_start(args, fmt);
+
+    va_list args_copy;
+    va_copy(args_copy, args);
+    int len = std::vsnprintf(nullptr, 0, fmt, args_copy);
+    va_end(args_copy);
+
+    std::string msg;
+    if (len > 0)
+    {
+        msg.resize(static_cast<size_t>(len));
+        std::vsnprintf(msg.data(), static_cast<size_t>(len) + 1, fmt, args);
+    }
+    va_end(args);
+
+    auto s = FormatLog(level, file, line, msg);
     __android_log_print(priority, LOG_TAG, "%s", s.c_str());
     LogUnity(level, s);
 }
@@ -125,10 +183,25 @@ inline void PlatformLog(LogLevel level, const char* file, int line, std::format_
 #elif __MACH__
 #include <cstdio>
 
-template<typename... Args>
-inline void PlatformLog(LogLevel level, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+inline void PlatformLogImpl(LogLevel level, const char* file, int line, const char* fmt, ...)
 {
-    auto s = FormatLog(level, file, line, fmt.get(), std::make_format_args(args...));
+    va_list args;
+    va_start(args, fmt);
+
+    va_list args_copy;
+    va_copy(args_copy, args);
+    int len = std::vsnprintf(nullptr, 0, fmt, args_copy);
+    va_end(args_copy);
+
+    std::string msg;
+    if (len > 0)
+    {
+        msg.resize(static_cast<size_t>(len));
+        std::vsnprintf(msg.data(), static_cast<size_t>(len) + 1, fmt, args);
+    }
+    va_end(args);
+
+    auto s = FormatLog(level, file, line, msg);
     FILE* stream = level >= Error ? stderr : stdout;
     std::fputs(s.c_str(), stream);
     std::fflush(stream);
@@ -139,12 +212,11 @@ inline void PlatformLog(LogLevel level, const char* file, int line, std::format_
 // =======================================================
 // 对外暴露的业务宏
 // =======================================================
-// 🌟 修复 4：使用 C++20 标准的 __VA_OPT__(,) 替代非标准的 ##__VA_ARGS__
-// 这样当只有 fmt 没有 args 时，逗号会被完美消除，跨平台兼容性 100%
-#define LOGD(fmt, ...) PlatformLog(LogLevel::Debug, __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
-#define LOGI(fmt, ...) PlatformLog(LogLevel::Info,  __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
-#define LOGW(fmt, ...) PlatformLog(LogLevel::Warn,  __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
-#define LOGE(fmt, ...) PlatformLog(LogLevel::Error, __FILE__, __LINE__, fmt __VA_OPT__(,) __VA_ARGS__)
+// C++17：使用 ##__VA_ARGS__ GCC/Clang 扩展消除尾随逗号（主流编译器均支持）
+#define LOGD(fmt, ...) PlatformLogImpl(LogLevel::Debug, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define LOGI(fmt, ...) PlatformLogImpl(LogLevel::Info,  __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define LOGW(fmt, ...) PlatformLogImpl(LogLevel::Warn,  __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define LOGE(fmt, ...) PlatformLogImpl(LogLevel::Error, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 
 static void set_unity_log(unity_log_ptr ptr)
 {
