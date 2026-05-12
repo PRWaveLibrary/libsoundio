@@ -383,7 +383,7 @@ static int outstream_pause_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_
                 }
                 default:
                 {
-                    LOGE("unknown state: {}", static_cast<int>(state));
+                    LOGE("unknown state: %d", static_cast<int>(state));
                     return SoundIoErrorStreaming;
                 }
             }

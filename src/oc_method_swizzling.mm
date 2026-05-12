@@ -106,7 +106,7 @@ static void restore_locked_session(void)
     }
 
     if (err) {
-        LOGE("AVAudioSessionGuard restore failed: {}", err.localizedDescription.UTF8String);
+        LOGE("AVAudioSessionGuard restore failed: %s", err.localizedDescription.UTF8String);
     }
 }
 
@@ -118,7 +118,7 @@ static void restore_locked_session(void)
 static BOOL swizzled_setCategory_error(id self, SEL _cmd, AVAudioSessionCategory category, NSError** error)
 {
     if (atomic_load(&s_lock_count) > 0) {
-        LOGI("AVAudioSessionGuard: intercepted setCategory:{} — restoring locked config", category.UTF8String);
+        LOGI("AVAudioSessionGuard: intercepted setCategory:%s — restoring locked config", category.UTF8String);
         if (error){
             NSDictionary *userInfo = @{NSLocalizedDescriptionKey: @"category locked."};
             *error = [NSError errorWithDomain:WaveAudioErrorDomain code:1000 userInfo:userInfo];
@@ -135,7 +135,7 @@ static BOOL swizzled_setCategory_options_error(id self, SEL _cmd,
                                                     NSError** error)
 {
     if (atomic_load(&s_lock_count) > 0) {
-        LOGI("AVAudioSessionGuard: intercepted setCategory:%@ options:%lu — restoring locked config", category.UTF8String, (unsigned long)options);
+        LOGI("AVAudioSessionGuard: intercepted setCategory:%s options:%lu — restoring locked config", category.UTF8String, (unsigned long)options);
         if (error){
             NSDictionary *userInfo = @{NSLocalizedDescriptionKey: @"category locked."};
             *error = [NSError errorWithDomain:WaveAudioErrorDomain code:1000 userInfo:userInfo];
@@ -148,7 +148,7 @@ static BOOL swizzled_setCategory_options_error(id self, SEL _cmd,
 static BOOL swizzled_setCategory_mode_options_error(id self, SEL _cmd, AVAudioSessionCategory category, AVAudioSessionMode mode, AVAudioSessionCategoryOptions options, NSError** error)
 {
     if (atomic_load(&s_lock_count) > 0) {
-        LOGI("AVAudioSessionGuard: intercepted setCategory:{} mode:{} options:{} — restoring locked config", category.UTF8String, mode.UTF8String, (unsigned long)options);
+        LOGI("AVAudioSessionGuard: intercepted setCategory:%s mode:%s options:%lu — restoring locked config", category.UTF8String, mode.UTF8String, (unsigned long)options);
         if (error){
             NSDictionary *userInfo = @{NSLocalizedDescriptionKey: @"category locked."};
             *error = [NSError errorWithDomain:WaveAudioErrorDomain code:1000 userInfo:userInfo];
@@ -218,9 +218,9 @@ void audio_session_guard_lock(void)
         s_locked_category = session.category;
         s_locked_options  = session.categoryOptions;
         s_locked_mode     = session.mode;
-        LOGI("AVAudioSessionGuard: LOCKED. snapshot: category={} mode={} options={}", s_locked_category.UTF8String, s_locked_mode.UTF8String, (unsigned long)s_locked_options);
+        LOGI("AVAudioSessionGuard: LOCKED. snapshot: category=%s mode=%s options=%lu", s_locked_category.UTF8String, s_locked_mode.UTF8String, (unsigned long)s_locked_options);
     } else {
-        LOGI("AVAudioSessionGuard: lock refcount -> {}", prev + 1);
+        LOGI("AVAudioSessionGuard: lock refcount -> %d", prev + 1);
     }
 }
 
@@ -239,7 +239,7 @@ void audio_session_guard_unlock(void)
         s_locked_options  = 0;
         LOGI("AVAudioSessionGuard: UNLOCKED. External category changes now allowed.");
     } else {
-        LOGI("AVAudioSessionGuard: lock refcount -> {}", prev - 1);
+        LOGI("AVAudioSessionGuard: lock refcount -> %d", prev - 1);
     }
 }
 
