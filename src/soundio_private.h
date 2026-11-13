@@ -10,9 +10,9 @@
 
 #include <memory>
 
-#include "soundio_internal.h"
-#include "config.h"
 #include <vector>
+#include "config.h"
+#include "soundio_internal.h"
 
 #ifdef SOUNDIO_HAVE_JACK
 #include "jack.h"
@@ -194,7 +194,7 @@ struct SoundIoPrivate : public SoundIo
 
     int (*outstream_start)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>);
 
-    int (*outstream_begin_write)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>, struct SoundIoChannelArea** out_areas, int* out_frame_count);
+    int (*outstream_begin_write)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>, struct SoundIoChannelArea** out_areas, int* frame_count);
 
     int (*outstream_end_write)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>);
 
