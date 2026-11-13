@@ -8,12 +8,12 @@
 #ifndef SOUNDIO_SOUNDIO_H
 #define SOUNDIO_SOUNDIO_H
 
-#include "endian.h"
-#include <stdbool.h>
 #include <memory>
-#include <vector>
+#include <stdbool.h>
 #include <string>
 #include <unordered_map>
+#include <vector>
+#include "endian.h"
 
 #include "logger/logger.hpp"
 
@@ -26,17 +26,17 @@
 #endif
 
 #if defined(SOUNDIO_STATIC_LIBRARY)
-# define SOUNDIO_EXPORT SOUNDIO_EXTERN_C
+#define SOUNDIO_EXPORT SOUNDIO_EXTERN_C
 #else
-# if defined(_WIN32)
-#  if defined(SOUNDIO_BUILDING_LIBRARY)
-#   define SOUNDIO_EXPORT SOUNDIO_EXTERN_C __declspec(dllexport)
-#  else
-#   define SOUNDIO_EXPORT SOUNDIO_EXTERN_C __declspec(dllimport)
-#  endif
-# else
-#  define SOUNDIO_EXPORT SOUNDIO_EXTERN_C __attribute__((visibility ("default")))
-# endif
+#if defined(_WIN32)
+#if defined(SOUNDIO_BUILDING_LIBRARY)
+#define SOUNDIO_EXPORT SOUNDIO_EXTERN_C __declspec(dllexport)
+#else
+#define SOUNDIO_EXPORT SOUNDIO_EXTERN_C __declspec(dllimport)
+#endif
+#else
+#define SOUNDIO_EXPORT SOUNDIO_EXTERN_C __attribute__((visibility("default")))
+#endif
 #endif
 /// \endcond
 
@@ -516,8 +516,8 @@ struct SoundIoOutStream
     /// For JACK, this value is always equal to
     /// SoundIoDevice::software_latency_current of the device.
     double software_latency;
-    /// Core Audio and WASAPI only: current output Audio Unit volume. Float, 0.0-1.0.
-    float volume;
+    std::atomic<float> volume = {1.0f};
+    std::atomic_bool mute = {false};
     /// Defaults to NULL. Put whatever you want here.
     void* userdata;
 
@@ -537,7 +537,7 @@ struct SoundIoOutStream
     /// for a long time. This includes all I/O functions (disk, TTY, network),
     /// malloc, free, printf, pthread_mutex_lock, sleep, wait, poll, select,
     /// pthread_join, pthread_cond_wait, etc.
-    void (*write_callback)(std::shared_ptr<SoundIoOutStream>, int frame_count_min, int frame_count_max);
+    void (*write_callback)(const std::shared_ptr<SoundIoOutStream>&, int frame_count_min, int frame_count_max);
 
     /// This optional callback happens when the sound device runs out of
     /// buffered audio data to play. After this occurs, the outstream waits
@@ -857,9 +857,7 @@ SOUNDIO_EXPORT void soundio_force_device_scan(std::shared_ptr<SoundIo> soundio);
 
 /// Returns whether the channel count field and each channel id matches in
 /// the supplied channel layouts.
-SOUNDIO_EXPORT bool soundio_channel_layout_equal(
-        const struct SoundIoChannelLayout* a,
-        const struct SoundIoChannelLayout* b);
+SOUNDIO_EXPORT bool soundio_channel_layout_equal(const struct SoundIoChannelLayout* a, const struct SoundIoChannelLayout* b);
 
 SOUNDIO_EXPORT const std::wstring soundio_get_channel_name(enum SoundIoChannelId id);
 
@@ -881,8 +879,7 @@ SOUNDIO_EXPORT const struct SoundIoChannelLayout* soundio_channel_layout_get_bui
 SOUNDIO_EXPORT const struct SoundIoChannelLayout* soundio_channel_layout_get_default(int channel_count);
 
 /// Return the index of `channel` in `layout`, or `-1` if not found.
-SOUNDIO_EXPORT int soundio_channel_layout_find_channel(
-        const struct SoundIoChannelLayout* layout, enum SoundIoChannelId channel);
+SOUNDIO_EXPORT int soundio_channel_layout_find_channel(const struct SoundIoChannelLayout* layout, enum SoundIoChannelId channel);
 
 /// Populates the name field of layout if it matches a builtin one.
 /// returns whether it found a match
@@ -891,9 +888,8 @@ SOUNDIO_EXPORT bool soundio_channel_layout_detect_builtin(struct SoundIoChannelL
 /// Iterates over preferred_layouts. Returns the first channel layout in
 /// preferred_layouts which matches one of the channel layouts in
 /// available_layouts. Returns NULL if none matches.
-SOUNDIO_EXPORT const struct SoundIoChannelLayout* soundio_best_matching_channel_layout(
-        const struct SoundIoChannelLayout* preferred_layouts, int preferred_layout_count,
-        const struct SoundIoChannelLayout* available_layouts, int available_layout_count);
+SOUNDIO_EXPORT const struct SoundIoChannelLayout* soundio_best_matching_channel_layout(const struct SoundIoChannelLayout* preferred_layouts, int preferred_layout_count, const struct SoundIoChannelLayout* available_layouts,
+                                                                                       int available_layout_count);
 
 /// Sorts by channel count, descending.
 SOUNDIO_EXPORT void soundio_sort_channel_layouts(std::vector<SoundIoChannelLayout>& layouts);
@@ -911,8 +907,7 @@ static inline int soundio_get_bytes_per_frame(enum SoundIoFormat format, int cha
 }
 
 /// Sample rate is the number of frames per second.
-static inline int soundio_get_bytes_per_second(enum SoundIoFormat format,
-                                               int channel_count, int sample_rate)
+static inline int soundio_get_bytes_per_second(enum SoundIoFormat format, int channel_count, int sample_rate)
 {
     return soundio_get_bytes_per_frame(format, channel_count) * sample_rate;
 }
@@ -1067,8 +1062,7 @@ SOUNDIO_EXPORT int soundio_outstream_start(std::shared_ptr<SoundIoOutStream> out
 /// * #SoundIoErrorIncompatibleDevice - in rare cases it might just now
 ///   be discovered that the device uses non-byte-aligned access, in which
 ///   case this error code is returned.
-SOUNDIO_EXPORT int soundio_outstream_begin_write(std::shared_ptr<SoundIoOutStream> outstream,
-                                                 struct SoundIoChannelArea** areas, int* frame_count);
+SOUNDIO_EXPORT int soundio_outstream_begin_write(std::shared_ptr<SoundIoOutStream> outstream, struct SoundIoChannelArea** areas, int* frame_count);
 
 /// Commits the write that you began with ::soundio_outstream_begin_write.
 /// You must call this function only from the SoundIoOutStream::write_callback thread context.
@@ -1130,11 +1124,9 @@ SOUNDIO_EXPORT int soundio_outstream_get_time(std::shared_ptr<SoundIoOutStream> 
 ///
 /// Possible errors:
 /// * #SoundIoErrorStreaming
-SOUNDIO_EXPORT int soundio_outstream_get_latency(std::shared_ptr<SoundIoOutStream> outstream,
-                                                 double* out_latency);
+SOUNDIO_EXPORT int soundio_outstream_get_latency(std::shared_ptr<SoundIoOutStream> outstream, double* out_latency);
 
-SOUNDIO_EXPORT int soundio_outstream_set_volume(std::shared_ptr<SoundIoOutStream> outstream,
-                                                double volume);
+SOUNDIO_EXPORT int soundio_outstream_set_volume(std::shared_ptr<SoundIoOutStream> outstream, double volume);
 
 
 // Input Streams
@@ -1205,8 +1197,7 @@ SOUNDIO_EXPORT int soundio_instream_start(std::shared_ptr<SoundIoInStream> instr
 /// * #SoundIoErrorIncompatibleDevice - in rare cases it might just now
 ///   be discovered that the device uses non-byte-aligned access, in which
 ///   case this error code is returned.
-SOUNDIO_EXPORT int soundio_instream_begin_read(std::shared_ptr<SoundIoInStream> instream,
-                                               struct SoundIoChannelArea** areas, int* frame_count);
+SOUNDIO_EXPORT int soundio_instream_begin_read(std::shared_ptr<SoundIoInStream> instream, struct SoundIoChannelArea** areas, int* frame_count);
 
 /// This will drop all of the frames from when you called
 /// ::soundio_instream_begin_read.
@@ -1239,8 +1230,7 @@ SOUNDIO_EXPORT int soundio_instream_pause(std::shared_ptr<SoundIoInStream> instr
 ///
 /// Possible errors:
 /// * #SoundIoErrorStreaming
-SOUNDIO_EXPORT int soundio_instream_get_latency(std::shared_ptr<SoundIoInStream> instream,
-                                                double* out_latency);
+SOUNDIO_EXPORT int soundio_instream_get_latency(std::shared_ptr<SoundIoInStream> instream, double* out_latency);
 
 
 struct SoundIoRingBuffer;

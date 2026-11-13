@@ -8,21 +8,21 @@
 #ifndef SOUNDIO_WASAPI_H
 #define SOUNDIO_WASAPI_H
 
-#include "soundio_internal.h"
-#include "os.h"
 #include <atomic>
 #include <string>
+#include "os.h"
+#include "soundio_internal.h"
 
 // #define CINTERFACE
 #define COBJMACROS
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#include <windows.h>
-#include <mmdeviceapi.h>
 #include <audioclient.h>
-#include <audiosessiontypes.h>
 #include <audiopolicy.h>
+#include <audiosessiontypes.h>
+#include <mmdeviceapi.h>
+#include <windows.h>
 
 struct IMMDeviceDeleter
 {
@@ -54,7 +54,7 @@ struct SoundIoOutStreamWasapi
     IAudioClockAdjustment* audio_clock_adjustment;
     IAudioRenderClient* audio_render_client;
     IAudioSessionControl* audio_session_control;
-    ISimpleAudioVolume* audio_volume_control;
+    // ISimpleAudioVolume* audio_volume_control;
     IAudioClock* audio_clock;
     std::wstring stream_name;
     bool need_resample;
@@ -68,7 +68,7 @@ struct SoundIoOutStreamWasapi
     int buffer_frame_count;
     int write_frame_count;
     HANDLE h_event;
-    std::atomic<bool> desired_pause_state{false};
+    std::atomic_bool desired_pause_state{false};
     std::atomic_flag pause_resume_flag = ATOMIC_FLAG_INIT;
     std::atomic_flag clear_buffer_flag = ATOMIC_FLAG_INIT;
     bool is_paused;
@@ -76,8 +76,7 @@ struct SoundIoOutStreamWasapi
     int open_err;
     bool started;
     int min_padding_frames;
-    float volume;
-    struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
+    SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };
 
 struct SoundIoInStreamWasapi
