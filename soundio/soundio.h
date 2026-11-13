@@ -500,7 +500,8 @@ struct SoundIoOutStream
     {
         /// 当前读取位置，master 时间轴上的帧号（带小数）
         double pos = 0.0;
-        /// 当前重采样比 = 本设备采样率 / 主声卡采样率 × 时钟差修正
+        /// 每输出 1 帧在 master 时间轴上前进多少帧：
+        /// = 本设备采样率 / 主声卡采样率 × 时钟差修正；> 1 表示快放（追），< 1 表示慢放（等）
         double ratio = 1.0;
         /// 低通后的位置误差（帧）
         double err = 0.0;
@@ -703,12 +704,12 @@ struct SoundIo
     /// 只由 master 的 write_callback 推进。
     std::atomic<int64_t> master_frames = {0};
 
-    /// master_frames 对应的 steady_clock 时刻（ns）。从声卡用它把阶梯状的
-    /// master_frames 插值成连续位置，否则误差信号里的量化噪声（一个 callback 的帧数）
-    /// 会远大于漂移本身（每秒几帧）。
-    std::atomic<int64_t> master_ts_ns = {0};
+    /// master_frames 对应的 steady_clock 时刻（原始 tick，单位见 audio_renderer.cpp 的 to_seconds）。
+    /// 从声卡用它把阶梯状的 master_frames 插值成连续位置，否则误差信号里的量化噪声
+    /// （一个 callback 的帧数）会远大于漂移本身（每秒几帧）。
+    std::atomic<int64_t> master_ts = {0};
 
-    /// master_frames / master_ts_ns 的更新序号（seqlock，奇数表示 master 正在更新），
+    /// master_frames / master_ts 的更新序号（seqlock，奇数表示 master 正在更新），
     /// 从声卡据此判断采到的基准是否和读到的 track 位置一致。
     std::atomic<uint32_t> master_seq = {0};
 
