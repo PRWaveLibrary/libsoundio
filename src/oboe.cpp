@@ -247,7 +247,7 @@ static void force_device_scan_oboe(std::shared_ptr<SoundIoPrivate> si)
  */
 static void outstream_destroy_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
-    LOGI("destroy oboe outstream");
+    LOGI(L"destroy oboe outstream");
     SoundIoOutStreamOboe& oso = os->backend_data.oboe;
     oso.audio_stream = nullptr;
     oso.callback = nullptr;
@@ -274,7 +274,7 @@ void OboeStreamDeleter::operator()(oboe::AudioStream* stream) const
  */
 static int outstream_open_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
-    LOGI("open oboe outstream");
+    LOGI(L"open oboe outstream");
     SoundIoOutStreamOboe& oso = os->backend_data.oboe;
     std::shared_ptr<SoundIoOutStream> outstream = os;
     std::shared_ptr<SoundIoDevice> device = outstream->device;
@@ -383,7 +383,7 @@ static int outstream_pause_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_
                 }
                 default:
                 {
-                    LOGE("unknown state: %d", static_cast<int>(state));
+                    LOGE(L"unknown state: %d", static_cast<int>(state));
                     return SoundIoErrorStreaming;
                 }
             }
@@ -580,7 +580,7 @@ static void instream_destroy_oboe(std::shared_ptr<SoundIoPrivate> si, std::share
  */
 static void destroy_oboe(std::shared_ptr<SoundIoPrivate> si)
 {
-    LOGI("destroy oboe");
+    LOGI(L"destroy oboe");
     SoundIoOboe& sio = si->backend_data->oboe;
 
     if (sio.thread)

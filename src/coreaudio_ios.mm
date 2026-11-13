@@ -253,7 +253,7 @@ static void device_thread_run(std::shared_ptr<void> arg) {
  */
 static void outstream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
-    LOGI("destroy core audio outstream");
+    LOGI(L"destroy core audio outstream");
     os->backend_data.coreaudio_ios.instance = nullptr;
     si->backend_data->coreaudio_ios.callback->out_stream.reset();
 }
@@ -272,7 +272,7 @@ OSStatus CoreAudioCallback::write_callback_ca(AudioUnitRenderActionFlags *io_act
         {
             memset(io_data->mBuffers[i].mData, 0, io_data->mBuffers[i].mDataByteSize);
         }
-        LOGE("os is nullptr.");
+        LOGE(L"os is nullptr.");
         return noErr;
     }
     
@@ -361,7 +361,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     AVAudioSession* session = AVAudioSession.sharedInstance;
     BOOL isOk = [session setPreferredIOBufferDuration:os->software_latency error:&ns_err];
     if(!isOk){
-        LOGE("Audio Session Error: %s", ns_err.localizedDescription.UTF8String);
+        LOGE(L"Audio Session Error: %hs", ns_err.localizedDescription.UTF8String);
         outstream_destroy_ca(si,os);
         return SoundIoErrorOpeningDevice;
     }
@@ -369,7 +369,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     
     isOk = [session setActive:YES error:&ns_err];
     if (!isOk) {
-        LOGE("Audio Session Error: %s", ns_err.localizedDescription.UTF8String);
+        LOGE(L"Audio Session Error: %hs", ns_err.localizedDescription.UTF8String);
         outstream_destroy_ca(si,os);
         return SoundIoErrorOpeningDevice;
     }
@@ -637,27 +637,27 @@ void CoreAudioCallback::on_notification_ca(NSNotification* note){
     switch(type){
         case AVAudioSessionInterruptionTypeBegan:
         {
-            LOGI("apple notification pause.");
+            LOGI(L"apple notification pause.");
             s->outstream_pause(s,std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(s->outstream),true);
         }
             break;
         case AVAudioSessionInterruptionTypeEnded:
         {
-            LOGI("apple notification resume begin.");
+            LOGI(L"apple notification resume begin.");
             NSError *error = nil;
             BOOL success = [[AVAudioSession sharedInstance] setActive:YES error:&error];
             if (!success) {
-                LOGE("restart session failed.%s", error.localizedDescription.UTF8String);
+                LOGE(L"restart session failed.%hs", error.localizedDescription.UTF8String);
                 return;
             }
             AVAudioSessionInterruptionOptions options = [userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue];
             if (!(options & AVAudioSessionInterruptionOptionShouldResume))
             {
-                LOGI("apple notification disable resume.");
+                LOGI(L"apple notification disable resume.");
                 return;
             }
             s->outstream_pause(s,std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(s->outstream),false);
-            LOGI("apple notification resume finished.");
+            LOGI(L"apple notification resume finished.");
         }
         break;
             
@@ -674,37 +674,37 @@ void CoreAudioCallback::on_route_notification_ca(NSNotification* note){
     switch(type){
         case AVAudioSessionRouteChangeReasonOldDeviceUnavailable:
         {
-            LOGI("AVAudioSessionRouteChangeReasonOldDeviceUnavailable");
+            LOGI(L"AVAudioSessionRouteChangeReasonOldDeviceUnavailable");
             soundio_outstream_pause(s->outstream, false);
             break;
         }
         case AVAudioSessionRouteChangeReasonNewDeviceAvailable: {
-            LOGI("AVAudioSessionRouteChangeReasonNewDeviceAvailable");
+            LOGI(L"AVAudioSessionRouteChangeReasonNewDeviceAvailable");
 //            force_device_scan_ca(s);
             break;
         }
         case AVAudioSessionRouteChangeReasonCategoryChange: {
-            LOGI("AVAudioSessionRouteChangeReasonCategoryChange");
+            LOGI(L"AVAudioSessionRouteChangeReasonCategoryChange");
             break;
         }
         case AVAudioSessionRouteChangeReasonOverride: {
-            LOGI("AVAudioSessionRouteChangeReasonOverride");
+            LOGI(L"AVAudioSessionRouteChangeReasonOverride");
             break;
         }
         case AVAudioSessionRouteChangeReasonWakeFromSleep: {
-            LOGI("AVAudioSessionRouteChangeReasonWakeFromSleep");
+            LOGI(L"AVAudioSessionRouteChangeReasonWakeFromSleep");
             break;
         }
         case AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory: {
-            LOGI("AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory");
+            LOGI(L"AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory");
             break;
         }
         case AVAudioSessionRouteChangeReasonRouteConfigurationChange: {
-            LOGI("AVAudioSessionRouteChangeReasonRouteConfigurationChange");
+            LOGI(L"AVAudioSessionRouteChangeReasonRouteConfigurationChange");
             break;
         }
         case AVAudioSessionRouteChangeReasonUnknown: {
-            LOGI("AVAudioSessionRouteChangeReasonUnknown");
+            LOGI(L"AVAudioSessionRouteChangeReasonUnknown");
             break;
         }
     }
@@ -731,7 +731,7 @@ OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags *io_acti
     auto is = in_stream.lock();
     if(is == nullptr)
     {
-        LOGE("is is nullptr.");
+        LOGE(L"is is nullptr.");
         return noErr;
     }
     
@@ -975,7 +975,7 @@ static int instream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
  */
 static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
 {
-    LOGI("destroy core audio");
+    LOGI(L"destroy core audio");
     if(audio_session_guard_is_locked()){
         audio_session_guard_unlock();
     }
@@ -1014,21 +1014,21 @@ static int set_record_route(std::shared_ptr<SoundIoPrivate> si){
     AVAudioSessionCategoryOptions options = AVAudioSessionCategoryOptionDefaultToSpeaker | AVAudioSessionCategoryOptionAllowBluetoothHFP | AVAudioSessionCategoryOptionAllowBluetoothA2DP;
     BOOL isOk = [session setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:options error:&ns_err];
     if(!isOk){
-        LOGE("Audio setCategory Error: %s", ns_err.localizedDescription.UTF8String);
+        LOGE(L"Audio setCategory Error: %hs", ns_err.localizedDescription.UTF8String);
         destroy_ca(si);
         return SoundIoErrorInitAudioBackend;
     }
     
     isOk = [session setMode:AVAudioSessionModeMeasurement error:&ns_err];
     if(!isOk){
-        LOGE("Audio setMode Error: %s", ns_err.localizedDescription.UTF8String);
+        LOGE(L"Audio setMode Error: %hs", ns_err.localizedDescription.UTF8String);
         destroy_ca(si);
         return SoundIoErrorInitAudioBackend;
     }
     
     isOk = [session setActive:YES error:&ns_err];
     if (!isOk) {
-        LOGE("Audio Session Error: %s", ns_err.localizedDescription.UTF8String);
+        LOGE(L"Audio Session Error: %hs", ns_err.localizedDescription.UTF8String);
         destroy_ca(si);
         return SoundIoErrorInitAudioBackend;
     }
@@ -1041,21 +1041,21 @@ static int set_playback_route(std::shared_ptr<SoundIoPrivate> si){
     
     BOOL isOk = [session setCategory:AVAudioSessionCategoryPlayback withOptions:NULL error:&ns_err];
     if(!isOk){
-        LOGE("Audio setCategory Error: %s", ns_err.localizedDescription.UTF8String);
+        LOGE(L"Audio setCategory Error: %hs", ns_err.localizedDescription.UTF8String);
         destroy_ca(si);
         return SoundIoErrorInitAudioBackend;
     }
     
     isOk = [session setMode:AVAudioSessionModeDefault error:&ns_err];
     if(!isOk){
-        LOGE("Audio setMode Error: %s", ns_err.localizedDescription.UTF8String);
+        LOGE(L"Audio setMode Error: %hs", ns_err.localizedDescription.UTF8String);
         destroy_ca(si);
         return SoundIoErrorInitAudioBackend;
     }
     
     isOk = [session setActive:YES error:&ns_err];
     if (!isOk) {
-        LOGE("Audio Session Error: %s", ns_err.localizedDescription.UTF8String);
+        LOGE(L"Audio Session Error: %hs", ns_err.localizedDescription.UTF8String);
         destroy_ca(si);
         return SoundIoErrorInitAudioBackend;
     }

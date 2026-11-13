@@ -48,7 +48,7 @@ static enum SoundIoDeviceAim aims[] =
  */
 OSStatus CoreAudioCallback::devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[])
 {
-    LOGI("on devices changed %u", in_object_id);
+    LOGI(L"on devices changed %u", in_object_id);
     std::shared_ptr<SoundIoPrivate> s = si.lock();
     if (s == nullptr)
     {
@@ -1020,7 +1020,7 @@ static void device_thread_run(std::shared_ptr<void> arg)
  */
 static void outstream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
-    LOGI("destroy core audio outstream");
+    LOGI(L"destroy core audio outstream");
     si->backend_data->coreaudio.callback->out_stream.reset();
     SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
     std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(os->device);
@@ -1104,7 +1104,7 @@ static int set_ca_desc(enum SoundIoFormat fmt, AudioStreamBasicDescription* desc
  */
 static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
-    LOGI("open core audio outstream");
+    LOGI(L"open core audio outstream");
     SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
     std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(os->device);
     std::shared_ptr<SoundIoDeviceCoreAudio> dca = dev->backend_data.coreaudio;
@@ -1126,7 +1126,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     AudioComponent component = AudioComponentFindNext(nullptr, &desc);
     if (!component)
     {
-        LOGE("AudioComponent not found.");
+        LOGE(L"AudioComponent not found.");
         outstream_destroy_ca(si, os);
         return SoundIoErrorOpeningDevice;
     }
@@ -1135,7 +1135,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     OSStatus os_err = AudioComponentInstanceNew(component, &osca.instance);
     if (os_err != noErr)
     {
-        LOGE("AudioComponentInstanceNew failed.");
+        LOGE(L"AudioComponentInstanceNew failed.");
         outstream_destroy_ca(si, os);
         return SoundIoErrorOpeningDevice;
     }
@@ -1143,7 +1143,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     os_err = AudioUnitInitialize(osca.instance);
     if (os_err != noErr)
     {
-        LOGE("AudioUnitInitialize failed.");
+        LOGE(L"AudioUnitInitialize failed.");
         outstream_destroy_ca(si, os);
         return SoundIoErrorOpeningDevice;
     }
@@ -1154,7 +1154,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     int err = set_ca_desc(os->format, &format);
     if (err)
     {
-        LOGE("set_ca_desc failed.");
+        LOGE(L"set_ca_desc failed.");
         outstream_destroy_ca(si, os);
         return err;
     }
@@ -1165,14 +1165,14 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     os_err = AudioUnitSetProperty(osca.instance, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Input, OUTPUT_ELEMENT, &dca->device_id, sizeof(AudioDeviceID));
     if (os_err != noErr)
     {
-        LOGE("Binding outstream id %d failed.", dca->device_id);
+        LOGE(L"Binding outstream id %d failed.", dca->device_id);
         outstream_destroy_ca(si, os);
         return SoundIoErrorOpeningDevice;
     }
     os_err = AudioUnitSetProperty(osca.instance, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, OUTPUT_ELEMENT, &format, sizeof(AudioStreamBasicDescription));
     if (os_err != noErr)
     {
-        LOGE("AudioUnitSetProperty format failed.");
+        LOGE(L"AudioUnitSetProperty format failed.");
         outstream_destroy_ca(si, os);
         return SoundIoErrorIncompatibleDevice;
     }
@@ -1181,7 +1181,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     os_err = AudioUnitSetProperty(osca.instance, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, OUTPUT_ELEMENT, &render_callback, sizeof(AURenderCallbackStruct));
     if (os_err != noErr)
     {
-        LOGE("Binding render_callback failed.");
+        LOGE(L"Binding render_callback failed.");
         outstream_destroy_ca(si, os);
         return SoundIoErrorOpeningDevice;
     }
@@ -1191,7 +1191,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     os_err = AudioObjectSetPropertyData(dca->device_id, &prop_address, 0, nullptr, sizeof(UInt32), &buffer_frame_size);
     if (os_err != noErr)
     {
-        LOGE("Set buffer frame size %d failed.", buffer_frame_size);
+        LOGE(L"Set buffer frame size %d failed.", buffer_frame_size);
         outstream_destroy_ca(si, os);
         return SoundIoErrorOpeningDevice;
     }
@@ -1202,14 +1202,14 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     os_err = AudioObjectAddPropertyListener(dca->device_id, &prop_address, CoreAudioCallback::on_outstream_device_overload, si->backend_data->coreaudio.callback.get());
     if (os_err != noErr)
     {
-        LOGE("Binding callback overload failed.");
+        LOGE(L"Binding callback overload failed.");
         outstream_destroy_ca(si, os);
         return SoundIoErrorOpeningDevice;
     }
     os_err = AudioUnitGetParameter(osca.instance, kHALOutputParam_Volume, kAudioUnitScope_Global, 0, &os->volume);
     if (os_err != noErr)
     {
-        LOGE("Set volume failed.");
+        LOGE(L"Set volume failed.");
         outstream_destroy_ca(si, os);
         return SoundIoErrorOpeningDevice;
     }
@@ -1662,7 +1662,7 @@ static int instream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
  */
 static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
 {
-    LOGI("destroy core audio");
+    LOGI(L"destroy core audio");
 
     SoundIoCoreAudio& sica = si->backend_data->coreaudio;
 

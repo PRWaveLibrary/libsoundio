@@ -9,11 +9,22 @@
 #include <string_view>
 #include <cstdio>
 #include <cstdarg>
-#include "../libsoundio/common.h"
 
-#define LOG_TAG "WaveAudio"
+// 相对于本文件的路径：logger 在 libsoundio 下，而 string_util 在仓库的 src/common 下
+#include "../../src/common/string_util.h"
 
-typedef void (*unity_log_ptr)(int, const char*);
+#define LOG_TAG        L"WaveAudio"
+
+// 宽字符版 __FILE__（MSVC 自带 __FILEW__，GCC/Clang 用拼接得到）
+#ifdef __FILEW__
+#define WA_FILE_W __FILEW__
+#else
+#define WA_WIDEN_IMPL(x) L##x
+#define WA_WIDEN(x) WA_WIDEN_IMPL(x)
+#define WA_FILE_W WA_WIDEN(__FILE__)
+#endif
+
+typedef void (*unity_log_ptr)(int, const char16_t*);
 
 inline unity_log_ptr g_unity_log = nullptr;
 
@@ -25,74 +36,92 @@ enum LogLevel
     Error
 };
 
-static inline void LogUnity(LogLevel level, std::string& s)
+static inline void LogUnity(LogLevel level, const std::wstring& s)
 {
     if (g_unity_log == nullptr)
     {
         return;
     }
-    g_unity_log(level, s.c_str());
+    g_unity_log(level, Util::String::to_u16string(s).c_str());
 }
 
 // =======================================================
 // 底层格式化实现核心
 // =======================================================
 
-inline const char* GetLogLevelString(LogLevel level)
+inline const wchar_t* GetLogLevelString(LogLevel level)
 {
     switch (level)
     {
         case Debug:
-            return "DEBUG";
+            return L"DEBUG";
         case Info:
-            return "INFO";
+            return L"INFO";
         case Warn:
-            return "WARN";
+            return L"WARN";
         case Error:
-            return "ERROR";
+            return L"ERROR";
         default:
-            return "UNKNOWN";
+            return L"UNKNOWN";
     }
 }
 
-// C++17 实现：接受已格式化好的消息字符串，拼接完整日志行
-inline std::string FormatLog(LogLevel level, const char* file, int line, const std::string& msg)
+// 接受已格式化好的消息字符串，拼接完整日志行
+inline std::wstring FormatLog(LogLevel level, const wchar_t* file, int line, const std::wstring& msg)
 {
-    // 获取文件名 (使用 std::string_view 零拷贝，更高效)
-    std::string_view filePath(file);
-    auto lastSlash = filePath.find_last_of("/\\");
-    std::string_view fileName = (lastSlash == std::string_view::npos) ? filePath : filePath.substr(lastSlash + 1);
+    // 获取文件名 (使用 std::string_view 零拷贝，仅在拼接时转宽)
+    std::wstring_view filePath(file);
+    auto lastSlash = filePath.find_last_of(L"/\\");
+    std::wstring_view fileName = (lastSlash == std::string_view::npos) ? filePath : filePath.substr(lastSlash + 1);
 
     // 拼接最终的控制台输出格式
-    char header[256];
-    std::snprintf(header, sizeof(header), "[%s][%s][%.*s:%d] ",
-                  LOG_TAG,
-                  GetLogLevelString(level),
-                  static_cast<int>(fileName.size()), fileName.data(),
-                  line);
-
-    return std::string(header) + msg + "\n";
+    std::wstring out;
+    out.reserve(fileName.size() + msg.size() + 32);
+    out += L"[";
+    out += LOG_TAG;
+    out += L"][";
+    out += GetLogLevelString(level);
+    out += L"][";
+    out += fileName;
+    out += L':';
+    out += std::to_wstring(line);
+    out += L"] ";
+    out += msg;
+    out += L'\n';
+    return out;
 }
 
-// C++17 实现：用 vsnprintf 格式化可变参数
-inline std::string FormatArgs(const char* fmt, ...)
+// 用 vswprintf 格式化可变参数（printf 风格，宽字符）
+inline std::wstring FormatArgsV(const wchar_t* fmt, va_list args)
+{
+    // vswprintf 无法像 vsnprintf 那样先探测长度，只能逐步扩容重试
+    std::wstring result(256, L'\0');
+    for (;;)
+    {
+        va_list args_copy;
+        va_copy(args_copy, args);
+        const int len = std::vswprintf(result.data(), result.size(), fmt, args_copy);
+        va_end(args_copy);
+
+        if (len >= 0 && static_cast<size_t>(len) < result.size())
+        {
+            result.resize(static_cast<size_t>(len));
+            return result;
+        }
+        if (result.size() >= 64 * 1024)
+        {
+            return {}; // 格式化失败或超长，放弃
+        }
+        // 缓冲不足（MSVC / glibc 都返回 -1），扩容后重试
+        result.resize(result.size() * 4);
+    }
+}
+
+inline std::wstring FormatArgs(const wchar_t* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-
-    // 先计算所需长度
-    va_list args_copy;
-    va_copy(args_copy, args);
-    int len = std::vsnprintf(nullptr, 0, fmt, args_copy);
-    va_end(args_copy);
-
-    std::string result;
-    if (len > 0)
-    {
-        result.resize(static_cast<size_t>(len));
-        std::vsnprintf(result.data(), static_cast<size_t>(len) + 1, fmt, args);
-    }
-
+    std::wstring result = FormatArgsV(fmt, args);
     va_end(args);
     return result;
 }
@@ -102,34 +131,39 @@ inline std::string FormatArgs(const char* fmt, ...)
 #include <windows.h>
 #include <cstdio>
 
-inline void PlatformLogImpl(LogLevel level, const char* file, int line, const char* fmt, ...)
+inline void PlatformLogImpl(LogLevel level, const wchar_t* file, int line, const wchar_t* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-
-    va_list args_copy;
-    va_copy(args_copy, args);
-    int len = std::vsnprintf(nullptr, 0, fmt, args_copy);
-    va_end(args_copy);
-
-    std::string msg;
-    if (len > 0)
-    {
-        msg.resize(static_cast<size_t>(len));
-        std::vsnprintf(msg.data(), static_cast<size_t>(len) + 1, fmt, args);
-    }
+    std::wstring msg = FormatArgsV(fmt, args);
     va_end(args);
 
     auto s = FormatLog(level, file, line, msg);
 
     if (IsDebuggerPresent())
     {
-        printf("%s", s.c_str());
-        fflush(stdout);
+        // 先把之前缓冲的窄字符输出刷出去，保证日志顺序
+        std::fflush(stdout);
+
+        // 直接输出 UTF-16 到控制台，绕过代码页转换（否则中文会变成 '?'）
+        HANDLE h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+        DWORD mode = 0;
+        if (h_stdout != nullptr && h_stdout != INVALID_HANDLE_VALUE && GetConsoleMode(h_stdout, &mode))
+        {
+            DWORD written = 0;
+            WriteConsoleW(h_stdout, s.c_str(), static_cast<DWORD>(s.size()), &written, nullptr);
+        }
+        else
+        {
+            // stdout 被重定向到文件/管道时，退化为 UTF-8 字节输出
+            const auto utf8 = Util::String::to_utf8(s);
+            std::fwrite(utf8.data(), 1, utf8.size(), stdout);
+        }
+        std::fflush(stdout);
     }
     else
     {
-        OutputDebugStringA(s.c_str());
+        OutputDebugStringW(s.c_str());
     }
     LogUnity(level, s);
 }
@@ -139,7 +173,7 @@ inline void PlatformLogImpl(LogLevel level, const char* file, int line, const ch
 #include <cstdio>
 #include <cstring>
 
-inline void PlatformLogImpl(LogLevel level, const char* file, int line, const char* fmt, ...)
+inline void PlatformLogImpl(LogLevel level, const wchar_t* file, int line, const wchar_t* fmt, ...)
 {
     // 映射 Android 底层优先级
     android_LogPriority priority = ANDROID_LOG_DEFAULT;
@@ -161,49 +195,29 @@ inline void PlatformLogImpl(LogLevel level, const char* file, int line, const ch
 
     va_list args;
     va_start(args, fmt);
-
-    va_list args_copy;
-    va_copy(args_copy, args);
-    int len = std::vsnprintf(nullptr, 0, fmt, args_copy);
-    va_end(args_copy);
-
-    std::string msg;
-    if (len > 0)
-    {
-        msg.resize(static_cast<size_t>(len));
-        std::vsnprintf(msg.data(), static_cast<size_t>(len) + 1, fmt, args);
-    }
+    std::wstring msg = FormatArgsV(fmt, args);
     va_end(args);
 
     auto s = FormatLog(level, file, line, msg);
-    __android_log_print(priority, LOG_TAG, "%s", s.c_str());
+    const auto utf8 = Util::String::to_utf8(s);
+    __android_log_print(priority, LOG_TAG, "%s", utf8.c_str());
     LogUnity(level, s);
 }
 
 #elif __MACH__
 #include <cstdio>
 
-inline void PlatformLogImpl(LogLevel level, const char* file, int line, const char* fmt, ...)
+inline void PlatformLogImpl(LogLevel level, const wchar_t* file, int line, const wchar_t* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-
-    va_list args_copy;
-    va_copy(args_copy, args);
-    int len = std::vsnprintf(nullptr, 0, fmt, args_copy);
-    va_end(args_copy);
-
-    std::string msg;
-    if (len > 0)
-    {
-        msg.resize(static_cast<size_t>(len));
-        std::vsnprintf(msg.data(), static_cast<size_t>(len) + 1, fmt, args);
-    }
+    std::wstring msg = FormatArgsV(fmt, args);
     va_end(args);
 
     auto s = FormatLog(level, file, line, msg);
+    const auto utf8 = Util::String::to_utf8(s);
     FILE* stream = level >= Error ? stderr : stdout;
-    std::fputs(s.c_str(), stream);
+    std::fputs(utf8.c_str(), stream);
     std::fflush(stream);
     LogUnity(level, s);
 }
@@ -212,11 +226,12 @@ inline void PlatformLogImpl(LogLevel level, const char* file, int line, const ch
 // =======================================================
 // 对外暴露的业务宏
 // =======================================================
-// C++17：使用 ##__VA_ARGS__ GCC/Clang 扩展消除尾随逗号（主流编译器均支持）
-#define LOGD(fmt, ...) PlatformLogImpl(LogLevel::Debug, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define LOGI(fmt, ...) PlatformLogImpl(LogLevel::Info,  __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define LOGW(fmt, ...) PlatformLogImpl(LogLevel::Warn,  __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define LOGE(fmt, ...) PlatformLogImpl(LogLevel::Error, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+// 格式串为宽字符：L"xxx %d"；窄字符串参数用 %hs，宽字符串参数用 %ls
+// ##__VA_ARGS__ 为 GCC/Clang 扩展，用于消除无参时的尾随逗号
+#define LOGD(fmt, ...) PlatformLogImpl(LogLevel::Debug, WA_FILE_W, __LINE__, fmt, ##__VA_ARGS__)
+#define LOGI(fmt, ...) PlatformLogImpl(LogLevel::Info,  WA_FILE_W, __LINE__, fmt, ##__VA_ARGS__)
+#define LOGW(fmt, ...) PlatformLogImpl(LogLevel::Warn,  WA_FILE_W, __LINE__, fmt, ##__VA_ARGS__)
+#define LOGE(fmt, ...) PlatformLogImpl(LogLevel::Error, WA_FILE_W, __LINE__, fmt, ##__VA_ARGS__)
 
 static void set_unity_log(unity_log_ptr ptr)
 {

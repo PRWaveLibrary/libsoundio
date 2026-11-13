@@ -454,15 +454,8 @@ int soundio_default_input_device_index(std::shared_ptr<SoundIo> soundio)
 int soundio_default_output_device_index(std::shared_ptr<SoundIo> soundio)
 {
     std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
-
     assert(si->safe_devices_info);
-    // if (!si->safe_devices_info)
-    //     return -1;
-
     assert(soundio->current_backend != SoundIoBackendNone);
-    // if (soundio->current_backend == SoundIoBackendNone)
-    //     return -1;
-
     return si->safe_devices_info->default_output_index;
 }
 
@@ -489,68 +482,16 @@ struct std::shared_ptr<SoundIoDevice> soundio_get_input_device(std::shared_ptr<S
     return si->safe_devices_info->input_devices.at(index);
 }
 
-struct std::shared_ptr<SoundIoDevice> soundio_get_output_device(std::shared_ptr<SoundIo> soundio, int index)
+std::shared_ptr<SoundIoDevice> soundio_get_output_device(std::shared_ptr<SoundIo> soundio, int index)
 {
     std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
-
     assert(soundio->current_backend != SoundIoBackendNone);
-    // if (soundio->current_backend == SoundIoBackendNone)
-    //     return NULL;
-
     assert(si->safe_devices_info);
-    // if (!si->safe_devices_info)
-    //     return NULL;
 
     assert(index >= 0);
     assert(static_cast<size_t>(index) < si->safe_devices_info->output_devices.size());
-    // if (index >= si->safe_devices_info->output_devices.size())
-    //     return NULL;
-    std::shared_ptr<SoundIoDevice> device = si->safe_devices_info->output_devices.at(index);
-    // soundio_device_ref(device);
-    return device;
+    return si->safe_devices_info->output_devices.at(index);
 }
-
-// void soundio_device_unref(struct SoundIoDevice* device)
-// {
-//     if (!device)
-//         return;
-//
-//     device->ref_count -= 1;
-//     assert(device->ref_count >= 0);
-//
-//     if (device->ref_count == 0)
-//     {
-//         struct SoundIoDevicePrivate* dev = reinterpret_cast<struct SoundIoDevicePrivate*>(device);
-//         if (dev->destruct)
-//         {
-//             dev->destruct(dev);
-//         }
-//
-//         free(device->id);
-//         free(device->name);
-//
-//         if (device->sample_rates != &dev->prealloc_sample_rate_range &&
-//             device->sample_rates != dev->sample_rates.items)
-//         {
-//             free(device->sample_rates);
-//         }
-//         SoundIoListSampleRateRange_deinit(&dev->sample_rates);
-//
-//         if (device->formats != &dev->prealloc_format)
-//             free(device->formats);
-//
-//         if (device->layouts != &device->current_layout)
-//             free(device->layouts);
-//
-//         free(dev);
-//     }
-// }
-
-// void soundio_device_ref(struct SoundIoDevice* device)
-// {
-//     assert(device);
-//     device->ref_count += 1;
-// }
 
 void soundio_wait_events(std::shared_ptr<SoundIo> soundio)
 {
@@ -590,7 +531,7 @@ int soundio_outstream_end_write(std::shared_ptr<SoundIoOutStream> outstream)
 
 static void default_outstream_error_callback(std::shared_ptr<SoundIoOutStream> os, int err)
 {
-    soundio_panic("libsoundio: %s", soundio_strerror(err));
+    LOGE(L"libsoundio: %s", soundio_strerror(err));
 }
 
 static void default_underflow_callback(std::shared_ptr<SoundIoOutStream> outstream)
@@ -604,11 +545,11 @@ std::shared_ptr<SoundIoOutStream> soundio_outstream_create(std::shared_ptr<Sound
 
     if (!os)
     {
-        return NULL;
+        return nullptr;
     }
     if (!device)
     {
-        return NULL;
+        return nullptr;
     }
 
     outstream->device = device;
@@ -987,12 +928,14 @@ int soundio_device_nearest_sample_rate(std::shared_ptr<SoundIoDevice> device, in
 {
     int best_rate = -1;
     int best_delta = -1;
-    for (size_t i = 0; i < device->sample_rates.size(); ++i)
+
+    for (const auto& range: device->sample_rates)
     {
-        struct SoundIoSampleRateRange* range = &device->sample_rates[i];
-        int candidate_rate = soundio_int_clamp(range->min, sample_rate, range->max);
+        int candidate_rate = soundio_int_clamp(range.min, sample_rate, range.max);
         if (candidate_rate == sample_rate)
+        {
             return candidate_rate;
+        }
 
         int delta = abs_diff_int(candidate_rate, sample_rate);
         bool best_rate_too_small = best_rate < sample_rate;
@@ -1005,6 +948,7 @@ int soundio_device_nearest_sample_rate(std::shared_ptr<SoundIoDevice> device, in
             best_delta = delta;
         }
     }
+
     return best_rate;
 }
 

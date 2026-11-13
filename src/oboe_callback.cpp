@@ -39,6 +39,6 @@ void oboe_stream_error_callback::onErrorAfterClose(oboe::AudioStream* audioStrea
         return;
     }
 
-    LOGI("device change.");
+    LOGI(L"device change.");
     soundio_force_device_scan(si);
 }

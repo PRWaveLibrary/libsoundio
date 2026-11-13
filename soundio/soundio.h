@@ -13,6 +13,8 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <unordered_map>
+
 #include "logger/logger.hpp"
 
 /// \cond
@@ -361,11 +363,13 @@ struct SoundIoDevice
     /// one for each value of SoundIoDevice::is_raw and one for each value of
     /// SoundIoDevice::aim.
     std::wstring id;
+    std::wstring container_id;
     /// User-friendly UTF-8 encoded text to describe the device.
     std::wstring name;
 
     /// Tells whether this device is an input device or an output device.
     enum SoundIoDeviceAim aim;
+    bool is_default;
 
     /// Channel layouts are handled similarly to SoundIoDevice::formats.
     /// If this information is missing due to a SoundIoDevice::probe_error,
@@ -473,8 +477,18 @@ struct SoundIoOutStream
     /// Defaults to Stereo, if available, followed by the first layout
     /// supported.
     struct SoundIoChannelLayout layout;
-    
-    std::atomic_bool paused;
+
+    bool IsDefault() const
+    {
+        if (device == nullptr)
+        {
+            return false;
+        }
+        return device->is_default;
+    }
+
+    std::atomic_bool paused = {};
+    std::vector<float> mix_buffer = {};
 
     /// Ignoring hardware latency, this is the number of seconds it takes for
     /// the last sample in a full buffer to be played.
@@ -661,7 +675,14 @@ struct SoundIo
     /// Optional. Put whatever you want here. Defaults to NULL.
     void* userdata;
 
-    std::shared_ptr<SoundIoOutStream> outstream;
+    std::shared_ptr<SoundIoOutStream> default_out_stream = {};
+    std::unordered_map<std::wstring, std::shared_ptr<SoundIoOutStream>> outstreams = {};
+
+    void ClearOutStreams()
+    {
+        outstreams.clear();
+        default_out_stream = nullptr;
+    }
 
     /// Optional callback. Called when the list of devices change. Only called
     /// during a call to ::soundio_flush_events or ::soundio_wait_events.
@@ -837,8 +858,8 @@ SOUNDIO_EXPORT void soundio_force_device_scan(std::shared_ptr<SoundIo> soundio);
 /// Returns whether the channel count field and each channel id matches in
 /// the supplied channel layouts.
 SOUNDIO_EXPORT bool soundio_channel_layout_equal(
-    const struct SoundIoChannelLayout* a,
-    const struct SoundIoChannelLayout* b);
+        const struct SoundIoChannelLayout* a,
+        const struct SoundIoChannelLayout* b);
 
 SOUNDIO_EXPORT const std::wstring soundio_get_channel_name(enum SoundIoChannelId id);
 
@@ -861,7 +882,7 @@ SOUNDIO_EXPORT const struct SoundIoChannelLayout* soundio_channel_layout_get_def
 
 /// Return the index of `channel` in `layout`, or `-1` if not found.
 SOUNDIO_EXPORT int soundio_channel_layout_find_channel(
-    const struct SoundIoChannelLayout* layout, enum SoundIoChannelId channel);
+        const struct SoundIoChannelLayout* layout, enum SoundIoChannelId channel);
 
 /// Populates the name field of layout if it matches a builtin one.
 /// returns whether it found a match
@@ -871,8 +892,8 @@ SOUNDIO_EXPORT bool soundio_channel_layout_detect_builtin(struct SoundIoChannelL
 /// preferred_layouts which matches one of the channel layouts in
 /// available_layouts. Returns NULL if none matches.
 SOUNDIO_EXPORT const struct SoundIoChannelLayout* soundio_best_matching_channel_layout(
-    const struct SoundIoChannelLayout* preferred_layouts, int preferred_layout_count,
-    const struct SoundIoChannelLayout* available_layouts, int available_layout_count);
+        const struct SoundIoChannelLayout* preferred_layouts, int preferred_layout_count,
+        const struct SoundIoChannelLayout* available_layouts, int available_layout_count);
 
 /// Sorts by channel count, descending.
 SOUNDIO_EXPORT void soundio_sort_channel_layouts(std::vector<SoundIoChannelLayout>& layouts);

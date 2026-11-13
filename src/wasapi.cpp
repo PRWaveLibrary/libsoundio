@@ -37,6 +37,7 @@
 #endif
 
 #include <functiondiscoverykeys_devpkey.h>
+#include <ranges>
 
 // Some HRESULT values are not defined by the windows headers
 #ifndef E_NOTFOUND
@@ -841,17 +842,16 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         return SoundIoErrorIncompatibleDevice;
     }
 
-    int device_count = unsigned_count;
     rd->devices_info = std::make_unique<SoundIoDevicesInfo>();
     rd->devices_info->default_input_index = -1;
     rd->devices_info->default_output_index = -1;
 
-    for (int device_i = 0; device_i < device_count; device_i += 1)
+    for (uint32_t i = 0; i < unsigned_count; i += 1)
     {
         rd->mm_device = nullptr;
 
         IMMDevice* device;
-        if (FAILED(hr = rd->collection->Item(device_i, &device)))
+        if (FAILED(hr = rd->collection->Item(i, &device)))
         {
             continue;
         }
@@ -879,7 +879,6 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         std::shared_ptr<SoundIoDevicePrivate> raw_w = std::make_shared<SoundIoDevicePrivate>();
 
         rd->device_raw = raw_w;
-        // rd->device_raw->ref_count = 1;
         rd->device_raw->soundio = si;
         rd->device_raw->is_raw = true;
         rd->device_raw->software_latency_max = 0.5;
@@ -889,6 +888,33 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         CoTaskMemFree(lpwstr);
         lpwstr = nullptr;
 
+
+        //cid
+        std::wstring cid = L"";
+        IPropertyStore* store = nullptr;
+        if (SUCCEEDED(device->OpenPropertyStore(STGM_READ, &store)) && store != nullptr)
+        {
+            PROPVARIANT variant{};
+            if (SUCCEEDED(store->GetValue(PKEY_Device_ContainerId, &variant)))
+            {
+                if (variant.vt == VT_CLSID && variant.puuid != nullptr)
+                {
+                    wchar_t guid[64]{};
+                    if (StringFromGUID2(*variant.puuid, guid, std::size(guid)) > 0)
+                    {
+                        cid = std::wstring(guid); // "{xxxxxxxx-xxxx-...}"
+                    }
+                }
+                else if (variant.vt == VT_LPWSTR && variant.pwszVal != nullptr)
+                {
+                    cid = std::wstring(variant.pwszVal);
+                }
+            }
+            PropVariantClear(&variant);
+            store->Release();
+        }
+
+        rd->device_raw->container_id = rd->device_shared->container_id = cid;
         if (rd->endpoint)
         {
             rd->endpoint->Release();
@@ -923,16 +949,19 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             device_list = &rd->devices_info->output_devices;
             if (rd->device_shared->id == rd->default_render_id)
             {
-                rd->devices_info->default_output_index = device_list->size();
+                rd->device_shared->is_default = true;
+                rd->device_raw->is_default = true;
+                rd->devices_info->default_output_index = static_cast<int>(device_list->size());
             }
         }
         else
         {
-            assert(rd->device_shared->aim == SoundIoDeviceAimInput);
             device_list = &rd->devices_info->input_devices;
             if (rd->device_shared->id == rd->default_capture_id)
             {
-                rd->devices_info->default_input_index = device_list->size();
+                rd->device_shared->is_default = true;
+                rd->device_raw->is_default = true;
+                rd->devices_info->default_input_index = static_cast<int>(device_list->size());
             }
         }
 
@@ -1372,7 +1401,7 @@ static void outstream_thread_deinit(std::shared_ptr<SoundIoPrivate> si, std::sha
  */
 static void outstream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
-    LOGI("destroy wasapi outstream");
+    LOGI(L"destroy wasapi outstream");
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
 
     if (osw.thread)
@@ -2032,7 +2061,6 @@ static void outstream_thread_run(std::shared_ptr<void> arg)
  */
 static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
-    LOGI("open wasapi outstream");
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
     std::shared_ptr<SoundIoDevice> device = os->device;
     std::shared_ptr<SoundIo> soundio = si;
@@ -2867,7 +2895,7 @@ static int instream_get_latency_wasapi(std::shared_ptr<SoundIoPrivate> si, std::
  */
 static void destroy_wasapi(std::shared_ptr<SoundIoPrivate> si)
 {
-    LOGI("destroy wasapi");
+    LOGI(L"destroy wasapi");
     SoundIoWasapi& siw = si->backend_data->wasapi;
 
     if (siw.thread)
@@ -2885,9 +2913,12 @@ static void destroy_wasapi(std::shared_ptr<SoundIoPrivate> si)
     siw.scan_devices_mutex = nullptr;
     siw.mutex = nullptr;
 
+    for (const auto& os: si->outstreams | std::ranges::views::values)
+    {
+        outstream_destroy_wasapi(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(os));
+    }
 
-    outstream_destroy_wasapi(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
-
+    si->ClearOutStreams();
 }
 
 STDMETHODIMP soundio_NotificationClient::QueryInterface(REFIID riid, void** ppv)
@@ -2932,7 +2963,7 @@ static HRESULT queue_device_scan(soundio_NotificationClient* client)
     std::shared_ptr<SoundIoPrivate> si = client->si.lock();
     if (si == nullptr)
     {
-        LOGE("os is nullptr!");
+        LOGE(L"os is nullptr!");
         return S_OK;
     }
     force_device_scan_wasapi(si);
