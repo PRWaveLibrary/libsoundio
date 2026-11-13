@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
 project(libsoundio LANGUAGES CXX)
-if (MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif ()
 
 set(CMAKE_MODULE_PATH ${libsoundio_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 

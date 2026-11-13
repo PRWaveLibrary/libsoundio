@@ -8,6 +8,8 @@
 #ifndef SOUNDIO_SOUNDIO_H
 #define SOUNDIO_SOUNDIO_H
 
+#include <atomic>
+#include <cstdint>
 #include <memory>
 #include <stdbool.h>
 #include <string>
@@ -490,6 +492,25 @@ struct SoundIoOutStream
     std::atomic_bool paused = {};
     std::vector<float> mix_buffer = {};
 
+    // -----------------------------------------------------------------------
+    // 多声卡时钟偏移跟踪状态：从声卡（slave）相对主声卡（master）的读取位置。
+    // 只由该 stream 自己的音频线程访问；drift_reset 由主线程置位。
+    // -----------------------------------------------------------------------
+    struct ClockDrift
+    {
+        /// 当前读取位置，master 时间轴上的帧号（带小数）
+        double pos = 0.0;
+        /// 当前重采样比 = 本设备采样率 / 主声卡采样率 × 时钟差修正
+        double ratio = 1.0;
+        /// 低通后的位置误差（帧）
+        double err = 0.0;
+    };
+
+    ClockDrift drift = {};
+
+    /// 置位后，本 stream 的音频线程在下次回调时重新对齐到 master 时间轴
+    std::atomic_bool drift_reset = {true};
+
     /// Ignoring hardware latency, this is the number of seconds it takes for
     /// the last sample in a full buffer to be played.
     /// After you call ::soundio_outstream_open, this value is replaced with the
@@ -677,6 +698,19 @@ struct SoundIo
 
     std::shared_ptr<SoundIoOutStream> default_out_stream = {};
     std::unordered_map<std::wstring, std::shared_ptr<SoundIoOutStream>> outstreams = {};
+
+    /// 主声卡已经混好的累计帧数，多声卡时钟偏移补偿的时间轴基准。
+    /// 只由 master 的 write_callback 推进。
+    std::atomic<int64_t> master_frames = {0};
+
+    /// master_frames 对应的 steady_clock 时刻（ns）。从声卡用它把阶梯状的
+    /// master_frames 插值成连续位置，否则误差信号里的量化噪声（一个 callback 的帧数）
+    /// 会远大于漂移本身（每秒几帧）。
+    std::atomic<int64_t> master_ts_ns = {0};
+
+    /// master_frames / master_ts_ns 的更新序号（seqlock，奇数表示 master 正在更新），
+    /// 从声卡据此判断采到的基准是否和读到的 track 位置一致。
+    std::atomic<uint32_t> master_seq = {0};
 
     void ClearOutStreams()
     {
