@@ -1401,9 +1401,8 @@ static void outstream_thread_deinit(std::shared_ptr<SoundIoPrivate> si, std::sha
  */
 static void outstream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
 {
-    LOGI(L"destroy wasapi outstream");
+    LOGI(L"destroy wasapi outstream: %ls", os->name.c_str());
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
-
     if (osw.thread)
     {
         osw.thread_exit_flag.test_and_set();

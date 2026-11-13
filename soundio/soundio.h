@@ -789,7 +789,7 @@ SOUNDIO_EXPORT int soundio_connect_backend(std::shared_ptr<SoundIo> soundio, enu
 SOUNDIO_EXPORT void soundio_disconnect(std::shared_ptr<SoundIo> soundio);
 
 /// Get a string representation of a #SoundIoError
-SOUNDIO_EXPORT const char* soundio_strerror(int error);
+SOUNDIO_EXPORT const wchar_t* soundio_strerror(int error);
 
 /// Get a string representation of a #SoundIoBackend
 SOUNDIO_EXPORT const char* soundio_backend_name(enum SoundIoBackend backend);

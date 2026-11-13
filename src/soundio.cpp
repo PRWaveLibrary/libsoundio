@@ -91,44 +91,44 @@ static backend_init_t backend_init_fns[] = {
 // SOUNDIO_MAKE_LIST_DEF(struct SoundIoDevice*, SoundIoListDevicePtr, SOUNDIO_LIST_NOT_STATIC)
 // SOUNDIO_MAKE_LIST_DEF(struct SoundIoSampleRateRange, SoundIoListSampleRateRange, SOUNDIO_LIST_NOT_STATIC)
 
-const char* soundio_strerror(int error)
+const wchar_t* soundio_strerror(int error)
 {
-    switch ((enum SoundIoError) error)
+    switch (static_cast<SoundIoError>(error))
     {
         case SoundIoErrorNone:
-            return "(no error)";
+            return L"(no error)";
         case SoundIoErrorNoMem:
-            return "out of memory";
+            return L"out of memory";
         case SoundIoErrorInitAudioBackend:
-            return "unable to initialize audio backend";
+            return L"unable to initialize audio backend";
         case SoundIoErrorSystemResources:
-            return "system resource not available";
+            return L"system resource not available";
         case SoundIoErrorOpeningDevice:
-            return "unable to open device";
+            return L"unable to open device";
         case SoundIoErrorNoSuchDevice:
-            return "no such device";
+            return L"no such device";
         case SoundIoErrorInvalid:
-            return "invalid value";
+            return L"invalid value";
         case SoundIoErrorBackendUnavailable:
-            return "backend unavailable";
+            return L"backend unavailable";
         case SoundIoErrorStreaming:
-            return "unrecoverable streaming failure";
+            return L"unrecoverable streaming failure";
         case SoundIoErrorIncompatibleDevice:
-            return "incompatible device";
+            return L"incompatible device";
         case SoundIoErrorNoSuchClient:
-            return "no such client";
+            return L"no such client";
         case SoundIoErrorIncompatibleBackend:
-            return "incompatible backend";
+            return L"incompatible backend";
         case SoundIoErrorBackendDisconnected:
-            return "backend disconnected";
+            return L"backend disconnected";
         case SoundIoErrorInterrupted:
-            return "interrupted; try again";
+            return L"interrupted; try again";
         case SoundIoErrorUnderflow:
-            return "buffer underflow";
+            return L"buffer underflow";
         case SoundIoErrorEncodingString:
-            return "failed to encode string";
+            return L"failed to encode string";
     }
-    return "(invalid error)";
+    return L"(invalid error)";
 }
 
 int soundio_get_bytes_per_sample(enum SoundIoFormat format)
@@ -531,7 +531,7 @@ int soundio_outstream_end_write(std::shared_ptr<SoundIoOutStream> outstream)
 
 static void default_outstream_error_callback(std::shared_ptr<SoundIoOutStream> os, int err)
 {
-    LOGE(L"libsoundio: %s", soundio_strerror(err));
+    LOGE(L"libsoundio: %ls", soundio_strerror(err));
 }
 
 static void default_underflow_callback(std::shared_ptr<SoundIoOutStream> outstream)
@@ -673,7 +673,7 @@ int soundio_outstream_set_volume(std::shared_ptr<SoundIoOutStream> outstream, do
 
 static void default_instream_error_callback(std::shared_ptr<SoundIoInStream> is, int err)
 {
-    soundio_panic("libsoundio: %s", soundio_strerror(err));
+    LOGE(L"libsoundio: %ls", soundio_strerror(err));
 }
 
 static void default_overflow_callback(std::shared_ptr<SoundIoInStream> instream)
