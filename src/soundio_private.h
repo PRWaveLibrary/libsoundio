@@ -178,49 +178,49 @@ struct SoundIoPrivate : public SoundIo
     std::unique_ptr<SoundIoDevicesInfo> safe_devices_info;
     std::unique_ptr<SoundIoBackendData> backend_data;
 
-    void (*destroy)(std::shared_ptr<SoundIoPrivate>);
+    void (*destroy)(const std::shared_ptr<SoundIoPrivate>&);
 
-    void (*flush_events)(std::shared_ptr<SoundIoPrivate>);
+    void (*flush_events)(const std::shared_ptr<SoundIoPrivate>&);
 
-    void (*wait_events)(std::shared_ptr<SoundIoPrivate>);
+    void (*wait_events)(const std::shared_ptr<SoundIoPrivate>&);
 
-    void (*wakeup)(std::shared_ptr<SoundIoPrivate>);
+    void (*wakeup)(const std::shared_ptr<SoundIoPrivate>&);
 
-    void (*force_device_scan)(std::shared_ptr<SoundIoPrivate>);
+    void (*force_device_scan)(const std::shared_ptr<SoundIoPrivate>&);
 
-    int (*outstream_open)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>);
+    int (*outstream_open)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&);
 
-    void (*outstream_destroy)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>);
+    void (*outstream_destroy)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&);
 
-    int (*outstream_start)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>);
+    int (*outstream_start)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&);
 
-    int (*outstream_begin_write)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>, struct SoundIoChannelArea** out_areas, int* frame_count);
+    int (*outstream_begin_write)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&, SoundIoChannelArea** out_areas, int frame_count);
 
-    int (*outstream_end_write)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>);
+    int (*outstream_end_write)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&);
 
-    int (*outstream_clear_buffer)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>);
+    int (*outstream_clear_buffer)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&);
 
-    int (*outstream_pause)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>, bool pause);
+    int (*outstream_pause)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&, bool pause);
 
-    int (*outstream_get_latency)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>, double* out_latency);
+    int (*outstream_get_latency)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&, double* out_latency);
 
-    int (*outstream_set_volume)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>, float volume);
+    int (*outstream_set_volume)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&, float volume);
 
-    int (*outstream_get_time)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoOutStreamPrivate>, double* out_time);
+    int (*outstream_get_time)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&, double* out_time);
 
-    int (*instream_open)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>);
+    int (*instream_open)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoInStreamPrivate>&);
 
-    void (*instream_destroy)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>);
+    void (*instream_destroy)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoInStreamPrivate>&);
 
-    int (*instream_start)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>);
+    int (*instream_start)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoInStreamPrivate>&);
 
-    int (*instream_begin_read)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>, struct SoundIoChannelArea** out_areas, int* out_frame_count);
+    int (*instream_begin_read)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoInStreamPrivate>&, SoundIoChannelArea** out_areas, int* out_frame_count);
 
-    int (*instream_end_read)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>);
+    int (*instream_end_read)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoInStreamPrivate>&);
 
-    int (*instream_pause)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>, bool pause);
+    int (*instream_pause)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoInStreamPrivate>&, bool pause);
 
-    int (*instream_get_latency)(std::shared_ptr<SoundIoPrivate>, std::shared_ptr<SoundIoInStreamPrivate>, double* out_latency);
+    int (*instream_get_latency)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoInStreamPrivate>&, double* out_latency);
 };
 
 // SOUNDIO_MAKE_LIST_STRUCT(struct SoundIoSampleRateRange, SoundIoListSampleRateRange, SOUNDIO_LIST_NOT_STATIC)

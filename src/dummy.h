@@ -15,7 +15,7 @@
 
 struct SoundIoPrivate;
 
-int soundio_dummy_init(std::shared_ptr<SoundIoPrivate> si);
+int soundio_dummy_init(const std::shared_ptr<SoundIoPrivate>& si);
 
 struct SoundIoDummy
 {

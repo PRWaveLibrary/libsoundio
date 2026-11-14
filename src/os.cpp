@@ -9,8 +9,8 @@
 #include "os.h"
 #include "soundio_internal.h"
 
-#include <ctime>
 #include <cassert>
+#include <ctime>
 
 static std::atomic_bool initialized = false;
 static std::mutex init_mutex;
@@ -60,9 +60,9 @@ double soundio_os_get_time()
 #if defined(SOUNDIO_OS_WINDOWS)
 #include <objbase.h>
 
-static void run_win32_thread(void (*run)(std::shared_ptr<void> arg), std::shared_ptr<void> arg)
+static void run_win32_thread(void (*run)(const std::shared_ptr<void>& arg), const std::shared_ptr<void>& arg)
 {
-    HRESULT err = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    const HRESULT err = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     assert(err == S_OK);
     run(arg);
     CoUninitialize();
@@ -71,7 +71,7 @@ static void run_win32_thread(void (*run)(std::shared_ptr<void> arg), std::shared
 #endif
 
 
-std::unique_ptr<SoundIoOsThread> SoundIoOsThread::create(STATIC_CALLBACK_PTR run, std::shared_ptr<void> arg)
+std::unique_ptr<SoundIoOsThread> SoundIoOsThread::create(STATIC_CALLBACK_PTR run, const std::shared_ptr<void>& arg)
 {
     std::unique_ptr<SoundIoOsThread> thread = std::make_unique<SoundIoOsThread>();
 #if defined(SOUNDIO_OS_WINDOWS)
@@ -196,6 +196,3 @@ int soundio_os_page_size()
 {
     return page_size;
 }
-
-
-

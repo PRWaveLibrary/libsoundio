@@ -24,15 +24,15 @@
 
 int SoundIoRingBuffer::init(int requested_capacity)
 {
-    int err;
-    if ((err = init_mirrored_memory(requested_capacity)))
+    int err = init_mirrored_memory(requested_capacity);
+    if (err)
     {
         return err;
     }
     write_offset = 0;
     read_offset = 0;
 
-    return 0;
+    return SoundIoErrorNone;
 }
 
 struct MmapDeleter
@@ -40,8 +40,7 @@ struct MmapDeleter
     size_t capacity;
     void* priv = nullptr;
 
-    MmapDeleter(size_t capacity, void* priv) :
-        capacity(capacity), priv(priv)
+    MmapDeleter(size_t capacity, void* priv) : capacity(capacity), priv(priv)
     {
     }
 
@@ -204,5 +203,5 @@ int SoundIoRingBuffer::init_mirrored_memory(int requested_capacity)
 #endif
 
     mem->capacity = actual_capacity;
-    return 0;
+    return SoundIoErrorNone;
 }

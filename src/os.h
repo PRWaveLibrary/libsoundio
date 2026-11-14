@@ -8,13 +8,13 @@
 #ifndef SOUNDIO_OS_H
 #define SOUNDIO_OS_H
 
-#include <memory>
-#include <functional>
-#include <cassert>
-#include <thread>
-#include <mutex>
 #include <atomic>
+#include <cassert>
 #include <condition_variable>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <thread>
 
 
 #if defined(__FreeBSD__) || defined(__MACH__)
@@ -63,7 +63,7 @@
 
 #endif
 
-using STATIC_CALLBACK_PTR = void (*)(std::shared_ptr<void>);
+using STATIC_CALLBACK_PTR = void (*)(const std::shared_ptr<void>&);
 
 class SoundIoOsThread
 {
@@ -82,7 +82,7 @@ public:
         }
     }
 
-    static std::unique_ptr<SoundIoOsThread> create(STATIC_CALLBACK_PTR run, std::shared_ptr<void> arg);
+    static std::unique_ptr<SoundIoOsThread> create(STATIC_CALLBACK_PTR run, const std::shared_ptr<void>& arg);
 };
 
 class SoundIoOsMutex

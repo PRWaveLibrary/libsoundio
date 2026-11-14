@@ -20,7 +20,6 @@
 #endif
 #include <audioclient.h>
 #include <audiopolicy.h>
-#include <audiosessiontypes.h>
 #include <mmdeviceapi.h>
 #include <windows.h>
 
@@ -39,7 +38,7 @@ struct IMMDeviceDeleter
 
 struct SoundIoPrivate;
 
-int soundio_wasapi_init(std::shared_ptr<SoundIoPrivate> si);
+int soundio_wasapi_init(const std::shared_ptr<SoundIoPrivate>& si);
 
 struct SoundIoDeviceWasapi
 {
@@ -91,18 +90,18 @@ struct SoundIoInStreamWasapi
     std::unique_ptr<SoundIoOsCond> start_cond;
     std::atomic_flag thread_exit_flag = ATOMIC_FLAG_INIT;
     bool is_raw;
-    int readable_frame_count;
-    UINT32 buffer_frame_count;
-    int read_frame_count;
+    std::int32_t readable_frame_count;
+    std::uint32_t buffer_frame_count;
+    std::int32_t read_frame_count;
     HANDLE h_event;
     bool is_paused;
     bool open_complete;
-    int open_err;
+    std::int32_t open_err;
     bool started;
     char* read_buf;
-    int read_buf_frames_left;
-    int opened_buf_frames;
-    struct SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
+    std::int32_t read_buf_frames_left;
+    std::int32_t opened_buf_frames;
+    SoundIoChannelArea areas[SOUNDIO_MAX_CHANNELS];
 };
 
 class soundio_NotificationClient;
@@ -129,9 +128,10 @@ struct SoundIoWasapi
 class soundio_NotificationClient : public IMMNotificationClient
 {
 public:
+    virtual ~soundio_NotificationClient() = default;
     std::weak_ptr<SoundIoPrivate> si;
 
-    soundio_NotificationClient(std::weak_ptr<SoundIoPrivate> si)
+    soundio_NotificationClient(const std::weak_ptr<SoundIoPrivate>& si)
     {
         this->si = si;
     }

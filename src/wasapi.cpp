@@ -17,7 +17,6 @@
 #endif
 
 #define INITGUID
-// #define CINTERFACE
 #define COBJMACROS
 #define CONST_VTABLE
 
@@ -33,10 +32,6 @@
 #include "wasapi.h"
 
 #include "util.h"
-
-#ifdef _MSC_VER
-#include <propkeydef.h>
-#endif
 
 #include <algorithm>
 #include <functiondiscoverykeys_devpkey.h>
@@ -164,9 +159,9 @@ static const IID IID_ISimpleAudioVolume = {
 
 // Attempting to use the Windows-supplied versions of these constants resulted
 // in `undefined reference` linker errors.
-const static GUID SOUNDIO_KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
+static constexpr GUID SOUNDIO_KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {0x00000003, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
 
-const static GUID SOUNDIO_KSDATAFORMAT_SUBTYPE_PCM = {0x00000001, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
+static constexpr GUID SOUNDIO_KSDATAFORMAT_SUBTYPE_PCM = {0x00000001, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
 
 // Adding more common sample rates helps the heuristics; feel free to do that.
 static int test_sample_rates[] = {
@@ -234,8 +229,7 @@ namespace
         HANDLE handle = nullptr;
         DWORD task_index = 0;
 
-        MmcssProAudioScope()
-            : handle(AvSetMmThreadCharacteristicsW(L"Pro Audio", &task_index))
+        MmcssProAudioScope() : handle(AvSetMmThreadCharacteristicsW(L"Pro Audio", &task_index))
         {
         }
 
@@ -313,7 +307,7 @@ static void from_channel_mask_layout(UINT channel_mask, struct SoundIoChannelLay
  * @param wave_format 包含 channel mask 的 wave_format 指针
  * @param layout 输出的 layout 数据
  */
-static void from_wave_format_layout(WAVEFORMATEXTENSIBLE* wave_format, struct SoundIoChannelLayout* layout)
+static void from_wave_format_layout(const WAVEFORMATEXTENSIBLE* wave_format, struct SoundIoChannelLayout* layout)
 {
     assert(wave_format->Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE);
     layout->channel_count = 0;
@@ -328,7 +322,7 @@ static void from_wave_format_layout(WAVEFORMATEXTENSIBLE* wave_format, struct So
  * @param wave_format 包含 format 参数的数据结构
  * @return enum SoundIoFormat 如果支持则返回有效格式，否则返回 Invalid
  */
-static enum SoundIoFormat from_wave_format_format(WAVEFORMATEXTENSIBLE* wave_format)
+static enum SoundIoFormat from_wave_format_format(const WAVEFORMATEXTENSIBLE* wave_format)
 {
     assert(wave_format->Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE);
     bool is_pcm = IS_EQUAL_GUID(wave_format->SubFormat, SOUNDIO_KSDATAFORMAT_SUBTYPE_PCM);
@@ -381,8 +375,7 @@ static void to_wave_format_layout(const struct SoundIoChannelLayout* layout, WAV
     wave_format->Format.nChannels = layout->channel_count;
     for (int i = 0; i < layout->channel_count; i += 1)
     {
-        enum SoundIoChannelId channel_id = layout->channels[i];
-        switch (channel_id)
+        switch (layout->channels[i])
         {
             case SoundIoChannelIdFrontLeft:
                 wave_format->dwChannelMask |= SPEAKER_FRONT_LEFT;
@@ -533,53 +526,56 @@ static double from_reference_time(REFERENCE_TIME rt)
  * @param seconds 要被转换的时间 (秒)
  * @return REFERENCE_TIME 对应的 100 纳秒精度的整型时间
  */
-static REFERENCE_TIME to_reference_time(double seconds)
+static REFERENCE_TIME to_reference_time(const double seconds)
 {
-    return static_cast<REFERENCE_TIME>(seconds * 10000000.0 + 0.5);
+    return std::lround(seconds * 10000000.0);
 }
 
 // ==============================================================================
 // 3. Device Scanning & Enumeration
 // ==============================================================================
 
-struct RefreshDevices
+namespace
 {
-    IMMDeviceCollection* collection = nullptr;
-    std::shared_ptr<IMMDevice> mm_device;
-    IMMDevice* default_render_device = nullptr;
-    IMMDevice* default_capture_device = nullptr;
-    IMMEndpoint* endpoint = nullptr;
-    IPropertyStore* prop_store = nullptr;
-    IAudioClient* audio_client = nullptr;
-    PROPVARIANT prop_variant_value;
-    WAVEFORMATEXTENSIBLE* wave_format = nullptr;
-    bool prop_variant_value_inited = false;
-    std::unique_ptr<SoundIoDevicesInfo> devices_info;
-    std::shared_ptr<SoundIoDevice> device_shared;
-    std::shared_ptr<SoundIoDevice> device_raw;
-    std::wstring default_render_id;
-    std::wstring default_capture_id;
-
-    ~RefreshDevices()
+    struct RefreshDevices
     {
-        if (collection)
-            collection->Release();
-        if (default_render_device)
-            default_render_device->Release();
-        if (default_capture_device)
-            default_capture_device->Release();
-        if (endpoint)
-            endpoint->Release();
-        if (prop_store)
-            prop_store->Release();
-        if (audio_client)
-            audio_client->Release();
-        if (prop_variant_value_inited)
-            PropVariantClear(&prop_variant_value);
-        if (wave_format)
-            CoTaskMemFree(wave_format);
-    }
-};
+        IMMDeviceCollection* collection = nullptr;
+        std::shared_ptr<IMMDevice> mm_device;
+        IMMDevice* default_render_device = nullptr;
+        IMMDevice* default_capture_device = nullptr;
+        IMMEndpoint* endpoint = nullptr;
+        IPropertyStore* prop_store = nullptr;
+        IAudioClient* audio_client = nullptr;
+        PROPVARIANT prop_variant_value{};
+        WAVEFORMATEXTENSIBLE* wave_format = nullptr;
+        bool prop_variant_value_inited = false;
+        std::unique_ptr<SoundIoDevicesInfo> devices_info;
+        std::shared_ptr<SoundIoDevice> device_shared;
+        std::shared_ptr<SoundIoDevice> device_raw;
+        std::wstring default_render_id;
+        std::wstring default_capture_id;
+
+        ~RefreshDevices()
+        {
+            if (collection)
+                collection->Release();
+            if (default_render_device)
+                default_render_device->Release();
+            if (default_capture_device)
+                default_capture_device->Release();
+            if (endpoint)
+                endpoint->Release();
+            if (prop_store)
+                prop_store->Release();
+            if (audio_client)
+                audio_client->Release();
+            if (prop_variant_value_inited)
+                static_cast<void>(PropVariantClear(&prop_variant_value));
+            if (wave_format)
+                CoTaskMemFree(wave_format);
+        }
+    };
+} // namespace
 
 /**
  * @brief 检测并筛选出设备支持的有效 sound channel layouts
@@ -593,22 +589,19 @@ struct RefreshDevices
  * @param share_mode 指定测试是使用 shared 还是 exclusive mode
  * @return int 成功返回 0，错误返回对应 error code
  */
-static int detect_valid_layouts(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEXTENSIBLE* wave_format, std::shared_ptr<SoundIoDevicePrivate> dev, AUDCLNT_SHAREMODE share_mode)
+static int detect_valid_layouts(const std::shared_ptr<RefreshDevices>& rd, WAVEFORMATEXTENSIBLE* wave_format, const std::shared_ptr<SoundIoDevicePrivate>& dev, const AUDCLNT_SHAREMODE share_mode)
 {
-    std::shared_ptr<SoundIoDevice> device = dev;
-    HRESULT hr;
-
     WAVEFORMATEX* closest_match = nullptr;
-    WAVEFORMATEXTENSIBLE orig_wave_format = *wave_format;
+    const WAVEFORMATEXTENSIBLE orig_wave_format = *wave_format;
 
     for (size_t i = 0; i < std::size(test_formats); i += 1)
     {
-        enum SoundIoChannelLayoutId test_layout_id = test_layouts[i];
-        const struct SoundIoChannelLayout* test_layout = soundio_channel_layout_get_builtin(test_layout_id);
+        const SoundIoChannelLayoutId test_layout_id = test_layouts[i];
+        const SoundIoChannelLayout* test_layout = soundio_channel_layout_get_builtin(test_layout_id);
         to_wave_format_layout(test_layout, wave_format);
         complete_wave_format_data(wave_format);
 
-        hr = rd->audio_client->IsFormatSupported(share_mode, reinterpret_cast<WAVEFORMATEX*>(wave_format), &closest_match);
+        const HRESULT hr = rd->audio_client->IsFormatSupported(share_mode, reinterpret_cast<WAVEFORMATEX*>(wave_format), &closest_match);
         if (closest_match)
         {
             CoTaskMemFree(closest_match);
@@ -616,7 +609,7 @@ static int detect_valid_layouts(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEX
         }
         if (hr == S_OK)
         {
-            device->layouts.push_back(*test_layout);
+            dev->layouts.push_back(*test_layout);
         }
         else if (hr == AUDCLNT_E_UNSUPPORTED_FORMAT || hr == S_FALSE || hr == E_INVALIDARG)
         {
@@ -645,10 +638,9 @@ static int detect_valid_layouts(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEX
  * @param share_mode 指定验证所使用的共享模式
  * @return int 探测完成或错误时的对应 code
  */
-static int detect_valid_formats(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEXTENSIBLE* wave_format, std::shared_ptr<SoundIoDevicePrivate> dev, AUDCLNT_SHAREMODE share_mode)
+static int detect_valid_formats(const std::shared_ptr<RefreshDevices>& rd, WAVEFORMATEXTENSIBLE* wave_format, const std::shared_ptr<SoundIoDevicePrivate>& dev, const AUDCLNT_SHAREMODE share_mode)
 {
-    std::shared_ptr<SoundIoDevice> device = dev;
-    HRESULT hr;
+    const std::shared_ptr<SoundIoDevice> device = dev;
 
     // device->format_count = 0;
     // device->formats = ALLOCATE(enum SoundIoFormat, ARRAY_LENGTH(test_formats));
@@ -656,15 +648,15 @@ static int detect_valid_formats(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEX
     //     return SoundIoErrorNoMem;
 
     WAVEFORMATEX* closest_match = nullptr;
-    WAVEFORMATEXTENSIBLE orig_wave_format = *wave_format;
+    const WAVEFORMATEXTENSIBLE orig_wave_format = *wave_format;
 
     for (size_t i = 0; i < std::size(test_formats); i += 1)
     {
-        enum SoundIoFormat test_format = test_formats[i];
+        SoundIoFormat test_format = test_formats[i];
         to_wave_format_format(test_format, wave_format);
         complete_wave_format_data(wave_format);
 
-        hr = rd->audio_client->IsFormatSupported(share_mode, (WAVEFORMATEX*) wave_format, &closest_match);
+        const HRESULT hr = rd->audio_client->IsFormatSupported(share_mode, reinterpret_cast<WAVEFORMATEX*>(wave_format), &closest_match);
         if (closest_match)
         {
             CoTaskMemFree(closest_match);
@@ -689,7 +681,7 @@ static int detect_valid_formats(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEX
     return 0;
 }
 
-static void add_sample_rate(std::vector<SoundIoSampleRateRange>& sample_rates, int current_min, int the_max)
+static void add_sample_rate(std::vector<SoundIoSampleRateRange>& sample_rates, const int current_min, const int the_max)
 {
     SoundIoSampleRateRange range = {};
     range.min = current_min;
@@ -698,12 +690,13 @@ static void add_sample_rate(std::vector<SoundIoSampleRateRange>& sample_rates, i
     sample_rates.push_back(range);
 }
 
-static int do_sample_rate_test(std::shared_ptr<RefreshDevices> rd, std::shared_ptr<SoundIoDevicePrivate> dev, WAVEFORMATEXTENSIBLE* wave_format, int test_sample_rate, AUDCLNT_SHAREMODE share_mode, int* current_min, int* last_success_rate)
+static int do_sample_rate_test(const std::shared_ptr<RefreshDevices>& rd, const std::shared_ptr<SoundIoDevicePrivate>& dev, WAVEFORMATEXTENSIBLE* wave_format, const int test_sample_rate, const AUDCLNT_SHAREMODE share_mode, int* current_min,
+                               int* last_success_rate)
 {
     WAVEFORMATEX* closest_match = nullptr;
 
     wave_format->Format.nSamplesPerSec = test_sample_rate;
-    HRESULT hr = rd->audio_client->IsFormatSupported(share_mode, (WAVEFORMATEX*) wave_format, &closest_match);
+    const HRESULT hr = rd->audio_client->IsFormatSupported(share_mode, reinterpret_cast<WAVEFORMATEX*>(wave_format), &closest_match);
     if (closest_match)
     {
         CoTaskMemFree(closest_match);
@@ -733,13 +726,12 @@ static int do_sample_rate_test(std::shared_ptr<RefreshDevices> rd, std::shared_p
     return 0;
 }
 
-static int detect_valid_sample_rates(std::shared_ptr<RefreshDevices> rd, WAVEFORMATEXTENSIBLE* wave_format, std::shared_ptr<SoundIoDevicePrivate> dev, AUDCLNT_SHAREMODE share_mode)
+static int detect_valid_sample_rates(const std::shared_ptr<RefreshDevices>& rd, WAVEFORMATEXTENSIBLE* wave_format, const std::shared_ptr<SoundIoDevicePrivate>& dev, const AUDCLNT_SHAREMODE share_mode)
 {
-    int err;
 
-    DWORD orig_sample_rate = wave_format->Format.nSamplesPerSec;
+    const DWORD orig_sample_rate = wave_format->Format.nSamplesPerSec;
 
-    assert(dev->sample_rates.size() == 0);
+    assert(dev->sample_rates.empty());
 
     int current_min = -1;
     int last_success_rate = -1;
@@ -747,8 +739,8 @@ static int detect_valid_sample_rates(std::shared_ptr<RefreshDevices> rd, WAVEFOR
     {
         for (int offset = -1; offset <= 1; offset += 1)
         {
-            int test_sample_rate = test_sample_rates[i] + offset;
-            if ((err = do_sample_rate_test(rd, dev, wave_format, test_sample_rate, share_mode, &current_min, &last_success_rate)))
+            const int test_sample_rate = test_sample_rates[i] + offset;
+            if (const auto err = do_sample_rate_test(rd, dev, wave_format, test_sample_rate, share_mode, &current_min, &last_success_rate))
             {
                 wave_format->Format.nSamplesPerSec = orig_sample_rate;
                 return err;
@@ -776,7 +768,7 @@ static int detect_valid_sample_rates(std::shared_ptr<RefreshDevices> rd, WAVEFOR
  * @param si SoundIoPrivate 的 shared_ptr
  * @return int 完成设备的 refresh 则返回 0
  */
-static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
+static int refresh_devices(const std::shared_ptr<SoundIoPrivate>& si)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
     std::shared_ptr<RefreshDevices> rd = std::make_shared<RefreshDevices>();
@@ -904,7 +896,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
 
         // cid
-        std::wstring cid = L"";
+        std::wstring cid;
         IPropertyStore* store = nullptr;
         if (SUCCEEDED(device->OpenPropertyStore(STGM_READ, &store)) && store != nullptr)
         {
@@ -987,7 +979,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             rd->audio_client->Release();
             rd->audio_client = nullptr;
         }
-        if (FAILED(hr = rd->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, nullptr, (void**) &rd->audio_client)))
+        if (FAILED(hr = rd->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, nullptr, reinterpret_cast<void**>(&rd->audio_client))))
         {
             rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
             rd->device_raw->probe_error = SoundIoErrorOpeningDevice;
@@ -1032,7 +1024,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
         if (rd->prop_variant_value_inited)
         {
-            PropVariantClear(&rd->prop_variant_value);
+            static_cast<void>(PropVariantClear(&rd->prop_variant_value));
             rd->prop_variant_value_inited = false;
         }
         PropVariantInit(&rd->prop_variant_value);
@@ -1062,7 +1054,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         // rate while holding the format constant and vice versa.
         if (rd->prop_variant_value_inited)
         {
-            PropVariantClear(&rd->prop_variant_value);
+            static_cast<void>(PropVariantClear(&rd->prop_variant_value));
             rd->prop_variant_value_inited = false;
         }
         PropVariantInit(&rd->prop_variant_value);
@@ -1115,21 +1107,16 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             CoTaskMemFree(rd->wave_format);
             rd->wave_format = nullptr;
         }
-        if (FAILED(hr = rd->audio_client->GetMixFormat(reinterpret_cast<WAVEFORMATEX**>(&rd->wave_format))))
+        if (FAILED(hr = rd->audio_client->GetMixFormat(reinterpret_cast<WAVEFORMATEX**>(&rd->wave_format))) || rd->wave_format && rd->wave_format->Format.wFormatTag != WAVE_FORMAT_EXTENSIBLE)
         {
             // According to MSDN GetMixFormat only applies to shared-mode devices.
-            rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
-            rd->device_shared = nullptr;
-        }
-        else if (rd->wave_format && rd->wave_format->Format.wFormatTag != WAVE_FORMAT_EXTENSIBLE)
-        {
             rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
             rd->device_shared = nullptr;
         }
 
         if (rd->device_shared)
         {
-            rd->device_shared->sample_rate_current = rd->wave_format->Format.nSamplesPerSec;
+            rd->device_shared->sample_rate_current = static_cast<std::int32_t>(rd->wave_format->Format.nSamplesPerSec);
             rd->device_shared->current_format = from_wave_format_format(rd->wave_format);
 
             if (rd->device_shared->aim == SoundIoDeviceAimOutput)
@@ -1195,7 +1182,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
  * @param si 当前的 SoundIoPrivate instance
  * @param err 触发 backend shutdown 的对应 error code
  */
-static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
+static void shutdown_backend(const std::shared_ptr<SoundIoPrivate>& si, const int err)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
     std::unique_lock lock(siw.mutex->get());
@@ -1214,7 +1201,7 @@ static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
  * @param si 此前初始化的 SoundIoPrivate 对象
  * @param wait 指定如果没有 event 可用时是否需要进行 wait 阻塞
  */
-static void my_flush_events(std::shared_ptr<SoundIoPrivate> si, bool wait)
+static void my_flush_events(const std::shared_ptr<SoundIoPrivate>& si, bool wait)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
 
@@ -1260,12 +1247,12 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate> si, bool wait)
  *
  * @param si SoundIoPrivate 初始化对象
  */
-static void flush_events_wasapi(std::shared_ptr<SoundIoPrivate> si)
+static void flush_events_wasapi(const std::shared_ptr<SoundIoPrivate>& si)
 {
     my_flush_events(si, false);
 }
 
-static void wait_events_wasapi(std::shared_ptr<SoundIoPrivate> si)
+static void wait_events_wasapi(const std::shared_ptr<SoundIoPrivate>& si)
 {
     my_flush_events(si, true);
 }
@@ -1278,10 +1265,10 @@ static void wait_events_wasapi(std::shared_ptr<SoundIoPrivate> si)
  *
  * @param arg 用户传递的 SoundIoPrivate pointer 参数
  */
-static void device_thread_run(std::shared_ptr<void> arg)
+static void device_thread_run(const std::shared_ptr<void>& arg)
 {
-    std::shared_ptr<SoundIoPrivate> si = std::static_pointer_cast<SoundIoPrivate>(arg);
-    SoundIoWasapi& siw = si->backend_data->wasapi;
+    const auto si = std::static_pointer_cast<SoundIoPrivate>(arg);
+    auto& siw = si->backend_data->wasapi;
 
     HRESULT hr = CoCreateInstance(CLSID_MMDEVICEENUMERATOR, nullptr, CLSCTX_ALL, IID_IMMDEVICEENUMERATOR, reinterpret_cast<void**>(&siw.device_enumerator));
     if (FAILED(hr))
@@ -1330,7 +1317,7 @@ static void device_thread_run(std::shared_ptr<void> arg)
  *
  * @param si 顶层的 SoundIoPrivate 的 shared_ptr
  */
-static void wakeup_wasapi(std::shared_ptr<SoundIoPrivate> si)
+static void wakeup_wasapi(const std::shared_ptr<SoundIoPrivate>& si)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
     std::unique_lock lock(siw.mutex->get());
@@ -1344,7 +1331,7 @@ static void wakeup_wasapi(std::shared_ptr<SoundIoPrivate> si)
  *
  * @param si 顶层的 SoundIoPrivate 的 shared_ptr
  */
-static void force_device_scan_wasapi(std::shared_ptr<SoundIoPrivate> si)
+static void force_device_scan_wasapi(const std::shared_ptr<SoundIoPrivate>& si)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
 
@@ -1369,7 +1356,7 @@ static void force_device_scan_wasapi(std::shared_ptr<SoundIoPrivate> si)
  * @param si 当前 SoundIoPrivate 实例
  * @param os 输出流内部数据对象 SoundIoOutStreamPrivate
  */
-static void outstream_thread_deinit(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static void outstream_thread_deinit(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
 
@@ -1413,7 +1400,7 @@ static void outstream_thread_deinit(std::shared_ptr<SoundIoPrivate> si, std::sha
  * @param si 根级别 SoundIoPrivate context
  * @param os 即将销毁的输出流指针
  */
-static void outstream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static void outstream_destroy_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     LOGI(L"destroy wasapi outstream: %ls", os->name.c_str());
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1453,7 +1440,7 @@ static void outstream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::sh
  * @param wave_format 用户配置的音频波形格式
  * @return IAudioClient3* 如果创建失败则返回 nullptr
  */
-static IAudioClient3* open_audio_client3(std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format)
+static IAudioClient3* open_audio_client3(const std::shared_ptr<SoundIoOutStreamPrivate>& os, WAVEFORMATEXTENSIBLE* wave_format)
 {
     IAudioClient3* audio_client3 = nullptr;
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1476,8 +1463,8 @@ static IAudioClient3* open_audio_client3(std::shared_ptr<SoundIoOutStreamPrivate
             return nullptr;
         }
 
-        auto need_resample = mix_format->Format.nSamplesPerSec != static_cast<DWORD>(os->sample_rate);
-        if (need_resample)
+        // check need resample
+        if (mix_format->Format.nSamplesPerSec != static_cast<DWORD>(os->sample_rate))
         {
             // we can't use resampling with this new interface, fallback to old method
             CoTaskMemFree(mix_format);
@@ -1501,7 +1488,7 @@ static IAudioClient3* open_audio_client3(std::shared_ptr<SoundIoOutStreamPrivate
  * @param wave_format 指定的格式
  * @return IAudioClient* 返回激活的 client 组件，否则为空
  */
-static IAudioClient* open_audio_client(std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format)
+static IAudioClient* open_audio_client(const std::shared_ptr<SoundIoOutStreamPrivate>& os, WAVEFORMATEXTENSIBLE* wave_format)
 {
     IAudioClient* audio_client = nullptr;
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
@@ -1556,7 +1543,7 @@ static void deinit_mix_format(WAVEFORMATEXTENSIBLE** mix_format)
  * @param os 输出流对象
  * @param wave_format 相关格式信息
  */
-static void deinit_client3_and_callback(IAudioClient3** client3, IAudioClient** client, std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format)
+static void deinit_client3_and_callback(IAudioClient3** client3, IAudioClient** client, const std::shared_ptr<SoundIoOutStreamPrivate>& os, WAVEFORMATEXTENSIBLE* wave_format)
 {
     if (*client3 != nullptr)
     {
@@ -1582,8 +1569,8 @@ static void deinit_client3_and_callback(IAudioClient3** client3, IAudioClient** 
  * @param periodicity 请求的调度的 period
  * @return int 返回错误代码定义，如果是 OK 则返回 0
  */
-static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3, std::shared_ptr<SoundIoOutStreamPrivate> os, WAVEFORMATEXTENSIBLE* wave_format, DWORD flags, AUDCLNT_SHAREMODE share_mode, REFERENCE_TIME buffer_duration,
-                      REFERENCE_TIME periodicity)
+static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3, const std::shared_ptr<SoundIoOutStreamPrivate>& os, WAVEFORMATEXTENSIBLE* wave_format, DWORD flags, AUDCLNT_SHAREMODE share_mode,
+                      REFERENCE_TIME buffer_duration, REFERENCE_TIME periodicity)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
     std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(os->device);
@@ -1662,7 +1649,7 @@ NEXT:
                     return SoundIoErrorOpeningDevice;
                 }
                 wave_format->Format.nSamplesPerSec = mix_format->Format.nSamplesPerSec;
-                os->sample_rate = mix_format->Format.nSamplesPerSec;
+                os->sample_rate = static_cast<std::int32_t>(mix_format->Format.nSamplesPerSec);
                 // osw->need_resample = mix_format->Format.nSamplesPerSec != wave_format->Format.nSamplesPerSec;
 
                 deinit_mix_format(&mix_format);
@@ -1716,7 +1703,7 @@ NEXT:
  * @param os 需要被启动的输出流实例
  * @return int 如果无法符合设备支持则返回报错代码
  */
-static int outstream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_do_open(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
     std::shared_ptr<SoundIoDevice> device = os->device;
@@ -1797,8 +1784,9 @@ static int outstream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
         return SoundIoErrorOpeningDevice;
     }
 
-    double max_latency_sec = from_reference_time(max_latency_ref_time);
-    osw.min_padding_frames = (max_latency_sec * os->sample_rate) + 0.5;
+    const double max_latency_sec = from_reference_time(max_latency_ref_time);
+
+    osw.min_padding_frames = static_cast<std::int32_t>(std::lround(max_latency_sec * os->sample_rate));
 
     UINT32 buffer_size;
 
@@ -1877,12 +1865,10 @@ static int outstream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
  *
  * @param os 被驱动处理的 stream
  */
-static void outstream_shared_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
+static void outstream_shared_run(const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
-    SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
-
+    auto& osw = os->backend_data.wasapi;
     HRESULT hr;
-
     std::uint32_t frames_used;
     if (FAILED(hr = osw.audio_client->GetCurrentPadding(&frames_used)))
     {
@@ -1914,7 +1900,7 @@ static void outstream_shared_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
             os->error_callback(os, SoundIoErrorStreaming);
             return;
         }
-        osw.writable_frame_count = osw.buffer_frame_count - frames_used;
+        osw.writable_frame_count = osw.buffer_frame_count - static_cast<int>(frames_used);
         if (osw.thread_exit_flag.test())
         {
             return;
@@ -1948,7 +1934,7 @@ static void outstream_shared_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
             os->underflow_callback(os);
         }
 
-        frame_count_min = static_cast<std::int32_t>(std::max(0U, osw.min_padding_frames - frames_used));
+        frame_count_min = std::max(0, osw.min_padding_frames - static_cast<std::int32_t>(frames_used));
         os->write_callback(os, frame_count_min, osw.writable_frame_count);
     }
 }
@@ -1960,7 +1946,7 @@ static void outstream_shared_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
  *
  * @param os 需要驱动操作的流对象引用
  */
-static void outstream_raw_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
+static void outstream_raw_run(const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
 
@@ -2016,12 +2002,12 @@ static void outstream_raw_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
  *
  * @param arg 从底层传递入内部的 thread argument，代表 stream instance
  */
-static void outstream_thread_run(std::shared_ptr<void> arg)
+static void outstream_thread_run(const std::shared_ptr<void>& arg)
 {
-    std::shared_ptr<SoundIoOutStreamPrivate> os = std::static_pointer_cast<SoundIoOutStreamPrivate>(arg);
+    const std::shared_ptr<SoundIoOutStreamPrivate> os = std::static_pointer_cast<SoundIoOutStreamPrivate>(arg);
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
     std::shared_ptr<SoundIo> soundio = os->device->soundio.lock();
-    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    const std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
 
     if (const int err = outstream_do_open(si, os))
     {
@@ -2079,7 +2065,7 @@ static void outstream_thread_run(std::shared_ptr<void> arg)
  * @param os SoundIoOutStreamPrivate 的 shared_ptr
  * @return int 返回错误码，成功则返回 0
  */
-static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_open_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
     std::shared_ptr<SoundIoDevice> device = os->device;
@@ -2097,27 +2083,27 @@ static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
     // for the realtime code calls the user write_callback.
 
     osw.is_raw = device->is_raw;
-
-    if (!(osw.cond = soundio_os_cond_create()))
+    osw.cond = soundio_os_cond_create();
+    if (osw.cond == nullptr)
     {
         outstream_destroy_wasapi(si, os);
         return SoundIoErrorNoMem;
     }
-
-    if (!(osw.start_cond = soundio_os_cond_create()))
+    osw.start_cond = soundio_os_cond_create();
+    if (osw.start_cond == nullptr)
     {
         outstream_destroy_wasapi(si, os);
         return SoundIoErrorNoMem;
     }
-
-    if (!(osw.mutex = soundio_os_mutex_create()))
+    osw.mutex = soundio_os_mutex_create();
+    if (osw.mutex == nullptr)
     {
         outstream_destroy_wasapi(si, os);
         return SoundIoErrorNoMem;
     }
 
     osw.h_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-    if (!osw.h_event)
+    if (osw.h_event == INVALID_HANDLE_VALUE || osw.h_event == nullptr)
     {
         outstream_destroy_wasapi(si, os);
         return SoundIoErrorOpeningDevice;
@@ -2154,7 +2140,7 @@ static int outstream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
  * @param pause 为 true 则暂停，false 则恢复
  * @return int 成功返回 0
  */
-static int outstream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause)
+static int outstream_pause_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, const bool pause)
 {
     SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
     os->paused = pause;
@@ -2183,13 +2169,12 @@ static int outstream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::share
  * @param os SoundIoOutStreamPrivate 的 shared_ptr
  * @return int 成功返回 0
  */
-static int outstream_start_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_start_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
-    SoundIoOutStreamWasapi* osw = &os->backend_data.wasapi;
-
-    std::unique_lock lock(osw->mutex->get());
-    osw->started = true;
-    osw->start_cond->signal(&lock);
+    auto& osw = os->backend_data.wasapi;
+    std::unique_lock lock(osw.mutex->get());
+    osw.started = true;
+    osw.start_cond->signal(&lock);
     return 0;
 }
 
@@ -2205,12 +2190,12 @@ static int outstream_start_wasapi(std::shared_ptr<SoundIoPrivate> si, std::share
  * @param frame_count 希望写入的 frame 数量
  * @return int 成功返回 0
  */
-static int outstream_begin_write_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, SoundIoChannelArea** out_areas, int* frame_count)
+static int outstream_begin_write_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, SoundIoChannelArea** out_areas, const int frame_count)
 {
-    SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
+    auto& osw = os->backend_data.wasapi;
     HRESULT hr;
 
-    osw.write_frame_count = *frame_count;
+    osw.write_frame_count = frame_count;
 
 
     char* data;
@@ -2239,9 +2224,9 @@ static int outstream_begin_write_wasapi(std::shared_ptr<SoundIoPrivate> si, std:
  * @param os SoundIoOutStreamPrivate 的 shared_ptr
  * @return int 成功返回 0
  */
-static int outstream_end_write_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_end_write_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
-    SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
+    const auto& osw = os->backend_data.wasapi;
     HRESULT hr;
     if (FAILED(hr = osw.audio_render_client->ReleaseBuffer(osw.write_frame_count, 0)))
     {
@@ -2259,9 +2244,9 @@ static int outstream_end_write_wasapi(std::shared_ptr<SoundIoPrivate> si, std::s
  * @param os SoundIoOutStreamPrivate 的 shared_ptr
  * @return int 成功返回 0，如果在 raw 模式则返回错误码
  */
-static int outstream_clear_buffer_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_clear_buffer_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
-    SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
+    auto& osw = os->backend_data.wasapi;
 
     if (osw.h_event)
     {
@@ -2284,9 +2269,9 @@ static int outstream_clear_buffer_wasapi(std::shared_ptr<SoundIoPrivate> si, std
  * @param out_latency 返回当前的 latency
  * @return int 成功返回 0
  */
-static int outstream_get_latency_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, double* out_latency)
+static int outstream_get_latency_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, double* out_latency)
 {
-    SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
+    const auto& osw = os->backend_data.wasapi;
 
     HRESULT hr;
     UINT32 frames_used;
@@ -2309,10 +2294,9 @@ static int outstream_get_latency_wasapi(std::shared_ptr<SoundIoPrivate> si, std:
  * @param out_time 输出当前播放时间的时间戳参数 (精确到秒)
  * @return int 成功返回 0，未找到时间戳信息则返回 -1
  */
-static int outstream_get_time_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, double* out_time)
+static int outstream_get_time_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, double* out_time)
 {
-    SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
-
+    const auto& osw = os->backend_data.wasapi;
     UINT64 position = 0;
     UINT64 qpc = 0;
 
@@ -2339,7 +2323,7 @@ static int outstream_get_time_wasapi(std::shared_ptr<SoundIoPrivate> si, std::sh
  * @param volume 范围应在 0.0 ~ 1.0 的音量倍数
  * @return int 成功返回 0
  */
-static int outstream_set_volume_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, float volume)
+static int outstream_set_volume_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, const float volume)
 {
     // SoundIoOutStreamWasapi& osw = os->backend_data.wasapi;
 
@@ -2357,59 +2341,58 @@ static int outstream_set_volume_wasapi(std::shared_ptr<SoundIoPrivate> si, std::
 // 6. InStream (Input & Capture)
 // ==============================================================================
 
-static void instream_thread_deinit(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static void instream_thread_deinit(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
-    struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
-
-    if (isw->audio_capture_client)
+    auto& isw = is->backend_data.wasapi;
+    if (isw.audio_capture_client)
     {
-        isw->audio_capture_client->Release();
-        isw->audio_capture_client = nullptr;
+        isw.audio_capture_client->Release();
+        isw.audio_capture_client = nullptr;
     }
-    if (isw->audio_client)
+    if (isw.audio_client)
     {
-        isw->audio_client->Release();
-        isw->audio_client = nullptr;
+        isw.audio_client->Release();
+        isw.audio_client = nullptr;
     }
 }
 
 
-static void instream_destroy_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static void instream_destroy_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
-    struct SoundIoInStreamWasapi* isw = &is->backend_data.wasapi;
+    auto& isw = is->backend_data.wasapi;
 
-    if (isw->thread)
+    if (isw.thread)
     {
-        isw->thread_exit_flag.test_and_set();
-        if (isw->h_event)
+        isw.thread_exit_flag.test_and_set();
+        if (isw.h_event)
         {
-            SetEvent(isw->h_event);
+            SetEvent(isw.h_event);
         }
 
-        std::unique_lock lock(isw->mutex->get());
-        isw->cond->signal(&lock);
-        isw->start_cond->signal(&lock);
+        std::unique_lock lock(isw.mutex->get());
+        isw.cond->signal(&lock);
+        isw.start_cond->signal(&lock);
         lock.unlock();
 
-        isw->thread = nullptr;
+        isw.thread = nullptr;
     }
 
-    if (isw->h_event)
+    if (isw.h_event)
     {
-        CloseHandle(isw->h_event);
-        isw->h_event = nullptr;
+        CloseHandle(isw.h_event);
+        isw.h_event = nullptr;
     }
 
-    isw->cond = nullptr;
-    isw->start_cond = nullptr;
-    isw->mutex = nullptr;
+    isw.cond = nullptr;
+    isw.start_cond = nullptr;
+    isw.mutex = nullptr;
 }
 
-static int instream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_do_open(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
-    SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
-    std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(is->device);
-    std::shared_ptr<SoundIoDeviceWasapi> dw = dev->backend_data.wasapi;
+    auto& isw = is->backend_data.wasapi;
+    const auto dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(is->device);
+    const auto dw = dev->backend_data.wasapi;
     HRESULT hr;
 
     if (FAILED(hr = dw->mm_device->Activate(IID_IAUDIOCLIENT, CLSCTX_ALL, nullptr, reinterpret_cast<void**>(&isw.audio_client))))
@@ -2561,10 +2544,9 @@ static int instream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
     return 0;
 }
 
-static void instream_raw_run(std::shared_ptr<SoundIoInStreamPrivate> is)
+static void instream_raw_run(const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
-    SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
-
+    const auto& isw = is->backend_data.wasapi;
     HRESULT hr;
 
     if (FAILED(hr = isw.audio_client->Start()))
@@ -2581,11 +2563,11 @@ static void instream_raw_run(std::shared_ptr<SoundIoInStreamPrivate> is)
             return;
         }
 
-        is->read_callback(is, isw.buffer_frame_count, isw.buffer_frame_count);
+        is->read_callback(is, static_cast<std::int32_t>(isw.buffer_frame_count), static_cast<std::int32_t>(isw.buffer_frame_count));
     }
 }
 
-static void instream_shared_run(std::shared_ptr<SoundIoInStreamPrivate> is)
+static void instream_shared_run(const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
     SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
 
@@ -2612,7 +2594,7 @@ static void instream_shared_run(std::shared_ptr<SoundIoInStreamPrivate> is)
             return;
         }
 
-        isw.readable_frame_count = frames_available;
+        isw.readable_frame_count = static_cast<std::int32_t>(frames_available);
         if (isw.readable_frame_count > 0)
         {
             is->read_callback(is, 0, isw.readable_frame_count);
@@ -2620,16 +2602,15 @@ static void instream_shared_run(std::shared_ptr<SoundIoInStreamPrivate> is)
     }
 }
 
-static void instream_thread_run(std::shared_ptr<void> arg)
+static void instream_thread_run(const std::shared_ptr<void>& arg)
 {
-    std::shared_ptr<SoundIoInStreamPrivate> is = std::static_pointer_cast<SoundIoInStreamPrivate>(arg);
-    SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
-    std::shared_ptr<SoundIoDevice> device = is->device;
-    std::shared_ptr<SoundIo> soundio = device->soundio.lock();
-    std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
+    const auto is = std::static_pointer_cast<SoundIoInStreamPrivate>(arg);
+    auto& isw = is->backend_data.wasapi;
+    const auto device = is->device;
+    auto soundio = device->soundio.lock();
+    const auto si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
 
-    int err;
-    if ((err = instream_do_open(si, is)))
+    if (const int err = instream_do_open(si, is))
     {
         instream_thread_deinit(si, is);
 
@@ -2685,11 +2666,9 @@ static void instream_thread_run(std::shared_ptr<void> arg)
  * @param is SoundIoInStreamPrivate 的 shared_ptr
  * @return int 返回错误码，成功则返回 0
  */
-static int instream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_open_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
-    SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
-    std::shared_ptr<SoundIoDevice> device = is->device;
-    std::shared_ptr<SoundIo> soundio = si;
+    auto& isw = is->backend_data.wasapi;
 
     // All the COM functions are supposed to be called from the same thread. libsoundio API does not
     // restrict the calling thread context in this way. Furthermore, the user might have called
@@ -2698,7 +2677,7 @@ static int instream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_
     // via conditions and signals. The thread for initialization and teardown is also used
     // for the realtime code calls the user write_callback.
 
-    isw.is_raw = device->is_raw;
+    isw.is_raw = is->device->is_raw;
     isw.cond = soundio_os_cond_create();
     if (isw.cond == nullptr)
     {
@@ -2757,7 +2736,7 @@ static int instream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_
  * @param pause 若为 true 则暂停，false 则恢复
  * @return int 返回操作结果，成功为 0
  */
-static int instream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, bool pause)
+static int instream_pause_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is, const bool pause)
 {
     SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
     HRESULT hr;
@@ -2789,7 +2768,7 @@ static int instream_pause_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
  * @param is SoundIoInStreamPrivate 的 shared_ptr
  * @return int 成功返回 0
  */
-static int instream_start_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_start_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
     SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
     std::unique_lock lock(isw.mutex->get());
@@ -2810,7 +2789,7 @@ static int instream_start_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared
  * @param frame_count 期望读取的 frame 数量，在此方法中可能会被修改为实际可用数量
  * @return int 成功返回 0
  */
-static int instream_begin_read_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, struct SoundIoChannelArea** out_areas, int* frame_count)
+static int instream_begin_read_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is, SoundIoChannelArea** out_areas, int* frame_count)
 {
     SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
     HRESULT hr;
@@ -2864,7 +2843,7 @@ static int instream_begin_read_wasapi(std::shared_ptr<SoundIoPrivate> si, std::s
  * @param is SoundIoInStreamPrivate 的 shared_ptr
  * @return int 成功返回 0
  */
-static int instream_end_read_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_end_read_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
     SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
     HRESULT hr;
@@ -2892,12 +2871,12 @@ static int instream_end_read_wasapi(std::shared_ptr<SoundIoPrivate> si, std::sha
  * @param out_latency 返回当前的 latency (秒)
  * @return int 成功返回 0
  */
-static int instream_get_latency_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, double* out_latency)
+static int instream_get_latency_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is, double* out_latency)
 {
-    SoundIoInStreamWasapi& isw = is->backend_data.wasapi;
+    const auto& isw = is->backend_data.wasapi;
 
     HRESULT hr;
-    UINT32 frames_used;
+    std::uint32_t frames_used;
     if (FAILED(hr = isw.audio_client->GetCurrentPadding(&frames_used)))
     {
         return SoundIoErrorStreaming;
@@ -2918,7 +2897,7 @@ static int instream_get_latency_wasapi(std::shared_ptr<SoundIoPrivate> si, std::
  *
  * @param si 需要被销毁的 SoundIoPrivate 的 shared_ptr
  */
-static void destroy_wasapi(std::shared_ptr<SoundIoPrivate> si)
+static void destroy_wasapi(const std::shared_ptr<SoundIoPrivate>& si)
 {
     LOGI(L"destroy wasapi");
     SoundIoWasapi& siw = si->backend_data->wasapi;
@@ -2983,9 +2962,9 @@ STDMETHODIMP_(ULONG) soundio_NotificationClient::Release()
  * @param client 通知客户端实例
  * @return HRESULT 返回 S_OK 即不处理异常
  */
-static HRESULT queue_device_scan(soundio_NotificationClient* client)
+static HRESULT queue_device_scan(const soundio_NotificationClient* client)
 {
-    std::shared_ptr<SoundIoPrivate> si = client->si.lock();
+    const auto si = client->si.lock();
     if (si == nullptr)
     {
         LOGE(L"os is nullptr!");
@@ -3010,7 +2989,7 @@ STDMETHODIMP soundio_NotificationClient::OnDeviceRemoved(LPCWSTR wid)
     return queue_device_scan(this);
 }
 
-STDMETHODIMP soundio_NotificationClient::OnDefaultDeviceChanged(EDataFlow flow, ERole role, LPCWSTR wid)
+STDMETHODIMP soundio_NotificationClient::OnDefaultDeviceChanged(EDataFlow flow, const ERole role, LPCWSTR wid)
 {
     if (role != eMultimedia)
     {
@@ -3035,7 +3014,7 @@ STDMETHODIMP soundio_NotificationClient::OnPropertyValueChanged(LPCWSTR wid, con
  * @param si SoundIoPrivate 实例关联
  * @return int 初始化错误码，0 表示成功
  */
-int soundio_wasapi_init(std::shared_ptr<SoundIoPrivate> si)
+int soundio_wasapi_init(const std::shared_ptr<SoundIoPrivate>& si)
 {
     SoundIoWasapi& siw = si->backend_data->wasapi;
 

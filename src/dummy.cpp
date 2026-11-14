@@ -9,77 +9,78 @@
 #endif
 
 #include "dummy.h"
-
 #include <algorithm>
-
 #include "soundio_private.h"
-
 #include "util.h"
 
-static void playback_thread_run(std::shared_ptr<void> arg)
+static void playback_thread_run(const std::shared_ptr<void>& arg)
 {
-    std::shared_ptr<SoundIoOutStreamPrivate> os = std::static_pointer_cast<SoundIoOutStreamPrivate>(arg);
-    std::shared_ptr<SoundIoOutStream> outstream = os;
-    struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
+    const auto outstream = std::static_pointer_cast<SoundIoOutStreamPrivate>(arg);
+    auto& osd = outstream->backend_data.dummy;
 
-    int fill_bytes = osd->ring_buffer->fill_count();
-    int free_bytes = osd->ring_buffer->capacity() - fill_bytes;
-    int free_frames = free_bytes / outstream->bytes_per_frame;
-    osd->frames_left = free_frames;
-    if (free_frames > 0)
     {
-        outstream->write_callback(outstream, 0, free_frames);
+        const std::int32_t fill_bytes = osd.ring_buffer->fill_count();
+        const std::int32_t free_bytes = osd.ring_buffer->capacity() - fill_bytes;
+        const std::int32_t free_frames = free_bytes / outstream->bytes_per_frame;
+        osd.frames_left = free_frames;
+        if (free_frames > 0)
+        {
+            outstream->write_callback(outstream, 0, free_frames);
+        }
     }
+
     double start_time = soundio_os_get_time();
-    long frames_consumed = 0;
+    std::int64_t frames_consumed = 0;
     bool expected = true;
 
-    while (!osd->abort_flag.test())
+    while (!osd.abort_flag.test())
     {
-        double now = soundio_os_get_time();
-        double time_passed = now - start_time;
-        double next_period = start_time + ceil_dbl(time_passed / osd->period_duration) * osd->period_duration;
-        double relative_time = next_period - now;
+        const double now = soundio_os_get_time();
+        const double time_passed = now - start_time;
+        const double next_period = start_time + ceil_dbl(time_passed / osd.period_duration) * osd.period_duration;
+        const double relative_time = next_period - now;
 
 
-        osd->cond->timed_wait(nullptr, relative_time);
-        if (osd->clear_buffer.compare_exchange_strong(expected, false))
+        osd.cond->timed_wait(nullptr, relative_time);
+        if (osd.clear_buffer.compare_exchange_strong(expected, false))
         {
-            int free_bytes = osd->ring_buffer->capacity();
-            int free_frames = free_bytes / outstream->bytes_per_frame;
-            osd->frames_left = free_frames;
+            const std::int32_t free_bytes = osd.ring_buffer->capacity();
+            const std::int32_t free_frames = free_bytes / outstream->bytes_per_frame;
+            osd.frames_left = free_frames;
             if (free_frames > 0)
+            {
                 outstream->write_callback(outstream, 0, free_frames);
+            }
             frames_consumed = 0;
             start_time = soundio_os_get_time();
             continue;
         }
 
-        if (osd->pause_requested)
+        if (osd.pause_requested)
         {
             start_time = now;
             frames_consumed = 0;
             continue;
         }
 
-        int fill_bytes = osd->ring_buffer->fill_count();
-        int fill_frames = fill_bytes / outstream->bytes_per_frame;
-        int free_bytes = osd->ring_buffer->capacity() - fill_bytes;
-        int free_frames = free_bytes / outstream->bytes_per_frame;
+        const std::int32_t fill_bytes = osd.ring_buffer->fill_count();
+        std::int32_t fill_frames = fill_bytes / outstream->bytes_per_frame;
+        const std::int32_t free_bytes = osd.ring_buffer->capacity() - fill_bytes;
+        const std::int32_t free_frames = free_bytes / outstream->bytes_per_frame;
 
-        double total_time = soundio_os_get_time() - start_time;
-        long total_frames = total_time * outstream->sample_rate;
-        int frames_to_kill = static_cast<int>(total_frames - frames_consumed);
-        int read_count = std::min(frames_to_kill, fill_frames);
-        int byte_count = read_count * outstream->bytes_per_frame;
-        osd->ring_buffer->advance_read_ptr(byte_count);
-        // soundio_ring_buffer_advance_read_ptr(osd->ring_buffer, byte_count);
+        const double total_time = soundio_os_get_time() - start_time;
+        const auto total_frames = static_cast<std::int64_t>(total_time * outstream->sample_rate);
+        auto frames_to_kill = static_cast<std::int32_t>(total_frames - frames_consumed);
+        const std::int32_t read_count = std::min(frames_to_kill, fill_frames);
+        const std::int32_t byte_count = read_count * outstream->bytes_per_frame;
+        osd.ring_buffer->advance_read_ptr(byte_count);
+        // soundio_ring_buffer_advance_read_ptr(osd.ring_buffer, byte_count);
         frames_consumed += read_count;
 
         if (frames_to_kill > fill_frames)
         {
             outstream->underflow_callback(outstream);
-            osd->frames_left = free_frames;
+            osd.frames_left = free_frames;
             if (free_frames > 0)
                 outstream->write_callback(outstream, 0, free_frames);
             frames_consumed = 0;
@@ -87,46 +88,45 @@ static void playback_thread_run(std::shared_ptr<void> arg)
         }
         else if (free_frames > 0)
         {
-            osd->frames_left = free_frames;
+            osd.frames_left = free_frames;
             outstream->write_callback(outstream, 0, free_frames);
         }
     }
 }
 
-static void capture_thread_run(std::shared_ptr<void> arg)
+static void capture_thread_run(const std::shared_ptr<void>& arg)
 {
-    std::shared_ptr<SoundIoInStreamPrivate> is = std::static_pointer_cast<SoundIoInStreamPrivate>(arg);
-    std::shared_ptr<SoundIoInStream> instream = is;
-    struct SoundIoInStreamDummy* isd = &is->backend_data.dummy;
+    const auto instream = std::static_pointer_cast<SoundIoInStreamPrivate>(arg);
+    auto& isd = instream->backend_data.dummy;
 
-    long frames_consumed = 0;
+    std::int64_t frames_consumed = 0;
     double start_time = soundio_os_get_time();
-    while (!isd->abort_flag.test())
+    while (!isd.abort_flag.test())
     {
-        double now = soundio_os_get_time();
-        double time_passed = now - start_time;
-        double next_period = start_time + ceil_dbl(time_passed / isd->period_duration) * isd->period_duration;
-        double relative_time = next_period - now;
-        isd->cond->timed_wait(nullptr, relative_time);
+        const double now = soundio_os_get_time();
+        const double time_passed = now - start_time;
+        const double next_period = start_time + ceil_dbl(time_passed / isd.period_duration) * isd.period_duration;
+        const double relative_time = next_period - now;
+        isd.cond->timed_wait(nullptr, relative_time);
 
-        if (isd->pause_requested)
+        if (isd.pause_requested)
         {
             start_time = now;
             frames_consumed = 0;
             continue;
         }
 
-        int fill_bytes = isd->ring_buffer->fill_count();
-        int free_bytes = isd->ring_buffer->free_count();
-        int fill_frames = fill_bytes / instream->bytes_per_frame;
-        int free_frames = free_bytes / instream->bytes_per_frame;
+        const std::int32_t fill_bytes = isd.ring_buffer->fill_count();
+        const std::int32_t free_bytes = isd.ring_buffer->free_count();
+        const std::int32_t fill_frames = fill_bytes / instream->bytes_per_frame;
+        std::int32_t free_frames = free_bytes / instream->bytes_per_frame;
 
-        double total_time = soundio_os_get_time() - start_time;
-        long total_frames = total_time * instream->sample_rate;
-        int frames_to_kill = static_cast<int>(total_frames - frames_consumed);
-        int write_count = std::min(frames_to_kill, free_frames);
-        int byte_count = write_count * instream->bytes_per_frame;
-        isd->ring_buffer->advance_write_ptr(byte_count);
+        const double total_time = soundio_os_get_time() - start_time;
+        const auto total_frames = static_cast<std::int64_t>(total_time * instream->sample_rate);
+        const auto frames_to_kill = static_cast<std::int32_t>(total_frames - frames_consumed);
+        const auto write_count = std::min(frames_to_kill, free_frames);
+        const auto byte_count = write_count * instream->bytes_per_frame;
+        isd.ring_buffer->advance_write_ptr(byte_count);
         frames_consumed += write_count;
 
         if (frames_to_kill > free_frames)
@@ -137,15 +137,15 @@ static void capture_thread_run(std::shared_ptr<void> arg)
         }
         if (fill_frames > 0)
         {
-            isd->frames_left = fill_frames;
+            isd.frames_left = fill_frames;
             instream->read_callback(instream, 0, fill_frames);
         }
     }
 }
 
-static void destroy_dummy(std::shared_ptr<SoundIoPrivate> si)
+static void destroy_dummy(const std::shared_ptr<SoundIoPrivate>& si)
 {
-    SoundIoDummy& sid = si->backend_data->dummy;
+    auto& sid = si->backend_data->dummy;
 
     if (sid.cond)
     {
@@ -158,85 +158,83 @@ static void destroy_dummy(std::shared_ptr<SoundIoPrivate> si)
     }
 }
 
-static void flush_events_dummy(std::shared_ptr<SoundIoPrivate> si)
+static void flush_events_dummy(const std::shared_ptr<SoundIoPrivate>& si)
 {
-    std::shared_ptr<SoundIo> soundio = si;
-    SoundIoDummy& sid = si->backend_data->dummy;
+    const auto& soundio = si;
+    auto& sid = si->backend_data->dummy;
     if (sid.devices_emitted)
         return;
     sid.devices_emitted = true;
     soundio->on_devices_change(soundio);
 }
 
-static void wait_events_dummy(std::shared_ptr<SoundIoPrivate> si)
+static void wait_events_dummy(const std::shared_ptr<SoundIoPrivate>& si)
 {
-    SoundIoDummy& sid = si->backend_data->dummy;
+    const auto& sid = si->backend_data->dummy;
     flush_events_dummy(si);
     sid.cond->wait(nullptr);
 }
 
-static void wakeup_dummy(std::shared_ptr<SoundIoPrivate> si)
+static void wakeup_dummy(const std::shared_ptr<SoundIoPrivate>& si)
 {
-    SoundIoDummy& sid = si->backend_data->dummy;
+    const auto& sid = si->backend_data->dummy;
     sid.cond->signal(nullptr);
 }
 
-static void force_device_scan_dummy(std::shared_ptr<SoundIoPrivate> si)
+static void force_device_scan_dummy(const std::shared_ptr<SoundIoPrivate>& si)
 {
     // nothing to do; dummy devices never change
 }
 
-static void outstream_destroy_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static void outstream_destroy_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
-    struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
+    auto& osd = os->backend_data.dummy;
 
-    if (osd->thread)
+    if (osd.thread)
     {
-        osd->abort_flag.test_and_set();
-        osd->cond->signal(nullptr);
-        osd->thread = nullptr;
+        osd.abort_flag.test_and_set();
+        osd.cond->signal(nullptr);
+        osd.thread = nullptr;
     }
 
-    osd->cond = nullptr;
-    osd->ring_buffer = nullptr;
+    osd.cond = nullptr;
+    osd.ring_buffer = nullptr;
 }
 
-static int outstream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_open_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
-    struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
-    std::shared_ptr<SoundIoOutStream> outstream = os;
-    std::shared_ptr<SoundIoDevice> device = outstream->device;
-    osd->clear_buffer = false;
-    osd->pause_requested = false;
+    auto& osd = os->backend_data.dummy;
+    const auto& device = os->device;
+    osd.clear_buffer = false;
+    osd.pause_requested = false;
 
-    if (outstream->software_latency == 0.0)
+    if (os->software_latency == 0.0)
     {
-        outstream->software_latency = std::clamp(1.0, device->software_latency_min, device->software_latency_max);
+        os->software_latency = std::clamp(1.0, device->software_latency_min, device->software_latency_max);
     }
 
-    osd->period_duration = outstream->software_latency / 2.0;
+    osd.period_duration = os->software_latency / 2.0;
 
-    // int err;
-    const int buffer_size = static_cast<int>(outstream->bytes_per_frame * outstream->sample_rate * outstream->software_latency);
-    osd->ring_buffer = std::make_unique<SoundIoRingBuffer>();
-    // if (!osd->ring_buffer)
+    // std::int32_t err;
+    const auto buffer_size = static_cast<std::int32_t>(os->bytes_per_frame * os->sample_rate * os->software_latency);
+    osd.ring_buffer = std::make_unique<SoundIoRingBuffer>();
+    // if (!osd.ring_buffer)
     // {
     //     outstream_destroy_dummy(si, os);
     //     return SoundIoErrorNoMem;
     // }
-
-    int err;
-    if ((err = osd->ring_buffer->init(buffer_size)))
+    const std::int32_t err = osd.ring_buffer->init(buffer_size);
+    if (err)
     {
         return err;
     }
 
-    int actual_capacity = osd->ring_buffer->capacity();
-    osd->buffer_frame_count = actual_capacity / outstream->bytes_per_frame;
-    outstream->software_latency = osd->buffer_frame_count / static_cast<double>(outstream->sample_rate);
+    const std::int32_t actual_capacity = osd.ring_buffer->capacity();
+    osd.buffer_frame_count = actual_capacity / os->bytes_per_frame;
+    os->software_latency = osd.buffer_frame_count / static_cast<double>(os->sample_rate);
 
-    osd->cond = soundio_os_cond_create();
-    if (!osd->cond)
+    osd.cond = soundio_os_cond_create();
+    if (!osd.cond)
     {
         outstream_destroy_dummy(si, os);
         return SoundIoErrorNoMem;
@@ -245,133 +243,131 @@ static int outstream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_
     return 0;
 }
 
-static int outstream_pause_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause)
+static int outstream_pause_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, const bool pause)
 {
-    struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
-    osd->pause_requested = pause;
+    auto& osd = os->backend_data.dummy;
+    osd.pause_requested = pause;
     return 0;
 }
 
-static int outstream_start_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_start_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
-    struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
-    std::shared_ptr<SoundIo> soundio = si;
-    assert(!osd->thread);
-    osd->abort_flag.clear();
-    osd->thread = SoundIoOsThread::create(playback_thread_run, os);
+    auto& osd = os->backend_data.dummy;
+    assert(!osd.thread);
+    osd.abort_flag.clear();
+    osd.thread = SoundIoOsThread::create(playback_thread_run, os);
     return 0;
 }
 
-static int outstream_begin_write_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, struct SoundIoChannelArea** out_areas, int* frame_count)
+static int outstream_begin_write_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, SoundIoChannelArea** out_areas, const int frame_count)
 {
-    std::shared_ptr<SoundIoOutStream> outstream = os;
-    struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
+    const auto& outstream = os;
+    auto& osd = os->backend_data.dummy;
 
-    if (*frame_count > osd->frames_left)
+    if (frame_count > osd.frames_left)
         return SoundIoErrorInvalid;
 
-    char* write_ptr = osd->ring_buffer->write_ptr();
-    for (int ch = 0; ch < outstream->layout.channel_count; ch += 1)
+    char* write_ptr = osd.ring_buffer->write_ptr();
+    for (std::int32_t ch = 0; ch < outstream->layout.channel_count; ch += 1)
     {
-        osd->areas[ch].ptr = write_ptr + outstream->bytes_per_sample * ch;
-        osd->areas[ch].step = outstream->bytes_per_frame;
+        osd.areas[ch].ptr = write_ptr + outstream->bytes_per_sample * ch;
+        osd.areas[ch].step = outstream->bytes_per_frame;
     }
 
-    osd->write_frame_count = *frame_count;
-    *out_areas = osd->areas;
+    osd.write_frame_count = frame_count;
+    *out_areas = osd.areas;
     return 0;
 }
 
-static int outstream_end_write_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_end_write_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
-    struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
-    std::shared_ptr<SoundIoOutStream> outstream = os;
-    int byte_count = osd->write_frame_count * outstream->bytes_per_frame;
-    osd->ring_buffer->advance_write_ptr(byte_count);
-    // soundio_ring_buffer_advance_write_ptr(osd->ring_buffer, byte_count);
-    osd->frames_left -= osd->write_frame_count;
+    auto& osd = os->backend_data.dummy;
+    const auto& outstream = os;
+    std::int32_t byte_count = osd.write_frame_count * outstream->bytes_per_frame;
+    osd.ring_buffer->advance_write_ptr(byte_count);
+    // soundio_ring_buffer_advance_write_ptr(osd.ring_buffer, byte_count);
+    osd.frames_left -= osd.write_frame_count;
     return 0;
 }
 
-static int outstream_clear_buffer_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_clear_buffer_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
-    struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
-    osd->clear_buffer = true;
-    osd->cond->signal(nullptr);
+    auto& osd = os->backend_data.dummy;
+    osd.clear_buffer = true;
+    osd.cond->signal(nullptr);
     return 0;
 }
 
-static int outstream_get_latency_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, double* out_latency)
+static int outstream_get_latency_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, double* out_latency)
 {
-    std::shared_ptr<SoundIoOutStream> outstream = os;
-    struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
-    int fill_bytes = osd->ring_buffer->fill_count();
+    const auto& outstream = os;
+    const auto& osd = os->backend_data.dummy;
+    const std::int32_t fill_bytes = osd.ring_buffer->fill_count();
 
-    *out_latency = (fill_bytes / outstream->bytes_per_frame) / static_cast<double>(outstream->sample_rate);
+    *out_latency = static_cast<double>(fill_bytes) / outstream->bytes_per_frame / static_cast<double>(outstream->sample_rate);
     return 0;
 }
 
-static int outstream_get_time_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, double* out_time)
+static int outstream_get_time_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, double* out_time)
 {
     *out_time = 0;
     return 0;
 }
 
 
-static void instream_destroy_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static void instream_destroy_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
-    struct SoundIoInStreamDummy* isd = &is->backend_data.dummy;
+    auto& isd = is->backend_data.dummy;
 
-    if (isd->thread)
+    if (isd.thread)
     {
-        isd->abort_flag.test_and_set();
-        isd->cond->signal(nullptr);
-        // soundio_os_thread_destroy(isd->thread);
-        isd->thread = NULL;
+        isd.abort_flag.test_and_set();
+        isd.cond->signal(nullptr);
+        // soundio_os_thread_destroy(isd.thread);
+        isd.thread = nullptr;
     }
-    // soundio_os_cond_destroy(isd->cond);
-    isd->cond = NULL;
-    isd->ring_buffer = nullptr;
+    // soundio_os_cond_destroy(isd.cond);
+    isd.cond = nullptr;
+    isd.ring_buffer = nullptr;
 
-    // soundio_ring_buffer_deinit(&isd->ring_buffer);
+    // soundio_ring_buffer_deinit(&isd.ring_buffer);
 }
 
-static int instream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_open_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
-    struct SoundIoInStreamDummy* isd = &is->backend_data.dummy;
-    std::shared_ptr<SoundIoInStream> instream = is;
-    std::shared_ptr<SoundIoDevice> device = instream->device;
-    isd->pause_requested = false;
+    auto& isd = is->backend_data.dummy;
+    const auto& device = is->device;
+    isd.pause_requested = false;
 
-    if (instream->software_latency == 0.0)
+    if (is->software_latency == 0.0)
     {
-        instream->software_latency = std::clamp(1.0, device->software_latency_min, device->software_latency_max);
+        is->software_latency = std::clamp(1.0, device->software_latency_min, device->software_latency_max);
     }
 
-    isd->period_duration = instream->software_latency;
+    isd.period_duration = is->software_latency;
 
 
-    isd->ring_buffer = std::make_unique<SoundIoRingBuffer>();
-    // if (!isd->ring_buffer)
+    isd.ring_buffer = std::make_unique<SoundIoRingBuffer>();
+    // if (!isd.ring_buffer)
     // {
     //     instream_destroy_dummy(si, is);
     //     return SoundIoErrorNoMem;
     // }
 
-    double target_buffer_duration = isd->period_duration * 4.0;
-    int buffer_size = instream->bytes_per_frame * instream->sample_rate * target_buffer_duration;
+    const double target_buffer_duration = isd.period_duration * 4.0;
+    const auto buffer_size = static_cast<std::int32_t>(is->bytes_per_frame * is->sample_rate * target_buffer_duration);
 
-    int err;
-    if ((err = isd->ring_buffer->init(buffer_size)))
+    std::int32_t err = isd.ring_buffer->init(buffer_size);
+    if (err)
     {
         return err;
     }
 
-    int actual_capacity = isd->ring_buffer->capacity();
-    isd->buffer_frame_count = actual_capacity / instream->bytes_per_frame;
+    const std::int32_t actual_capacity = isd.ring_buffer->capacity();
+    isd.buffer_frame_count = actual_capacity / is->bytes_per_frame;
 
-    isd->cond = soundio_os_cond_create();
-    if (!isd->cond)
+    isd.cond = soundio_os_cond_create();
+    if (!isd.cond)
     {
         instream_destroy_dummy(si, is);
         return SoundIoErrorNoMem;
@@ -380,65 +376,60 @@ static int instream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_p
     return 0;
 }
 
-static int instream_pause_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, bool pause)
+static int instream_pause_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is, const bool pause)
 {
-    struct SoundIoInStreamDummy* isd = &is->backend_data.dummy;
-    isd->pause_requested = pause;
+    auto& isd = is->backend_data.dummy;
+    isd.pause_requested = pause;
     return 0;
 }
 
-static int instream_start_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_start_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
-    struct SoundIoInStreamDummy* isd = &is->backend_data.dummy;
-    std::shared_ptr<SoundIo> soundio = si;
-    assert(!isd->thread);
-    isd->abort_flag.clear();
-    isd->thread = SoundIoOsThread::create(capture_thread_run, is);
+    auto& isd = is->backend_data.dummy;
+    assert(!isd.thread);
+    isd.abort_flag.clear();
+    isd.thread = SoundIoOsThread::create(capture_thread_run, is);
     return 0;
 }
 
-static int instream_begin_read_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, struct SoundIoChannelArea** out_areas, int* frame_count)
+static int instream_begin_read_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is, SoundIoChannelArea** out_areas, int* out_frame_count)
 {
-    std::shared_ptr<SoundIoInStream> instream = is;
-    struct SoundIoInStreamDummy* isd = &is->backend_data.dummy;
+    auto& isd = is->backend_data.dummy;
 
-    assert(*frame_count <= isd->frames_left);
+    assert(*out_frame_count <= isd.frames_left);
 
-    char* read_ptr = isd->ring_buffer->read_ptr();
-    for (int ch = 0; ch < instream->layout.channel_count; ch += 1)
+    char* read_ptr = isd.ring_buffer->read_ptr();
+    for (std::int32_t ch = 0; ch < is->layout.channel_count; ch += 1)
     {
-        isd->areas[ch].ptr = read_ptr + instream->bytes_per_sample * ch;
-        isd->areas[ch].step = instream->bytes_per_frame;
+        isd.areas[ch].ptr = read_ptr + is->bytes_per_sample * ch;
+        isd.areas[ch].step = is->bytes_per_frame;
     }
 
-    isd->read_frame_count = *frame_count;
-    *out_areas = isd->areas;
+    isd.read_frame_count = *out_frame_count;
+    *out_areas = isd.areas;
 
     return 0;
 }
 
-static int instream_end_read_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_end_read_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
-    struct SoundIoInStreamDummy* isd = &is->backend_data.dummy;
-    std::shared_ptr<SoundIoInStream> instream = is;
-    int byte_count = isd->read_frame_count * instream->bytes_per_frame;
-    isd->ring_buffer->advance_read_ptr(byte_count);
-    // soundio_ring_buffer_advance_read_ptr(isd->ring_buffer, byte_count);
-    isd->frames_left -= isd->read_frame_count;
+    auto& isd = is->backend_data.dummy;
+    const std::int32_t byte_count = isd.read_frame_count * is->bytes_per_frame;
+    isd.ring_buffer->advance_read_ptr(byte_count);
+    // soundio_ring_buffer_advance_read_ptr(isd.ring_buffer, byte_count);
+    isd.frames_left -= isd.read_frame_count;
     return 0;
 }
 
-static int instream_get_latency_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, double* out_latency)
+static int instream_get_latency_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is, double* out_latency)
 {
-    std::shared_ptr<SoundIoInStream> instream = is;
-    SoundIoInStreamDummy& osd = is->backend_data.dummy;
-    int fill_bytes = osd.ring_buffer->fill_count();
-
-    *out_latency = (fill_bytes / instream->bytes_per_frame) / static_cast<double>(instream->sample_rate);
+    const auto& osd = is->backend_data.dummy;
+    const std::int32_t fill_bytes = osd.ring_buffer->fill_count();
+    *out_latency = static_cast<double>(fill_bytes) / is->bytes_per_frame / static_cast<double>(is->sample_rate);
     return 0;
 }
 
-static int set_all_device_formats(std::shared_ptr<SoundIoDevice> device)
+static int set_all_device_formats(const std::shared_ptr<SoundIoDevice>& device)
 {
     // device->format_count = 18;
     // device->formats = ALLOCATE(enum SoundIoFormat, device->format_count);
@@ -467,7 +458,7 @@ static int set_all_device_formats(std::shared_ptr<SoundIoDevice> device)
     return 0;
 }
 
-static void set_all_device_sample_rates(std::shared_ptr<SoundIoDevice> device)
+static void set_all_device_sample_rates(const std::shared_ptr<SoundIoDevice>& device)
 {
     std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(device);
     SoundIoSampleRateRange range{};
@@ -476,21 +467,20 @@ static void set_all_device_sample_rates(std::shared_ptr<SoundIoDevice> device)
     device->sample_rates.push_back(range);
 }
 
-static int set_all_device_channel_layouts(std::shared_ptr<SoundIoDevice> device)
+static int set_all_device_channel_layouts(const std::shared_ptr<SoundIoDevice>& device)
 {
-    int count = soundio_channel_layout_builtin_count();
+    std::int32_t count = soundio_channel_layout_builtin_count();
 
-    for (int i = 0; i < count; i++)
+    for (std::int32_t i = 0; i < count; i++)
     {
         device->layouts.push_back(*soundio_channel_layout_get_builtin(i));
     }
     return 0;
 }
 
-int soundio_dummy_init(std::shared_ptr<SoundIoPrivate> si)
+int soundio_dummy_init(const std::shared_ptr<SoundIoPrivate>& si)
 {
-    std::shared_ptr<SoundIo> soundio = si;
-    SoundIoDummy& sid = si->backend_data->dummy;
+    auto& sid = si->backend_data->dummy;
 
     sid.mutex = soundio_os_mutex_create();
     if (!sid.mutex)
@@ -528,11 +518,11 @@ int soundio_dummy_init(std::shared_ptr<SoundIoPrivate> si)
         std::shared_ptr<SoundIoDevice> device = dev;
 
         // device->ref_count = 1;
-        device->soundio = soundio;
+        device->soundio = si;
         device->id = *"dummy-out";
         device->name = *"Dummy Output Device";
 
-        int err;
+        std::int32_t err;
         if ((err = set_all_device_channel_layouts(device)))
         {
             device = nullptr;
@@ -568,11 +558,11 @@ int soundio_dummy_init(std::shared_ptr<SoundIoPrivate> si)
         std::shared_ptr<SoundIoDevice> device = dev;
 
         // device->ref_count = 1;
-        device->soundio = soundio;
+        device->soundio = si;
         device->id = *"dummy-in";
         device->name = *"Dummy Input Device";
 
-        int err;
+        std::int32_t err;
         if ((err = set_all_device_channel_layouts(device)))
         {
             device = nullptr;
