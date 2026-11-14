@@ -206,6 +206,21 @@ static std::wstring GetDeviceName(IMMDevice* device)
 }
 #endif
 
+namespace
+{
+    struct IUnknownDeleter
+    {
+        void operator()(IUnknown* ptr) const
+        {
+            if (ptr != nullptr)
+            {
+                ptr->Release();
+            }
+        }
+    };
+} // namespace
+
+
 /**
  * @brief 从 channel mask 解析并构建 SoundIoChannelLayout
  *
@@ -1803,15 +1818,18 @@ static int outstream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
         return SoundIoErrorOpeningDevice;
     }
 
-    // if (FAILED(hr = audio_client->GetService(IID_ISIMPLEAUDIOVOLUME, reinterpret_cast<void**>(&osw.audio_volume_control))))
-    // {
-    //     return SoundIoErrorOpeningDevice;
-    // }
-    //
-    // if (FAILED(hr = osw.audio_volume_control->GetMasterVolume(&os->volume)))
-    // {
-    //     return SoundIoErrorOpeningDevice;
-    // }
+    ISimpleAudioVolume* audio_volume_control;
+
+    if (FAILED(hr = audio_client->GetService(IID_ISIMPLEAUDIOVOLUME, reinterpret_cast<void**>(&audio_volume_control))))
+    {
+        return SoundIoErrorOpeningDevice;
+    }
+
+    auto avc = std::unique_ptr<ISimpleAudioVolume, IUnknownDeleter>(audio_volume_control);
+    if (FAILED(hr = audio_volume_control->SetMasterVolume(1.0f, nullptr)))
+    {
+        return SoundIoErrorOpeningDevice;
+    }
 
     osw.audio_client = audio_client;
     return 0;
