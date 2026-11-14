@@ -2659,20 +2659,20 @@ static int instream_open_wasapi(std::shared_ptr<SoundIoPrivate> si, std::shared_
     // for the realtime code calls the user write_callback.
 
     isw.is_raw = device->is_raw;
-
-    if (!(isw.cond = soundio_os_cond_create()))
+    isw.cond = soundio_os_cond_create();
+    if (isw.cond == nullptr)
     {
         instream_destroy_wasapi(si, is);
         return SoundIoErrorNoMem;
     }
-
-    if (!(isw.start_cond = soundio_os_cond_create()))
+    isw.start_cond = soundio_os_cond_create();
+    if (isw.start_cond == nullptr)
     {
         instream_destroy_wasapi(si, is);
         return SoundIoErrorNoMem;
     }
-
-    if (!(isw.mutex = soundio_os_mutex_create()))
+    isw.mutex = soundio_os_mutex_create();
+    if (isw.mutex == nullptr)
     {
         instream_destroy_wasapi(si, is);
         return SoundIoErrorNoMem;
