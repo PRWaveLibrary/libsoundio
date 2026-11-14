@@ -26,6 +26,7 @@
 #include <initguid.h>
 #include "logger/logger.hpp"
 
+#include <avrt.h>
 #include <mmdeviceapi.h>
 
 #include "soundio_private.h"
@@ -219,6 +220,36 @@ namespace
                 ptr->Release();
             }
         }
+    };
+
+    /**
+     * @brief 把当前线程注册进 MMCSS 的 "Pro Audio" 任务
+     *
+     * 音频线程需要在一个 WASAPI period 内被唤醒并填满 buffer。普通优先级线程会被
+     * UI / 解码 / 索引等线程抢占，被抢占超过一个 period 就是缓冲吃空（可听见的卡顿）。
+     * 进入该任务后系统按实时线程的配额调度，退出时恢复原优先级。
+     */
+    struct MmcssProAudioScope
+    {
+        HANDLE handle = nullptr;
+        DWORD task_index = 0;
+
+        MmcssProAudioScope()
+            : handle(AvSetMmThreadCharacteristicsW(L"Pro Audio", &task_index))
+        {
+        }
+
+        ~MmcssProAudioScope()
+        {
+            if (handle != nullptr)
+            {
+                AvRevertMmThreadCharacteristics(handle);
+            }
+        }
+
+        MmcssProAudioScope(const MmcssProAudioScope&) = delete;
+
+        MmcssProAudioScope& operator=(const MmcssProAudioScope&) = delete;
     };
 } // namespace
 
@@ -2022,13 +2053,18 @@ static void outstream_thread_run(std::shared_ptr<void> arg)
 
     lock.unlock();
 
-    if (osw.is_raw)
+    // 从这里开始是实时路径：注册进 MMCSS "Pro Audio" 任务，
+    // 否则线程被普通优先级任务抢占时回调会晚到，缓冲吃空即表现为一次卡顿。
     {
-        outstream_raw_run(os);
-    }
-    else
-    {
-        outstream_shared_run(os);
+        MmcssProAudioScope mmcss;
+        if (osw.is_raw)
+        {
+            outstream_raw_run(os);
+        }
+        else
+        {
+            outstream_shared_run(os);
+        }
     }
 
     outstream_thread_deinit(si, os);
@@ -2623,13 +2659,17 @@ static void instream_thread_run(std::shared_ptr<void> arg)
 
     lock.unlock();
 
-    if (isw.is_raw)
+    // 采集流同样是实时路径，原因见 MmcssProAudioScope 的说明。
     {
-        instream_raw_run(is);
-    }
-    else
-    {
-        instream_shared_run(is);
+        MmcssProAudioScope mmcss;
+        if (isw.is_raw)
+        {
+            instream_raw_run(is);
+        }
+        else
+        {
+            instream_shared_run(is);
+        }
     }
 
     instream_thread_deinit(si, is);
