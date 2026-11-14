@@ -5,14 +5,14 @@
  * See http://opensource.org/licenses/MIT
  */
 
+#include "config.h"
+#include "os.h"
 #include "soundio_private.h"
 #include "util.h"
-#include "os.h"
-#include "config.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
-#include <algorithm>
 
 static const enum SoundIoBackend available_backends[] = {
 #ifdef SOUNDIO_HAVE_JACK
@@ -739,7 +739,8 @@ int soundio_instream_open(std::shared_ptr<SoundIoInStream> instream)
     instream->bytes_per_sample = soundio_get_bytes_per_sample(instream->format);
     std::shared_ptr<SoundIo> soundio = device->soundio.lock();
     std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
-    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);
+    ;
     return si->instream_open(si, is);
 }
 
@@ -747,7 +748,8 @@ int soundio_instream_start(std::shared_ptr<SoundIoInStream> instream)
 {
     std::shared_ptr<SoundIo> soundio = instream->device->soundio.lock();
     std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
-    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);
+    ;
     return si->instream_start(si, is);
 }
 
@@ -772,16 +774,17 @@ int soundio_instream_pause(std::shared_ptr<SoundIoInStream> instream, bool pause
 {
     std::shared_ptr<SoundIo> soundio = instream->device->soundio.lock();
     std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
-    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);
+    ;
     return si->instream_pause(si, is, pause);
 }
 
-int soundio_instream_begin_read(std::shared_ptr<SoundIoInStream> instream,
-                                struct SoundIoChannelArea** areas, int* frame_count)
+int soundio_instream_begin_read(std::shared_ptr<SoundIoInStream> instream, struct SoundIoChannelArea** areas, int* frame_count)
 {
     std::shared_ptr<SoundIo> soundio = instream->device->soundio.lock();
     std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
-    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);
+    ;
     return si->instream_begin_read(si, is, areas, frame_count);
 }
 
@@ -789,7 +792,8 @@ int soundio_instream_end_read(std::shared_ptr<SoundIoInStream> instream)
 {
     std::shared_ptr<SoundIo> soundio = instream->device->soundio.lock();
     std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
-    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);
+    ;
     return si->instream_end_read(si, is);
 }
 
@@ -797,7 +801,8 @@ int soundio_instream_get_latency(std::shared_ptr<SoundIoInStream> instream, doub
 {
     std::shared_ptr<SoundIo> soundio = instream->device->soundio.lock();
     std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
-    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
+    std::shared_ptr<SoundIoInStreamPrivate> is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);
+    ;
     return si->instream_get_latency(si, is, out_latency);
 }
 
@@ -834,8 +839,7 @@ enum SoundIoBackend soundio_get_backend(std::shared_ptr<SoundIo> soundio, int in
     return available_backends[index];
 }
 
-static bool layout_contains(const struct SoundIoChannelLayout* available_layouts, int available_layouts_count,
-                            const struct SoundIoChannelLayout* target_layout)
+static bool layout_contains(const struct SoundIoChannelLayout* available_layouts, int available_layouts_count, const struct SoundIoChannelLayout* target_layout)
 {
     for (int i = 0; i < available_layouts_count; i += 1)
     {
@@ -846,9 +850,7 @@ static bool layout_contains(const struct SoundIoChannelLayout* available_layouts
     return false;
 }
 
-const struct SoundIoChannelLayout* soundio_best_matching_channel_layout(
-        const struct SoundIoChannelLayout* preferred_layouts, int preferred_layouts_count,
-        const struct SoundIoChannelLayout* available_layouts, int available_layouts_count)
+const struct SoundIoChannelLayout* soundio_best_matching_channel_layout(const struct SoundIoChannelLayout* preferred_layouts, int preferred_layouts_count, const struct SoundIoChannelLayout* available_layouts, int available_layouts_count)
 {
     for (int i = 0; i < preferred_layouts_count; i += 1)
     {
@@ -931,7 +933,7 @@ int soundio_device_nearest_sample_rate(std::shared_ptr<SoundIoDevice> device, in
 
     for (const auto& range: device->sample_rates)
     {
-        int candidate_rate = soundio_int_clamp(range.min, sample_rate, range.max);
+        int candidate_rate = std::clamp(sample_rate, range.min, range.max);
         if (candidate_rate == sample_rate)
         {
             return candidate_rate;
@@ -940,9 +942,7 @@ int soundio_device_nearest_sample_rate(std::shared_ptr<SoundIoDevice> device, in
         int delta = abs_diff_int(candidate_rate, sample_rate);
         bool best_rate_too_small = best_rate < sample_rate;
         bool candidate_rate_too_small = candidate_rate < sample_rate;
-        if (best_rate == -1 ||
-            (best_rate_too_small && !candidate_rate_too_small) ||
-            ((best_rate_too_small || !candidate_rate_too_small) && delta < best_delta))
+        if (best_rate == -1 || (best_rate_too_small && !candidate_rate_too_small) || ((best_rate_too_small || !candidate_rate_too_small) && delta < best_delta))
         {
             best_rate = candidate_rate;
             best_delta = delta;

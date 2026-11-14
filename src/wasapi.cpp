@@ -8,6 +8,9 @@
  * This file is part of libsoundio, which is MIT licensed.
  * See http://opensource.org/licenses/MIT
  */
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -28,14 +31,13 @@
 #include "soundio_private.h"
 #include "wasapi.h"
 
-#include <cstdio>
-#include <thread>
 #include "util.h"
 
 #ifdef _MSC_VER
 #include <propkeydef.h>
 #endif
 
+#include <algorithm>
 #include <functiondiscoverykeys_devpkey.h>
 #include <ranges>
 
@@ -1042,7 +1044,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             rd->device_raw = nullptr;
             continue;
         }
-        WAVEFORMATEXTENSIBLE* valid_wave_format = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(rd->prop_variant_value.blob.pBlobData);
+        auto* valid_wave_format = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(rd->prop_variant_value.blob.pBlobData);
         if (valid_wave_format->Format.wFormatTag != WAVE_FORMAT_EXTENSIBLE)
         {
             rd->device_shared->probe_error = SoundIoErrorOpeningDevice;
@@ -1106,8 +1108,8 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
                 // Let's pick some reasonable min and max values.
                 // rd->device_shared->sample_rate_count = 1;
                 SoundIoSampleRateRange range{};
-                range.min = soundio_int_min(SOUNDIO_MIN_SAMPLE_RATE, rd->device_shared->sample_rate_current);
-                range.max = soundio_int_max(SOUNDIO_MAX_SAMPLE_RATE, rd->device_shared->sample_rate_current);
+                range.min = std::min(SOUNDIO_MIN_SAMPLE_RATE, rd->device_shared->sample_rate_current);
+                range.max = std::max(SOUNDIO_MAX_SAMPLE_RATE, rd->device_shared->sample_rate_current);
                 rd->device_shared->sample_rates.push_back(range);
             }
             else
@@ -1573,21 +1575,21 @@ static int Initialize(IAudioClient** audio_client, IAudioClient3** audio_client3
             goto NEXT;
         }
 
-        UINT32 default_period;
-        UINT32 fundamental_period;
-        UINT32 min_period;
-        UINT32 max_period;
+        std::uint32_t default_period;
+        std::uint32_t fundamental_period;
+        std::uint32_t min_period;
+        std::uint32_t max_period;
 
         if (FAILED(hr = (*audio_client3)->GetSharedModeEnginePeriod(&mix_format->Format, &default_period, &fundamental_period, &min_period, &max_period)))
         {
             deinit_mix_format(&mix_format);
         }
 
-        UINT32 periodicity_in_frames = default_period;
+        std::uint32_t periodicity_in_frames = default_period;
         if (os->software_latency < 1.0)
         {
-            periodicity_in_frames = fundamental_period * static_cast<UINT32>(mix_format->Format.nSamplesPerSec * os->software_latency / fundamental_period);
-            periodicity_in_frames = soundio_uint_clamp(min_period, periodicity_in_frames, max_period);
+            periodicity_in_frames = fundamental_period * static_cast<std::uint32_t>(mix_format->Format.nSamplesPerSec * os->software_latency / fundamental_period);
+            periodicity_in_frames = std::clamp(periodicity_in_frames, min_period, max_period);
         }
 
         if (!osw.need_resample && SUCCEEDED(hr = (*audio_client3)->InitializeSharedAudioStream(flags, periodicity_in_frames, reinterpret_cast<WAVEFORMATEX*>(wave_format), nullptr)))
@@ -1602,7 +1604,7 @@ NEXT:
     {
         if (hr == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED)
         {
-            UINT32 buffer_size;
+            std::uint32_t buffer_size;
 
             if (FAILED(hr = (*audio_client)->GetBufferSize(&buffer_size)))
             {
@@ -1693,7 +1695,8 @@ static int outstream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     {
         os->software_latency = 1.0;
     }
-    os->software_latency = soundio_double_clamp(device->software_latency_min, os->software_latency, device->software_latency_max);
+
+    os->software_latency = std::clamp(os->software_latency, device->software_latency_min, device->software_latency_max);
     AUDCLNT_SHAREMODE share_mode;
     DWORD flags;
     REFERENCE_TIME buffer_duration;
@@ -1849,19 +1852,21 @@ static void outstream_shared_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
 
     HRESULT hr;
 
-    UINT32 frames_used;
+    std::uint32_t frames_used;
     if (FAILED(hr = osw.audio_client->GetCurrentPadding(&frames_used)))
     {
         os->error_callback(os, SoundIoErrorStreaming);
         return;
     }
+
     osw.writable_frame_count = osw.buffer_frame_count - static_cast<int>(frames_used);
     if (osw.writable_frame_count <= 0)
     {
         os->error_callback(os, SoundIoErrorStreaming);
         return;
     }
-    int frame_count_min = soundio_int_max(0, osw.min_padding_frames - static_cast<int>(frames_used));
+
+    int frame_count_min = std::max(0, osw.min_padding_frames - static_cast<int>(frames_used));
     os->write_callback(os, frame_count_min, osw.writable_frame_count);
 
     if (FAILED(hr = osw.audio_client->Start()))
@@ -1912,7 +1917,7 @@ static void outstream_shared_run(std::shared_ptr<SoundIoOutStreamPrivate> os)
             os->underflow_callback(os);
         }
 
-        frame_count_min = soundio_uint_max(0U, osw.min_padding_frames - frames_used);
+        frame_count_min = static_cast<std::int32_t>(std::max(0U, osw.min_padding_frames - frames_used));
         os->write_callback(os, frame_count_min, osw.writable_frame_count);
     }
 }
@@ -2481,8 +2486,10 @@ static int instream_do_open(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
         return SoundIoErrorOpeningDevice;
     }
     if (is->software_latency == 0.0)
+    {
         is->software_latency = 1.0;
-    is->software_latency = soundio_double_clamp(dev->software_latency_min, is->software_latency, dev->software_latency_max);
+    }
+    is->software_latency = std::clamp(is->software_latency, dev->software_latency_min, dev->software_latency_max);
     if (isw.is_raw)
     {
         is->software_latency = isw.buffer_frame_count / static_cast<double>(is->sample_rate);
@@ -2785,7 +2792,7 @@ static int instream_begin_read_wasapi(std::shared_ptr<SoundIoPrivate> si, std::s
         }
     }
 
-    isw.read_frame_count = soundio_int_min(*frame_count, isw.read_buf_frames_left);
+    isw.read_frame_count = std::min(*frame_count, isw.read_buf_frames_left);
     *frame_count = isw.read_frame_count;
 
     if (isw.read_buf)

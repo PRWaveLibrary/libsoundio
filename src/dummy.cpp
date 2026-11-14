@@ -4,11 +4,16 @@
  * This file is part of libsoundio, which is MIT licensed.
  * See http://opensource.org/licenses/MIT
  */
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
 #include "dummy.h"
+
+#include <algorithm>
+
 #include "soundio_private.h"
 
-#include <stdio.h>
 #include "util.h"
 
 static void playback_thread_run(std::shared_ptr<void> arg)
@@ -65,7 +70,7 @@ static void playback_thread_run(std::shared_ptr<void> arg)
         double total_time = soundio_os_get_time() - start_time;
         long total_frames = total_time * outstream->sample_rate;
         int frames_to_kill = static_cast<int>(total_frames - frames_consumed);
-        int read_count = soundio_int_min(frames_to_kill, fill_frames);
+        int read_count = std::min(frames_to_kill, fill_frames);
         int byte_count = read_count * outstream->bytes_per_frame;
         osd->ring_buffer->advance_read_ptr(byte_count);
         // soundio_ring_buffer_advance_read_ptr(osd->ring_buffer, byte_count);
@@ -100,8 +105,7 @@ static void capture_thread_run(std::shared_ptr<void> arg)
     {
         double now = soundio_os_get_time();
         double time_passed = now - start_time;
-        double next_period = start_time +
-                             ceil_dbl(time_passed / isd->period_duration) * isd->period_duration;
+        double next_period = start_time + ceil_dbl(time_passed / isd->period_duration) * isd->period_duration;
         double relative_time = next_period - now;
         isd->cond->timed_wait(nullptr, relative_time);
 
@@ -119,8 +123,8 @@ static void capture_thread_run(std::shared_ptr<void> arg)
 
         double total_time = soundio_os_get_time() - start_time;
         long total_frames = total_time * instream->sample_rate;
-        int frames_to_kill = (int) (total_frames - frames_consumed);
-        int write_count = soundio_int_min(frames_to_kill, free_frames);
+        int frames_to_kill = static_cast<int>(total_frames - frames_consumed);
+        int write_count = std::min(frames_to_kill, free_frames);
         int byte_count = write_count * instream->bytes_per_frame;
         isd->ring_buffer->advance_write_ptr(byte_count);
         frames_consumed += write_count;
@@ -207,14 +211,13 @@ static int outstream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_
 
     if (outstream->software_latency == 0.0)
     {
-        outstream->software_latency = soundio_double_clamp(
-                device->software_latency_min, 1.0, device->software_latency_max);
+        outstream->software_latency = std::clamp(1.0, device->software_latency_min, device->software_latency_max);
     }
 
     osd->period_duration = outstream->software_latency / 2.0;
 
     // int err;
-    int buffer_size = outstream->bytes_per_frame * outstream->sample_rate * outstream->software_latency;
+    const int buffer_size = static_cast<int>(outstream->bytes_per_frame * outstream->sample_rate * outstream->software_latency);
     osd->ring_buffer = std::make_unique<SoundIoRingBuffer>();
     // if (!osd->ring_buffer)
     // {
@@ -259,8 +262,7 @@ static int outstream_start_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared
     return 0;
 }
 
-static int outstream_begin_write_dummy(std::shared_ptr<SoundIoPrivate> si,
-                                       std::shared_ptr<SoundIoOutStreamPrivate> os, struct SoundIoChannelArea** out_areas, int* frame_count)
+static int outstream_begin_write_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, struct SoundIoChannelArea** out_areas, int* frame_count)
 {
     std::shared_ptr<SoundIoOutStream> outstream = os;
     struct SoundIoOutStreamDummy* osd = &os->backend_data.dummy;
@@ -343,8 +345,7 @@ static int instream_open_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_p
 
     if (instream->software_latency == 0.0)
     {
-        instream->software_latency = soundio_double_clamp(
-                device->software_latency_min, 1.0, device->software_latency_max);
+        instream->software_latency = std::clamp(1.0, device->software_latency_min, device->software_latency_max);
     }
 
     isd->period_duration = instream->software_latency;
@@ -396,8 +397,7 @@ static int instream_start_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_
     return 0;
 }
 
-static int instream_begin_read_dummy(std::shared_ptr<SoundIoPrivate> si,
-                                     std::shared_ptr<SoundIoInStreamPrivate> is, struct SoundIoChannelArea** out_areas, int* frame_count)
+static int instream_begin_read_dummy(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, struct SoundIoChannelArea** out_areas, int* frame_count)
 {
     std::shared_ptr<SoundIoInStream> instream = is;
     struct SoundIoInStreamDummy* isd = &is->backend_data.dummy;
