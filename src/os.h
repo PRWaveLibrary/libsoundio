@@ -122,7 +122,18 @@ public:
     void wait(std::unique_lock<std::mutex>* locked_mutex);
 
     template<class Predicate>
-    void wait(std::unique_lock<std::mutex>* locked_mutex, Predicate pred);
+    void wait(std::unique_lock<std::mutex>* locked_mutex, Predicate pred)
+    {
+        if (locked_mutex != nullptr)
+        {
+            cond_.wait(*locked_mutex, pred);
+        }
+        else
+        {
+            std::unique_lock lock(default_mutex_);
+            cond_.wait(lock, pred);
+        }
+    }
 
     void timed_wait(std::unique_lock<std::mutex>* locked_mutex, double seconds);
 };

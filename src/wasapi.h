@@ -61,7 +61,6 @@ struct SoundIoOutStreamWasapi
     std::unique_ptr<SoundIoOsMutex> mutex;
     std::unique_ptr<SoundIoOsCond> cond;
     std::unique_ptr<SoundIoOsCond> start_cond;
-    std::atomic_flag thread_exit_flag = ATOMIC_FLAG_INIT;
     bool is_raw;
     int writable_frame_count;
     int buffer_frame_count;
@@ -88,7 +87,6 @@ struct SoundIoInStreamWasapi
     std::unique_ptr<SoundIoOsMutex> mutex;
     std::unique_ptr<SoundIoOsCond> cond;
     std::unique_ptr<SoundIoOsCond> start_cond;
-    std::atomic_flag thread_exit_flag = ATOMIC_FLAG_INIT;
     bool is_raw;
     std::int32_t readable_frame_count;
     std::uint32_t buffer_frame_count;
@@ -113,10 +111,9 @@ struct SoundIoWasapi
     std::unique_ptr<SoundIoOsCond> scan_devices_cond;
     std::unique_ptr<SoundIoOsMutex> scan_devices_mutex;
     std::unique_ptr<SoundIoOsThread> thread = nullptr;
-    std::atomic_flag abort_flag = ATOMIC_FLAG_INIT;
     // this one is ready to be read with flush_events. protected by mutex
     std::unique_ptr<struct SoundIoDevicesInfo> ready_devices_info;
-    bool have_devices_flag;
+    std::atomic_bool have_devices_flag = {false};
     std::atomic_bool device_scan_queued = {false};
     int shutdown_err;
     bool emitted_shutdown_cb;
@@ -129,6 +126,7 @@ class soundio_NotificationClient : public IMMNotificationClient
 {
 public:
     virtual ~soundio_NotificationClient() = default;
+
     std::weak_ptr<SoundIoPrivate> si;
 
     soundio_NotificationClient(const std::weak_ptr<SoundIoPrivate>& si)

@@ -25,7 +25,6 @@ struct SoundIoOboe
     std::unique_ptr<SoundIoOsMutex> mutex;
     std::unique_ptr<SoundIoOsCond> cond;
     std::unique_ptr<SoundIoOsThread> thread = nullptr;
-    std::atomic_flag abort_flag = ATOMIC_FLAG_INIT;
 
     // this one is ready to be read with flush_events. protected by mutex
     std::unique_ptr<struct SoundIoDevicesInfo> ready_devices_info;

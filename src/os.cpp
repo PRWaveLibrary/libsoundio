@@ -60,7 +60,7 @@ double soundio_os_get_time()
 #if defined(SOUNDIO_OS_WINDOWS)
 #include <objbase.h>
 
-static void run_win32_thread(STATIC_CALLBACK_PTR run, const std::stop_token& token, const std::shared_ptr<void>& arg)
+static void run_win32_thread(const std::stop_token& token, const STATIC_CALLBACK_PTR run, const std::shared_ptr<void>& arg)
 {
     const HRESULT err = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     assert(err == S_OK);
@@ -69,7 +69,6 @@ static void run_win32_thread(STATIC_CALLBACK_PTR run, const std::stop_token& tok
 }
 
 #endif
-
 
 std::unique_ptr<SoundIoOsThread> SoundIoOsThread::create(STATIC_CALLBACK_PTR run, const std::shared_ptr<void>& arg)
 {
@@ -131,20 +130,6 @@ void SoundIoOsCond::wait(std::unique_lock<std::mutex>* locked_mutex)
     {
         std::unique_lock lock(default_mutex_);
         cond_.wait(lock);
-    }
-}
-
-template<class Predicate>
-void SoundIoOsCond::wait(std::unique_lock<std::mutex>* locked_mutex, Predicate pred)
-{
-    if (locked_mutex != nullptr)
-    {
-        cond_.wait(*locked_mutex, pred);
-    }
-    else
-    {
-        std::unique_lock lock(default_mutex_);
-        cond_.wait(lock, pred);
     }
 }
 

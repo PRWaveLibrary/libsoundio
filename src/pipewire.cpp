@@ -853,38 +853,30 @@ static void device_thread_run(const std::stop_token& token, const std::shared_pt
     }
     else
     {
-        // refresh_devices 里要去等 pw 线程，只能先放锁，
-        // 所以每轮 lock/unlock 必须成对，收尾交给 unique_lock 析构。
-        std::unique_lock lock(siw.scan_devices_mutex->get());
+        // refresh_devices 里要去等 pw 线程，不能持锁执行，作用域结束锁自动释放。
         while (!token.stop_requested())
         {
-            siw.scan_devices_cond->wait(&lock);
-
-            if (token.stop_requested())
             {
-                break;
-            }
-            if (!siw.device_scan_queued.exchange(false))
-            {
-                continue;
+                std::unique_lock lock(siw.scan_devices_mutex->get());
+                siw.scan_devices_cond->wait(&lock, [&]
+                {
+                    return token.stop_requested() || siw.device_scan_queued.load(std::memory_order_acquire);
+                });
+
+                if (token.stop_requested())
+                {
+                    break;
+                }
+                siw.device_scan_queued.store(false, std::memory_order_release);
             }
 
-            lock.unlock();
-            const int err = refresh_devices(si);
-            if (err)
+            if (const int err = refresh_devices(si))
             {
                 shutdown_backend(si, err);
-            }
-            else
-            {
-                flush_events_pipewire(si);
-            }
-            lock.lock();
-
-            if (err)
-            {
                 break;
             }
+
+            flush_events_pipewire(si);
         }
     }
 

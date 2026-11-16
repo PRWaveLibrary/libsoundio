@@ -982,14 +982,14 @@ static void force_device_scan_ca(std::shared_ptr<SoundIoPrivate> si)
 /**
  * @brief CoreAudio devices 检测 background thread 执行框架
  */
-static void device_thread_run(std::shared_ptr<void> arg)
+static void device_thread_run(const std::stop_token& token, std::shared_ptr<void> arg)
 {
     std::shared_ptr<SoundIoPrivate> si = std::static_pointer_cast<SoundIoPrivate>(arg);
     SoundIoCoreAudio& sica = si->backend_data->coreaudio;
 
     std::unique_lock lock(sica.scan_devices_mutex->get());
 
-    while (!sica.abort_flag.test())
+    while (!token.stop_requested())
     {
         if (sica.service_restarted.load())
         {
@@ -1686,7 +1686,7 @@ static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
     if (sica.thread)
     {
         std::unique_lock lock(sica.scan_devices_mutex->get());
-        sica.abort_flag.test_and_set();
+        sica.thread->request_stop();
         sica.scan_devices_cond->signal(&lock);
         lock.unlock();
         sica.thread = nullptr;
@@ -1720,7 +1720,6 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si)
     sica.have_devices_flag.store(false);
     sica.device_scan_queued.store(true);
     sica.service_restarted.store(false);
-    sica.abort_flag.clear();
 
     sica.mutex = soundio_os_mutex_create();
     if (!sica.mutex)

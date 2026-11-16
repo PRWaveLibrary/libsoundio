@@ -33,7 +33,6 @@ struct SoundIoOutStreamDummy
 {
     std::unique_ptr<SoundIoOsThread> thread = nullptr;
     std::unique_ptr<SoundIoOsCond> cond;
-    std::atomic_flag abort_flag;
     double period_duration;
     int buffer_frame_count;
     int frames_left;
@@ -49,7 +48,6 @@ struct SoundIoInStreamDummy
 {
     std::unique_ptr<SoundIoOsThread> thread = nullptr;
     std::unique_ptr<SoundIoOsCond> cond;
-    std::atomic_flag abort_flag;
     double period_duration;
     int frames_left;
     int read_frame_count;

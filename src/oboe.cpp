@@ -181,18 +181,18 @@ static void wait_events_oboe(std::shared_ptr<SoundIoPrivate> si)
 /**
  * @brief 处理 Oboe device scan 流程的 background thread 回调主程序
  * 
- * 监听 device_scan_queued 或 abort_flag 并做出相应的设备加载反应。
+ * 监听 device_scan_queued 与 stop_token 并做出相应的设备加载反应。
  * 
  * @param arg 传递给 thread 的携带类型为 SoundIoPrivate 的通用指针
  */
-static void device_thread_run(std::shared_ptr<void> arg)
+static void device_thread_run(const std::stop_token& token, std::shared_ptr<void> arg)
 {
     std::shared_ptr<SoundIoPrivate> si = std::static_pointer_cast<SoundIoPrivate>(arg);
     SoundIoOboe& sio = si->backend_data->oboe;
 
     std::unique_lock lock(sio.scan_devices_mutex->get());
 
-    while (!sio.abort_flag.test())
+    while (!token.stop_requested())
     {
         if (sio.device_scan_queued.load())
         {
@@ -586,7 +586,7 @@ static void destroy_oboe(std::shared_ptr<SoundIoPrivate> si)
     if (sio.thread)
     {
         std::unique_lock lock(sio.scan_devices_mutex->get());
-        sio.abort_flag.test_and_set();
+        sio.thread->request_stop();
         sio.scan_devices_cond->signal(&lock);
         lock.unlock();
 
@@ -615,7 +615,6 @@ int soundio_oboe_init(std::shared_ptr<SoundIoPrivate> si)
 
     sio.have_devices_flag.store(false);
     sio.device_scan_queued.store(true);
-    sio.abort_flag.clear();
 
     sio.mutex = soundio_os_mutex_create();
     if (!sio.mutex)

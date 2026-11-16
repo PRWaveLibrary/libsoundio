@@ -33,7 +33,7 @@ static void playback_thread_run(const std::stop_token& token, const std::shared_
     std::int32_t frames_consumed = 0;
     bool expected = true;
 
-    while (!token.stop_requested() && !osd.abort_flag.test())
+    while (!token.stop_requested())
     {
         const double now = soundio_os_get_time();
         const double time_passed = now - start_time;
@@ -101,7 +101,7 @@ static void capture_thread_run(const std::stop_token& token, const std::shared_p
 
     std::int32_t frames_consumed = 0;
     double start_time = soundio_os_get_time();
-    while (!token.stop_requested() && !isd.abort_flag.test())
+    while (!token.stop_requested())
     {
         const double now = soundio_os_get_time();
         const double time_passed = now - start_time;
@@ -192,7 +192,7 @@ static void outstream_destroy_dummy(const std::shared_ptr<SoundIoPrivate>& si, c
 
     if (osd.thread)
     {
-        osd.abort_flag.test_and_set();
+        osd.thread->request_stop();
         osd.cond->signal(nullptr);
         osd.thread = nullptr;
     }
@@ -254,7 +254,6 @@ static int outstream_start_dummy(const std::shared_ptr<SoundIoPrivate>& si, cons
 {
     auto& osd = os->backend_data.dummy;
     assert(!osd.thread);
-    osd.abort_flag.clear();
     osd.thread = SoundIoOsThread::create(playback_thread_run, os);
     return 0;
 }
@@ -321,7 +320,7 @@ static void instream_destroy_dummy(const std::shared_ptr<SoundIoPrivate>& si, co
 
     if (isd.thread)
     {
-        isd.abort_flag.test_and_set();
+        isd.thread->request_stop();
         isd.cond->signal(nullptr);
         // soundio_os_thread_destroy(isd.thread);
         isd.thread = nullptr;
@@ -387,7 +386,6 @@ static int instream_start_dummy(const std::shared_ptr<SoundIoPrivate>& si, const
 {
     auto& isd = is->backend_data.dummy;
     assert(!isd.thread);
-    isd.abort_flag.clear();
     isd.thread = SoundIoOsThread::create(capture_thread_run, is);
     return 0;
 }
