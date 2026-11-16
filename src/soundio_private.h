@@ -14,6 +14,10 @@
 #include "config.h"
 #include "soundio_internal.h"
 
+#ifdef SOUNDIO_HAVE_PIPEWIRE
+#include "pipewire.h"
+#endif
+
 #ifdef SOUNDIO_HAVE_JACK
 #include "jack.h"
 #endif
@@ -55,6 +59,9 @@ struct SoundIoBackendData
 #ifdef SOUNDIO_HAVE_ALSA
     struct SoundIoAlsa alsa;
 #endif
+#ifdef SOUNDIO_HAVE_PIPEWIRE
+    SoundIoPipeWire pipe_wire;
+#endif
 #ifdef SOUNDIO_HAVE_COREAUDIO
     struct SoundIoCoreAudio coreaudio;
 #endif
@@ -82,6 +89,9 @@ struct SoundIoDeviceBackendData
 #ifdef SOUNDIO_HAVE_ALSA
     std::shared_ptr<SoundIoDeviceAlsa> alsa = std::make_shared<SoundIoDeviceAlsa>();
 #endif
+#ifdef SOUNDIO_HAVE_PIPEWIRE
+    std::shared_ptr<SoundIoDevicePipeWire> pipe_wire = std::make_shared<SoundIoDevicePipeWire>();
+#endif
 #ifdef SOUNDIO_HAVE_COREAUDIO
     std::shared_ptr<SoundIoDeviceCoreAudio> coreaudio = std::make_shared<SoundIoDeviceCoreAudio>();
 #endif
@@ -100,53 +110,59 @@ struct SoundIoDeviceBackendData
 struct SoundIoOutStreamBackendData
 {
 #ifdef SOUNDIO_HAVE_JACK
-    struct SoundIoOutStreamJack jack;
+    SoundIoOutStreamJack jack;
 #endif
 #ifdef SOUNDIO_HAVE_PULSEAUDIO
-    struct SoundIoOutStreamPulseAudio pulseaudio;
+    SoundIoOutStreamPulseAudio pulseaudio;
 #endif
 #ifdef SOUNDIO_HAVE_ALSA
-    struct SoundIoOutStreamAlsa alsa;
+    SoundIoOutStreamAlsa alsa;
+#endif
+#ifdef SOUNDIO_HAVE_PIPEWIRE
+    SoundIoOutStreamPipeWire pipe_wire;
 #endif
 #ifdef SOUNDIO_HAVE_COREAUDIO
-    struct SoundIoOutStreamCoreAudio coreaudio;
+    SoundIoOutStreamCoreAudio coreaudio;
 #endif
 #ifdef SOUNDIO_HAVE_COREAUDIO_IOS
-    struct SoundIoOutStreamCoreAudioIOS coreaudio_ios;
+    SoundIoOutStreamCoreAudioIOS coreaudio_ios;
 #endif
 #ifdef SOUNDIO_HAVE_WASAPI
-    struct SoundIoOutStreamWasapi wasapi;
+    SoundIoOutStreamWasapi wasapi;
 #endif
 #ifdef SOUNDIO_HAVE_OBOE
-    struct SoundIoOutStreamOboe oboe;
+    SoundIoOutStreamOboe oboe;
 #endif
-    struct SoundIoOutStreamDummy dummy;
+    SoundIoOutStreamDummy dummy;
 };
 
 struct SoundIoInStreamBackendData
 {
 #ifdef SOUNDIO_HAVE_JACK
-    struct SoundIoInStreamJack jack;
+    SoundIoInStreamJack jack;
 #endif
 #ifdef SOUNDIO_HAVE_PULSEAUDIO
-    struct SoundIoInStreamPulseAudio pulseaudio;
+    SoundIoInStreamPulseAudio pulseaudio;
 #endif
 #ifdef SOUNDIO_HAVE_ALSA
-    struct SoundIoInStreamAlsa alsa;
+    SoundIoInStreamAlsa alsa;
+#endif
+#ifdef SOUNDIO_HAVE_PIPEWIRE
+    SoundIoInStreamPipeWire pipe_wire;
 #endif
 #ifdef SOUNDIO_HAVE_COREAUDIO
-    struct SoundIoInStreamCoreAudio coreaudio;
+    SoundIoInStreamCoreAudio coreaudio;
 #endif
 #ifdef SOUNDIO_HAVE_COREAUDIO_IOS
-    struct SoundIoInStreamCoreAudioIOS coreaudio_ios;
+    SoundIoInStreamCoreAudioIOS coreaudio_ios;
 #endif
 #ifdef SOUNDIO_HAVE_WASAPI
-    struct SoundIoInStreamWasapi wasapi;
+    SoundIoInStreamWasapi wasapi;
 #endif
 #ifdef SOUNDIO_HAVE_OBOE
-    struct SoundIoInStreamOboe oboe;
+    SoundIoInStreamOboe oboe;
 #endif
-    struct SoundIoInStreamDummy dummy;
+    SoundIoInStreamDummy dummy;
 };
 
 // SOUNDIO_MAKE_LIST_STRUCT(struct SoundIoDevice*, SoundIoListDevicePtr, SOUNDIO_LIST_NOT_STATIC)

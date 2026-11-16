@@ -230,6 +230,7 @@ enum SoundIoBackend
     SoundIoBackendJack,
     SoundIoBackendPulseAudio,
     SoundIoBackendAlsa,
+    SoundIoBackendPipeWire,
     SoundIoBackendCoreAudio,
     SoundIoBackendCoreAudioIOS,
     SoundIoBackendAndroid,

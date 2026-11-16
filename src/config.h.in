@@ -20,6 +20,7 @@
 #cmakedefine SOUNDIO_HAVE_COREAUDIO_IOS
 #cmakedefine SOUNDIO_HAVE_OBOE
 #cmakedefine SOUNDIO_HAVE_WASAPI
+#cmakedefine SOUNDIO_HAVE_PIPEWIRE
 
 
 #endif

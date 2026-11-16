@@ -32,9 +32,10 @@ option(SOUNDIO_BUILD_STATIC_LIBS "Build static libraries" ON)
 option(SOUNDIO_BUILD_DYNAMIC_LIBS "Build dynamic libraries" ON)
 option(SOUNDIO_BUILD_EXAMPLE_PROGRAMS "Build example programs" ON)
 option(SOUNDIO_BUILD_TESTS "Build tests" ON)
-option(ENABLE_JACK "Enable JACK backend" ON)
-option(ENABLE_PULSEAUDIO "Enable PulseAudio backend" ON)
-option(ENABLE_ALSA "Enable ALSA backend" ON)
+option(ENABLE_JACK "Enable JACK backend" OFF)
+option(ENABLE_PULSEAUDIO "Enable PulseAudio backend" OFF)
+option(ENABLE_ALSA "Enable ALSA backend" OFF)
+option(ENABLE_PIPEWIRE "Enable PipeWire backend" ON)
 option(SOUNDIO_ENABLE_COREAUDIO "Enable CoreAudio backend" ON)
 option(SOUNDIO_ENABLE_COREAUDIO_IOS "Enable CoreAudio iOS backend" ON)
 option(SOUNDIO_ENABLE_OBOE "Enable Android Oboe backend" ON)
@@ -98,8 +99,28 @@ else ()
     set(ALSA_LIBRARIES "")
 endif ()
 
+
+
+if (ENABLE_PIPEWIRE)
+    find_package(PipeWire)
+    if (PIPEWIRE_FOUND)
+        set(STATUS_PIPEWIRE "OK")
+        set(SOUNDIO_HAVE_PIPEWIRE true)
+        include_directories(${PIPEWIRE_INCLUDE_DIRS})
+    else ()
+        set(STATUS_PIPEWIRE "not found")
+        set(SOUNDIO_HAVE_PIPEWIRE false)
+        set(PIPEWIRE_LIBRARIES "")
+    endif ()
+else ()
+    set(STATUS_PIPEWIRE "disabled")
+    set(SOUNDIO_HAVE_PIPEWIRE false)
+    set(PIPEWIRE_LIBRARIES "")
+endif ()
+
+
 if (SOUNDIO_ENABLE_COREAUDIO AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    find_package(COREAUDIO)
+    find_package(CoreAudio)
     if (COREAUDIO_FOUND)
         set(STATUS_COREAUDIO "OK")
         set(SOUNDIO_HAVE_COREAUDIO true)
@@ -283,7 +304,9 @@ if (SOUNDIO_BUILD_DYNAMIC_LIBS)
 endif ()
 
 if (SOUNDIO_BUILD_STATIC_LIBS)
-    add_library(libsoundio_static STATIC ${LIBSOUNDIO_SOURCES})
+    add_library(libsoundio_static STATIC ${LIBSOUNDIO_SOURCES}
+            src/pipewire.cpp
+            src/pipewire.h)
     set_target_properties(libsoundio_static PROPERTIES
             OUTPUT_NAME ${SOUNDIO_STATIC_LIBNAME}
             COMPILE_FLAGS ${LIB_CFLAGS}
@@ -382,6 +405,7 @@ message(
         "* JACK       (optional)        : ${STATUS_JACK}\n"
         "* PulseAudio (optional)        : ${STATUS_PULSEAUDIO}\n"
         "* ALSA       (optional)        : ${STATUS_ALSA}\n"
+        "* PipeWire   (optional)        : ${STATUS_PIPEWIRE}\n"
         "* CoreAudio      (optional)    : ${STATUS_COREAUDIO}\n"
         "* CoreAudio iOS  (optional)    : ${STATUS_COREAUDIO_IOS}\n"
         "* Oboe           (optional)    : ${STATUS_OBOE}\n"

@@ -26,6 +26,9 @@ static constexpr SoundIoBackend available_backends[] = {
 #ifdef SOUNDIO_HAVE_ALSA
         SoundIoBackendAlsa,
 #endif
+#ifdef SOUNDIO_HAVE_PIPEWIRE
+        SoundIoBackendPipeWire,
+#endif
 #ifdef SOUNDIO_HAVE_COREAUDIO
         SoundIoBackendCoreAudio,
 #endif
@@ -45,7 +48,6 @@ typedef int (*backend_init_t)(const std::shared_ptr<SoundIoPrivate>&);
 
 static backend_init_t backend_init_fns[] = {
         nullptr, // None backend
-
 #ifdef SOUNDIO_HAVE_JACK
         &soundio_jack_init,
 #else
@@ -60,6 +62,12 @@ static backend_init_t backend_init_fns[] = {
 
 #ifdef SOUNDIO_HAVE_ALSA
         &soundio_alsa_init,
+#else
+        nullptr,
+#endif
+
+#ifdef SOUNDIO_HAVE_ALSA
+    &soundio_pipewire_init,
 #else
         nullptr,
 #endif
