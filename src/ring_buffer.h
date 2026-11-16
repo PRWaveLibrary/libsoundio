@@ -19,7 +19,7 @@ struct SoundIoRingBuffer
 
     int init(int requested_capacity);
 
-    int capacity() const
+    size_t capacity() const
     {
         if (mem == nullptr)
         {
@@ -28,7 +28,7 @@ struct SoundIoRingBuffer
         return mem->capacity;
     }
 
-    int fill_count() const
+    size_t fill_count() const
     {
         int count = static_cast<int>(write_offset - read_offset);
         assert(count >= 0);
@@ -59,7 +59,7 @@ struct SoundIoRingBuffer
         assert(fill_count() >= 0);
     }
 
-    int free_count() const
+    size_t free_count() const
     {
         return capacity() - fill_count();
     }

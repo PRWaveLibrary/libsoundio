@@ -14,7 +14,7 @@
 #include <cassert>
 #include <cstdio>
 
-#include "logger/logger.hpp"
+#include "util/logger.hpp"
 
 static constexpr SoundIoBackend available_backends[] = {
 #ifdef SOUNDIO_HAVE_JACK
@@ -66,8 +66,8 @@ static backend_init_t backend_init_fns[] = {
         nullptr,
 #endif
 
-#ifdef SOUNDIO_HAVE_ALSA
-    &soundio_pipewire_init,
+#ifdef SOUNDIO_HAVE_PIPEWIRE
+        &soundio_pipewire_init,
 #else
         nullptr,
 #endif
@@ -141,7 +141,7 @@ const wchar_t* soundio_strerror(int error)
     return L"(invalid error)";
 }
 
-int soundio_get_bytes_per_sample(enum SoundIoFormat format)
+int soundio_get_bytes_per_sample(SoundIoFormat format)
 {
     switch (format)
     {
@@ -174,7 +174,7 @@ int soundio_get_bytes_per_sample(enum SoundIoFormat format)
     return -1;
 }
 
-const char* soundio_format_string(enum SoundIoFormat format)
+const char* soundio_format_string(SoundIoFormat format)
 {
     switch (format)
     {
@@ -222,7 +222,7 @@ const char* soundio_format_string(enum SoundIoFormat format)
 }
 
 
-const char* soundio_backend_name(enum SoundIoBackend backend)
+const char* soundio_backend_name(SoundIoBackend backend)
 {
     switch (backend)
     {
@@ -234,6 +234,8 @@ const char* soundio_backend_name(enum SoundIoBackend backend)
             return "PulseAudio";
         case SoundIoBackendAlsa:
             return "ALSA";
+        case SoundIoBackendPipeWire:
+            return "PipeWire";
         case SoundIoBackendCoreAudio:
             return "CoreAudio";
         case SoundIoBackendCoreAudioIOS:
@@ -263,7 +265,7 @@ static void default_msg_callback(const char* msg)
 
 static void default_backend_disconnect_cb(const std::shared_ptr<SoundIo>& soundio, const int err)
 {
-    soundio_panic("libsoundio: backend disconnected: %s", soundio_strerror(err));
+    LOGE(L"libsoundio: backend disconnected: %ls", soundio_strerror(err));
 }
 
 static std::atomic_flag rtprio_seen = ATOMIC_FLAG_INIT;
@@ -308,10 +310,14 @@ int soundio_connect(const std::shared_ptr<SoundIo>& soundio)
     for (const auto& backend: available_backends)
     {
         err = soundio_connect_backend(soundio, backend);
-        if (!err)
-            return 0;
+        if (err == SoundIoErrorNone)
+        {
+            return SoundIoErrorNone;
+        }
         if (err != SoundIoErrorInitAudioBackend)
+        {
             return err;
+        }
     }
 
     return err;
@@ -362,7 +368,7 @@ void soundio_disconnect(const std::shared_ptr<SoundIo>& soundio)
     {
         si->destroy(si);
     }
-    si->backend_data = nullptr;
+    si->backend_data = std::make_unique<SoundIoBackendData>();
 
     soundio->current_backend = SoundIoBackendNone;
 
@@ -710,21 +716,23 @@ int soundio_instream_start(const std::shared_ptr<SoundIoInStream>& instream)
 }
 
 
-// void soundio_instream_destroy(std::shared_ptr<SoundIoInStream> instream)
-// {
-//     if (!instream)
-//         return;
-//
-//     std::shared_ptr<SoundIoInStreamPrivate> is =std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);;
-//     std::shared_ptr<SoundIo> soundio = instream->device->soundio;
-//     std::shared_ptr<SoundIoPrivate> si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
-//
-//     if (si->instream_destroy)
-//         si->instream_destroy(si, is);
-//
-//     // soundio_device_unref(instream->device);
-//     free(is);
-// }
+void soundio_instream_destroy(const std::shared_ptr<SoundIoInStream>& instream)
+{
+    if (!instream)
+    {
+        return;
+    }
+
+    // 和 soundio_outstream_destroy 一致：disconnect 之后 si->instream_destroy 会被置空，
+    // 这里必须判一下，否则在断开后销毁流会调空函数指针。
+    const auto& is = std::dynamic_pointer_cast<SoundIoInStreamPrivate>(instream);
+    const auto& si = std::dynamic_pointer_cast<SoundIoPrivate>(is->device->soundio.lock());
+
+    if (si->instream_destroy)
+    {
+        si->instream_destroy(si, is);
+    }
+}
 
 int soundio_instream_pause(const std::shared_ptr<SoundIoInStream>& instream, bool pause)
 {

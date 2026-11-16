@@ -117,7 +117,7 @@ struct SoundIoWasapi
     // this one is ready to be read with flush_events. protected by mutex
     std::unique_ptr<struct SoundIoDevicesInfo> ready_devices_info;
     bool have_devices_flag;
-    bool device_scan_queued;
+    std::atomic_bool device_scan_queued = {false};
     int shutdown_err;
     bool emitted_shutdown_cb;
 

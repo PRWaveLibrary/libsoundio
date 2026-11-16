@@ -24,7 +24,17 @@
 
 int SoundIoRingBuffer::init(int requested_capacity)
 {
-    int err = init_mirrored_memory(requested_capacity);
+    // mem 是 shared_ptr<SoundIoOsMirroredMemory>，之前没人创建它（C 版本里是调用方传进来的栈变量）
+    if (mem == nullptr)
+    {
+        mem = std::make_shared<SoundIoOsMirroredMemory>();
+        if (mem == nullptr)
+        {
+            return SoundIoErrorNoMem;
+        }
+    }
+
+    const int err = init_mirrored_memory(requested_capacity);
     if (err)
     {
         return err;
@@ -68,8 +78,8 @@ struct MmapDeleter
 
 static inline size_t ceil_dbl_to_size_t(double x)
 {
-    const double truncation = (size_t) x;
-    return truncation + (truncation < x);
+    const auto truncation = static_cast<double>(static_cast<size_t>(x));
+    return static_cast<size_t>(truncation + (truncation < x));
 }
 
 
@@ -167,13 +177,13 @@ int SoundIoRingBuffer::init_mirrored_memory(int requested_capacity)
         return SoundIoErrorSystemResources;
     }
 
-    if (ftruncate(fd, actual_capacity))
+    if (ftruncate(fd, static_cast<std::int64_t>(actual_capacity)))
     {
         close(fd);
         return SoundIoErrorSystemResources;
     }
 
-    char* address = static_cast<char*>(mmap(NULL, actual_capacity * 2, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0));
+    char* address = static_cast<char*>(mmap(nullptr, actual_capacity * 2, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0));
     if (address == MAP_FAILED)
     {
         close(fd);

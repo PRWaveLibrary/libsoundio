@@ -60,7 +60,7 @@ struct SoundIoBackendData
     struct SoundIoAlsa alsa;
 #endif
 #ifdef SOUNDIO_HAVE_PIPEWIRE
-    SoundIoPipeWire pipe_wire;
+    struct SoundIoPipeWire pipe_wire;
 #endif
 #ifdef SOUNDIO_HAVE_COREAUDIO
     struct SoundIoCoreAudio coreaudio;

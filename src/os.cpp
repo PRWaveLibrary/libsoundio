@@ -60,11 +60,11 @@ double soundio_os_get_time()
 #if defined(SOUNDIO_OS_WINDOWS)
 #include <objbase.h>
 
-static void run_win32_thread(void (*run)(const std::shared_ptr<void>& arg), const std::shared_ptr<void>& arg)
+static void run_win32_thread(STATIC_CALLBACK_PTR run, const std::stop_token& token, const std::shared_ptr<void>& arg)
 {
     const HRESULT err = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     assert(err == S_OK);
-    run(arg);
+    run(token, arg);
     CoUninitialize();
 }
 
@@ -75,9 +75,9 @@ std::unique_ptr<SoundIoOsThread> SoundIoOsThread::create(STATIC_CALLBACK_PTR run
 {
     std::unique_ptr<SoundIoOsThread> thread = std::make_unique<SoundIoOsThread>();
 #if defined(SOUNDIO_OS_WINDOWS)
-    thread->thread = std::make_unique<std::thread>(run_win32_thread, run, arg);
+    thread->thread = std::make_unique<std::jthread>(run_win32_thread, run, arg);
 #else
-    thread->thread = std::make_unique<std::thread>(run, arg);
+    thread->thread = std::make_unique<std::jthread>(run, arg);
 #endif
     return thread;
 }

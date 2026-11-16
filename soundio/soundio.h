@@ -1241,6 +1241,9 @@ SOUNDIO_EXPORT int soundio_instream_begin_read(const std::shared_ptr<SoundIoInSt
 /// * #SoundIoErrorStreaming
 SOUNDIO_EXPORT int soundio_instream_end_read(const std::shared_ptr<SoundIoInStream>& instream);
 
+
+SOUNDIO_EXPORT void soundio_instream_destroy(const std::shared_ptr<SoundIoInStream>& instream);
+
 /// If the underyling device supports pausing, this pauses the stream and
 /// prevents SoundIoInStream::read_callback from being called. Otherwise this returns
 /// #SoundIoErrorIncompatibleDevice.

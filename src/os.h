@@ -63,11 +63,11 @@
 
 #endif
 
-using STATIC_CALLBACK_PTR = void (*)(const std::shared_ptr<void>&);
+using STATIC_CALLBACK_PTR = void (*)(const std::stop_token&, const std::shared_ptr<void>&);
 
 class SoundIoOsThread
 {
-    std::unique_ptr<std::thread> thread;
+    std::unique_ptr<std::jthread> thread;
 
 public:
     virtual ~SoundIoOsThread()
@@ -76,6 +76,8 @@ public:
         {
             return;
         }
+
+        thread->request_stop();
         if (thread->joinable())
         {
             thread->join();
@@ -83,6 +85,15 @@ public:
     }
 
     static std::unique_ptr<SoundIoOsThread> create(STATIC_CALLBACK_PTR run, const std::shared_ptr<void>& arg);
+
+    bool request_stop()
+    {
+        if (thread == nullptr)
+        {
+            return false;
+        }
+        return thread->request_stop();
+    }
 };
 
 class SoundIoOsMutex

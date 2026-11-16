@@ -118,7 +118,6 @@ else ()
     set(PIPEWIRE_LIBRARIES "")
 endif ()
 
-
 if (SOUNDIO_ENABLE_COREAUDIO AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
     find_package(CoreAudio)
     if (COREAUDIO_FOUND)
@@ -200,7 +199,6 @@ set(CONFIGURE_OUT_FILE "${libsoundio_BINARY_DIR}/config.h")
 set(LIBSOUNDIO_HEADERS
         "${libsoundio_SOURCE_DIR}/soundio/soundio.h"
         "${libsoundio_SOURCE_DIR}/soundio/endian.h"
-        "${libsoundio_SOURCE_DIR}/logger/logger.hpp"
 )
 
 if (SOUNDIO_HAVE_COREAUDIO)
@@ -250,6 +248,13 @@ if (SOUNDIO_HAVE_WASAPI)
     list(APPEND LIBSOUNDIO_SOURCES "${libsoundio_SOURCE_DIR}/src/wasapi.cpp")
 endif ()
 
+if (SOUNDIO_HAVE_PIPEWIRE)
+    list(APPEND LIBSOUNDIO_SOURCES
+            "${libsoundio_SOURCE_DIR}/src/pipewire.cpp"
+            "${libsoundio_SOURCE_DIR}/src/pipewire.h"
+    )
+endif ()
+
 include_directories(
         ${libsoundio_SOURCE_DIR}
         ${libsoundio_BINARY_DIR}
@@ -263,6 +268,7 @@ set(LIBSOUNDIO_LIBS
         ${AUDIOUNIT_LIBRARY}
         ${CMAKE_THREAD_LIBS_INIT}
         ${OBOE_LIBRARY}
+        ${PIPEWIRE_LIBRARIES}
 )
 
 if (MSVC)
@@ -304,17 +310,21 @@ if (SOUNDIO_BUILD_DYNAMIC_LIBS)
 endif ()
 
 if (SOUNDIO_BUILD_STATIC_LIBS)
-    add_library(libsoundio_static STATIC ${LIBSOUNDIO_SOURCES}
-            src/pipewire.cpp
-            src/pipewire.h)
+    add_library(libsoundio_static STATIC ${LIBSOUNDIO_SOURCES})
     set_target_properties(libsoundio_static PROPERTIES
             OUTPUT_NAME ${SOUNDIO_STATIC_LIBNAME}
             COMPILE_FLAGS ${LIB_CFLAGS}
             LINKER_LANGUAGE CXX
+            # 宿主（WaveAudio）把本静态库链进 .so，必须是 PIC
+            POSITION_INDEPENDENT_CODE ON
     )
     target_link_libraries(libsoundio_static PRIVATE ${LIBSOUNDIO_EXTEN_INCLUDE_LIB})
     if (SOUNDIO_HAVE_OBOE)
         target_link_libraries(libsoundio_static PUBLIC ${OBOE_LIBRARY})
+    endif ()
+    if (SOUNDIO_HAVE_PIPEWIRE)
+        # 静态库的符号解析要交给最终链接方，这里必须 PUBLIC
+        target_link_libraries(libsoundio_static PUBLIC ${PIPEWIRE_LIBRARIES})
     endif ()
     install(TARGETS libsoundio_static DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif ()
