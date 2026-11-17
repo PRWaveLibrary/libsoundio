@@ -914,7 +914,7 @@ int soundio_device_nearest_sample_rate(const std::shared_ptr<SoundIoDevice>& dev
         }
     }
 
-    return best_rate;
+    return sample_rate;
 }
 
 // bool soundio_device_equal(
