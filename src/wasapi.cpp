@@ -1212,11 +1212,12 @@ static void my_flush_events(const std::shared_ptr<SoundIoPrivate>& si, bool wait
     {
         std::unique_lock lock(siw.mutex->get());
 
-        // block until have devices
-        while (wait || (!siw.have_devices_flag.load(std::memory_order_acquire) && !siw.shutdown_err))
+        if (wait)
         {
-            siw.cond->wait(&lock);
-            wait = false;
+            siw.cond->wait(&lock, [&]
+            {
+                return siw.have_devices_flag.load(std::memory_order_acquire) || siw.shutdown_err;
+            });
         }
 
         if (siw.shutdown_err && !siw.emitted_shutdown_cb)
