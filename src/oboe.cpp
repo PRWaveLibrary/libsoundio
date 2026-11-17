@@ -632,9 +632,6 @@ int soundio_oboe_init(const std::shared_ptr<SoundIoPrivate>& si)
 {
     SoundIoOboe& sio = si->backend_data->oboe;
 
-    sio.have_devices_flag.store(false);
-    sio.device_scan_queued.store(true);
-
     sio.mutex = soundio_os_mutex_create();
     if (!sio.mutex)
     {

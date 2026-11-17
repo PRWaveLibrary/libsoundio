@@ -14,6 +14,7 @@
 #include <cassert>
 #include <ranges>
 #include <AVFoundation/AVFoundation.h>
+#include <MediaPlayer/MediaPlayer.h>
 #include "oc_method_swizzling.h"
 
 static const int OUTPUT_ELEMENT = 0;
@@ -241,7 +242,7 @@ static void device_thread_run(const std::stop_token& token, const std::shared_pt
                 err = SoundIoErrorBackendDisconnected;
                 break;
             }
-                sica.device_scan_queued.store(false, std::memory_order_release);
+            sica.device_scan_queued.store(false, std::memory_order_release);
         }
 
         err = refresh_devices(si);
@@ -354,6 +355,7 @@ static int set_ca_desc(enum SoundIoFormat fmt, AudioStreamBasicDescription *desc
  */
 static int outstream_open_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
+    LOGI(L"open outstream.");
     auto& osca = os->backend_data.coreaudio_ios;
     const auto dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(os->device);
     const auto dca = dev->backend_data.coreaudio_ios;
@@ -625,9 +627,40 @@ static void instream_destroy_ca(const std::shared_ptr<SoundIoPrivate>& si, const
     isca.buffer_list = nullptr;
 }
 
+/**
+ * @brief 异步激活 AVAudioSession
+ *
+ * 通知回调是挂在 [NSOperationQueue mainQueue] 上的，所以 InterruptionEnded 里
+ * 如果在主线程直接调同步版 -setActive:error:，iOS 27 会打这条运行时提示：
+ *   "This method can lead to UI unresponsiveness if called on the main thread.
+ *    Consider using the asynchronous activate/deactivate API instead..."
+ * 蓝牙设备（AirPods 的 A2DP<->HFP 切换等）激活尤其慢，主线程会被卡住，
+ * 所以这里统一走 iOS 27 起提供的异步 API。
+ *
+ * iOS 27 以下没有这个 API（也不存在那条提示），退回到同步调用。
+ *
+ * @param completion 激活结束后回调，activated 表示是否成功
+ */
+static void activate_session_async(void (^completion)(BOOL activated, NSError* _Nullable error))
+{
+    AVAudioSession* session = AVAudioSession.sharedInstance;
+
+#if defined(__IPHONE_OS_VERSION_MAX_ALLOWED) && __IPHONE_OS_VERSION_MAX_ALLOWED >= 270000
+    if (@available(iOS 27.0, *))
+    {
+        [session activateWithOptions:AVAudioSessionActivationOptionNone completionHandler:completion];
+        return;
+    }
+#endif
+
+    NSError* error = nil;
+    const BOOL ok = [session setActive:YES error:&error];
+    completion(ok, error);
+}
+
 void CoreAudioCallback::on_notification(NSNotification* note, const std::shared_ptr<SoundIoPrivate>& s)
 {
-    if (!s)
+    if (s == nullptr)
     {
         return;
     }
@@ -646,23 +679,31 @@ void CoreAudioCallback::on_notification(NSNotification* note, const std::shared_
         case AVAudioSessionInterruptionTypeEnded:
         {
             LOGI(L"apple notification resume begin.");
-            NSError *error = nil;
-            BOOL success = [[AVAudioSession sharedInstance] setActive:YES error:&error];
-            if (!success) {
-                LOGE(L"restart session failed.%hs", error.localizedDescription.UTF8String);
-                return;
-            }
             AVAudioSessionInterruptionOptions options = [userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue];
             if (!(options & AVAudioSessionInterruptionOptionShouldResume))
             {
                 LOGI(L"apple notification disable resume.");
                 return;
             }
-            if (s->default_out_stream)
+
+            // 先复制到局部变量再捕获：直接捕获 `const std::shared_ptr&` 参数时，
+            // block 不会 copy-construct 捕获对象，拿到的是悬空副本。
+            const std::shared_ptr<SoundIoPrivate> keep = s;
+            activate_session_async(^(BOOL activated, NSError* error)
             {
-                s->outstream_pause(s, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(s->default_out_stream), false);
-            }
-            LOGI(L"apple notification resume finished.");
+                if (!activated)
+                {
+                    LOGE(L"restart session failed.%hs",
+                         error != nil ? error.localizedDescription.UTF8String : "unknown");
+                    return;
+                }
+                // 激活是异步的，AudioUnit 必须等这里再启动
+                if (keep->outstream_pause && keep->default_out_stream)
+                {
+                    keep->outstream_pause(keep, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(keep->default_out_stream), false);
+                }
+                LOGI(L"apple notification resume finished.");
+            });
         }
         break;
             
@@ -671,7 +712,7 @@ void CoreAudioCallback::on_notification(NSNotification* note, const std::shared_
 
 void CoreAudioCallback::on_route_notification(NSNotification* note, const std::shared_ptr<SoundIoPrivate>& s)
 {
-    if (!s)
+    if (s == nullptr)
     {
         return;
     }
@@ -689,7 +730,6 @@ void CoreAudioCallback::on_route_notification(NSNotification* note, const std::s
         }
         case AVAudioSessionRouteChangeReasonNewDeviceAvailable: {
             LOGI(L"AVAudioSessionRouteChangeReasonNewDeviceAvailable");
-//            force_device_scan_ca(s);
             break;
         }
         case AVAudioSessionRouteChangeReasonCategoryChange: {
@@ -973,6 +1013,75 @@ static int instream_get_latency_ca(const std::shared_ptr<SoundIoPrivate>& si, co
 }
 
 /**
+ * @brief 拒绝蓝牙耳机（AirPods 等）的「按下暂停」媒体键
+ *
+ * category = Playback 时我们是当前的音频焦点，AirPods 捏一下会由 MediaRemote
+ * 发一条 togglePlayPause 命令过来；如果 App 不接管，系统就直接把 session
+ * deactivate 掉（表现就是收到 AVAudioSessionInterruptionTypeBegan、AudioUnit
+ * 被停）。对游戏/实时音频来说这是不可接受的。
+ *
+ * 这里把 togglePlayPause 认领下来并返回 Success（但什么都不做），MediaRemote
+ * 认为命令已被处理，就不会再自动暂停我们；play/pause/stop 也一并禁用，避免误触。
+ *
+ * 注意：真正的外部打断（来电、闹钟、Siri、其它 App 抢焦点）无法拒绝，
+ * 只能事后恢复。
+ *
+ * @param si 当前 SoundIoPrivate
+ */
+static void grab_remote_pause_commands(const std::shared_ptr<SoundIoPrivate>& si)
+{
+    auto& sica = si->backend_data->coreaudio_ios;
+    if (sica.remoteToggleTarget != nil)
+    {
+        // 已经装过了
+        return;
+    }
+
+    MPRemoteCommandCenter* cmd_center = MPRemoteCommandCenter.sharedCommandCenter;
+
+    // 返回的 token 由 MPRemoteCommandCenter 持有强引用，这里只留指针用于摘除
+    // 这个必须要设置,不设置下面管了
+    sica.remoteToggleTarget = [cmd_center.togglePlayPauseCommand
+            addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent* event)
+            {
+                LOGI(L"remote togglePlayPause ignored");
+                return MPRemoteCommandHandlerStatusSuccess;
+            }];
+
+    cmd_center.playCommand.enabled = NO;
+    cmd_center.pauseCommand.enabled = NO;
+    cmd_center.stopCommand.enabled = NO;
+    cmd_center.nextTrackCommand.enabled = NO;
+    cmd_center.previousTrackCommand.enabled = NO;
+
+    LOGI(L"remote play/pause commands are disabled (game mode)");
+}
+
+/**
+ * @brief 把上面禁用的媒体命令还原，避免影响同进程里别的播放器
+ *
+ * @param si 当前 SoundIoPrivate
+ */
+static void release_remote_pause_commands(const std::shared_ptr<SoundIoPrivate>& si)
+{
+    auto& sica = si->backend_data->coreaudio_ios;
+    MPRemoteCommandCenter* cmd_center = MPRemoteCommandCenter.sharedCommandCenter;
+
+    if (sica.remoteToggleTarget != nil)
+    {
+        [cmd_center.togglePlayPauseCommand removeTarget:sica.remoteToggleTarget];
+        sica.remoteToggleTarget = nil;
+    }
+
+    cmd_center.playCommand.enabled = YES;
+    cmd_center.pauseCommand.enabled = YES;
+    cmd_center.stopCommand.enabled = YES;
+    cmd_center.nextTrackCommand.enabled = YES;
+    cmd_center.previousTrackCommand.enabled = YES;
+    LOGI(L"remote play/pause commands enable");
+}
+
+/**
  * @brief 回收所有的 Backend 资源以及相关的 system thread
  *
  * 强制发送停止 event 给 background device 处理线程以确保安全。
@@ -1012,12 +1121,22 @@ static void destroy_ca(const std::shared_ptr<SoundIoPrivate>& si)
     }
     si->ClearOutStreams();
 
-    if(sica.notifyCallback != nil)
+    // 两个观察者都要摘掉（之前只摘了 notifyCallback，routeCallback 一直留在
+    // NSNotificationCenter 里，过期后还会被回调）
+    NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
+    if (sica.notifyCallback != nil)
     {
-        NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
         [center removeObserver:sica.notifyCallback];
         sica.notifyCallback = nil;
     }
+    if (sica.routeCallback != nil)
+    {
+        [center removeObserver:sica.routeCallback];
+        sica.routeCallback = nil;
+    }
+
+    // 还原媒体键（否则同进程里其它播放器会受影响）
+    release_remote_pause_commands(si);
 }
 
 static int set_record_route(const std::shared_ptr<SoundIoPrivate>& si){
@@ -1083,9 +1202,6 @@ static int set_playback_route(const std::shared_ptr<SoundIoPrivate>& si){
 int soundio_coreaudio_init(const std::shared_ptr<SoundIoPrivate>& si) 
 {
     auto& sica = si->backend_data->coreaudio_ios;
-
-    sica.have_devices_flag.store(false);
-    sica.device_scan_queued.store(true);
     sica.service_restarted.store(false);
     
     // 延迟测试把下一行取消注释,否则麦克风不能被打开
@@ -1129,18 +1245,37 @@ int soundio_coreaudio_init(const std::shared_ptr<SoundIoPrivate>& si)
     sica.thread = SoundIoOsThread::create(device_thread_run, si);
     
     NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
+
+    // 注意：**不能**直接在 block 里捕获 si。
+    // si 是 `const std::shared_ptr<SoundIoPrivate>&` 这种**引用参数**，clang 对这种
+    // 引用参数的 block 捕获不会 copy-construct 捕获对象（实测 use_count 不变），
+    // 于是 block 里拿到的是一个悬空副本：宿主一释放（ar_shutdown 后），回调里
+    // s 就变成 nullptr，或者 use_count 是垃圾值。
+    // 所以先落到局部变量再捕获；并且用 weak_ptr，避免观察者反过来把
+    // SoundIoPrivate 钉住不放（否则 soundio_destroy 之后对象永远不析构）。
+    const std::weak_ptr<SoundIoPrivate> weak_si = si;
+
     if(sica.notifyCallback == nil)
     {
         sica.notifyCallback = [center addObserverForName:AVAudioSessionInterruptionNotification object:[AVAudioSession sharedInstance] queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification* note){
-            CoreAudioCallback::on_notification(note,si);
+            if (const auto s = weak_si.lock())
+            {
+                CoreAudioCallback::on_notification(note, s);
+            }
         }];
     }
     
     if(sica.routeCallback == nil){
         sica.routeCallback = [center addObserverForName:AVAudioSessionRouteChangeNotification object:[AVAudioSession sharedInstance] queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification* note){
-            CoreAudioCallback::on_route_notification(note,si);
+            if (const auto s = weak_si.lock())
+            {
+                CoreAudioCallback::on_route_notification(note, s);
+            }
         }];
     }
+
+    // 拒绝 AirPods / 蓝牙耳机的「按下暂停」：接管 MediaRemote 的播放类命令
+    grab_remote_pause_commands(si);
     
     
     si->destroy = destroy_ca;

@@ -66,6 +66,9 @@ struct SoundIoCoreAudioIOS
 #ifdef __OBJC__
     id notifyCallback;
     id routeCallback;
+    // MediaRemote：认领 togglePlayPause 命令时拿到的 target token（由
+    // MPRemoteCommandCenter 持有强引用，这里只存指针，用于 destroy 时摘掉）
+    id remoteToggleTarget;
 #endif
 };
 

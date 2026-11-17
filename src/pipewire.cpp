@@ -495,7 +495,10 @@ static void OnRegistryGlobalRemove(void* data, uint32_t id)
     }
     {
         std::lock_guard lock(backend->data_mutex);
-        std::erase_if(backend->nodes, [id](const PwNodeInfo& node) { return node.id == id; });
+        std::erase_if(backend->nodes, [id](const PwNodeInfo& node)
+        {
+            return node.id == id;
+        });
         backend->device_names.erase(id);
     }
     LOGD(L"pipewire global %u removed", id);
@@ -537,7 +540,10 @@ static bool BackendSync(const std::shared_ptr<PipeWireBackend>& backend, const i
     }
 
     std::unique_lock lock(backend->sync_mutex);
-    return backend->sync_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [backend, seq] { return backend->last_done_seq >= seq; });
+    return backend->sync_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [backend, seq]
+    {
+        return backend->last_done_seq >= seq;
+    });
 }
 
 // ============================================================================
@@ -697,7 +703,7 @@ static int refresh_devices(const std::shared_ptr<SoundIoPrivate>& si)
     {
         std::unique_lock lock(siw.mutex->get());
         siw.ready_devices_info = std::move(devices_info);
-        siw.have_devices_flag = true;
+        siw.have_devices_flag.store(true, std::memory_order_release);
         siw.cond->signal(&lock);
     }
     si->on_events_signal(si);
@@ -725,9 +731,14 @@ static void my_flush_events(const std::shared_ptr<SoundIoPrivate>& si, bool wait
     bool cb_shutdown = false;
 
     std::unique_lock lock(siw.mutex->get());
+if (wait)
+{
+    
+}
+
 
     // block until have devices
-    while (wait || (!siw.have_devices_flag && !siw.shutdown_err))
+    while (wait || (!siw.have_devices_flag.load(std::memory_order_acquire) && !siw.shutdown_err))
     {
         siw.cond->wait(&lock);
         wait = false;
@@ -977,7 +988,10 @@ static void OnStreamStateChanged(void* data, pw_stream_state old, pw_stream_stat
 static bool WaitStreamReady(PipeWireStream* impl, const int timeout_ms)
 {
     std::unique_lock lock(impl->state_mutex);
-    return impl->state_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [impl] { return impl->state == PW_STREAM_STATE_PAUSED || impl->state == PW_STREAM_STATE_STREAMING || impl->state == PW_STREAM_STATE_ERROR; }) &&
+    return impl->state_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [impl]
+           {
+               return impl->state == PW_STREAM_STATE_PAUSED || impl->state == PW_STREAM_STATE_STREAMING || impl->state == PW_STREAM_STATE_ERROR;
+           }) &&
            !impl->state_error;
 }
 
@@ -1926,10 +1940,10 @@ int soundio_pipewire_init(const std::shared_ptr<SoundIoPrivate>& si)
     SoundIoPipeWire& siw = si->backend_data->pipe_wire;
 
     static std::once_flag init_flag;
-    std::call_once(init_flag, [] { pw_init(nullptr, nullptr); });
-
-    siw.device_scan_queued.store(true, std::memory_order_release);
-    siw.have_devices_flag = false;
+    std::call_once(init_flag, []
+    {
+        pw_init(nullptr, nullptr);
+    });
     siw.shutdown_err = 0;
     siw.emitted_shutdown_cb = false;
 
@@ -1992,29 +2006,6 @@ int soundio_pipewire_init(const std::shared_ptr<SoundIoPrivate>& si)
     si->instream_end_read = instream_end_read_pipewire;
     si->instream_pause = instream_pause_pipewire;
     si->instream_get_latency = instream_get_latency_pipewire;
-
-    // 等第一次枚举完成：拿不到就说明 daemon 不可用，让 soundio_connect 换后端
-    {
-        std::unique_lock lock(siw.mutex->get());
-        const double deadline = soundio_os_get_time() + 5.0;
-        while (!siw.have_devices_flag && !siw.shutdown_err)
-        {
-            if (soundio_os_get_time() >= deadline)
-            {
-                lock.unlock();
-                LOGE(L"pipewire: timeout waiting for device list");
-                destroy_pipewire(si);
-                return SoundIoErrorInitAudioBackend;
-            }
-            siw.cond->timed_wait(&lock, 0.05);
-        }
-        if (siw.shutdown_err)
-        {
-            lock.unlock();
-            destroy_pipewire(si);
-            return SoundIoErrorInitAudioBackend;
-        }
-    }
 
     return SoundIoErrorNone;
 }

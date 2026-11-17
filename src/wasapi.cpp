@@ -2959,14 +2959,14 @@ STDMETHODIMP soundio_NotificationClient::QueryInterface(REFIID riid, void** ppv)
     }
 }
 
-STDMETHODIMP_(ULONG) soundio_NotificationClient::AddRef()
+STDMETHODIMP_ (ULONG) soundio_NotificationClient::AddRef()
 {
     // SoundIoWasapi& siw = &si.lock()->backend_data.wasapi;
     // return InterlockedIncrement(&siw->device_events_refs);
     return S_OK;
 }
 
-STDMETHODIMP_(ULONG) soundio_NotificationClient::Release()
+STDMETHODIMP_ (ULONG) soundio_NotificationClient::Release()
 {
     // SoundIoWasapi& siw = &si.lock()->backend_data.wasapi;
     // return InterlockedDecrement(&siw->device_events_refs);
@@ -3094,6 +3094,5 @@ int soundio_wasapi_init(const std::shared_ptr<SoundIoPrivate>& si)
     si->instream_pause = instream_pause_wasapi;
     si->instream_get_latency = instream_get_latency_wasapi;
 
-    force_device_scan_wasapi(si);
     return 0;
 }

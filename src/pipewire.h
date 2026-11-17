@@ -39,7 +39,7 @@ struct SoundIoPipeWire
     std::unique_ptr<SoundIoOsCond> scan_devices_cond;
     std::unique_ptr<SoundIoOsMutex> scan_devices_mutex;
     std::unique_ptr<SoundIoOsThread> thread = nullptr;
-    bool have_devices_flag = false;
+    std::atomic_bool have_devices_flag = {false};
     // this one is ready to be read with flush_events. protected by mutex
     std::unique_ptr<SoundIoDevicesInfo> ready_devices_info;
     std::atomic_bool device_scan_queued = {false};

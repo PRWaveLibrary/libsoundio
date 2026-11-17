@@ -1676,10 +1676,6 @@ static void destroy_ca(const std::shared_ptr<SoundIoPrivate>& si)
 int soundio_coreaudio_init(const std::shared_ptr<SoundIoPrivate>& si)
 {
     auto& sica = si->backend_data->coreaudio;
-    int err;
-
-    sica.have_devices_flag.store(false);
-    sica.device_scan_queued.store(true);
     sica.service_restarted.store(false);
 
     sica.mutex = soundio_os_mutex_create();
@@ -1711,7 +1707,7 @@ int soundio_coreaudio_init(const std::shared_ptr<SoundIoPrivate>& si)
     }
 
     auto prop_address = AudioObjectPropertyAddress{kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
-    err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si.get());
+    int err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si.get());
     if (err != noErr)
     {
         destroy_ca(si);
