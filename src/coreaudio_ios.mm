@@ -63,6 +63,8 @@ static int refresh_devices(const std::shared_ptr<SoundIoPrivate>& si)
         dev->soundio = si;
         dev->is_raw = false;
         dev->aim = aim;
+         dev->name = aim == SoundIoDeviceAimInput ? L"CoreAudio Input" : L"CoreAudio Output";
+        dev->id = aim == SoundIoDeviceAimInput ? L"CoreAudio Input Device" : L"CoreAudio Output Device";
         dev->formats.push_back(SoundIoFormatFloat32LE);
         dev->is_default = true;
 
