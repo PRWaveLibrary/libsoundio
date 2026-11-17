@@ -18,7 +18,7 @@ struct OboeStreamDeleter
 
 struct SoundIoPrivate;
 
-int soundio_oboe_init(std::shared_ptr<SoundIoPrivate> si);
+int soundio_oboe_init(const std::shared_ptr<SoundIoPrivate>& si);
 
 struct SoundIoOboe
 {

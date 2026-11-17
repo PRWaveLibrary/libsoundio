@@ -6,6 +6,7 @@
 
 #include "soundio_private.h"
 #include "oboe/AudioStreamBuilder.h"
+#include "util/logger.hpp"
 
 
 oboe::DataCallbackResult oboe_callback::onAudioReady(oboe::AudioStream* audioStream, void* audioData, int32_t numFrames)
@@ -19,7 +20,7 @@ oboe::DataCallbackResult oboe_callback::onAudioReady(oboe::AudioStream* audioStr
     struct SoundIoOutStreamOboe* osca = &os->backend_data.oboe;
 
     osca->request_num_frames = numFrames;
-    osca->request_audio_data = static_cast<float *>(audioData);
+    osca->request_audio_data = static_cast<float*>(audioData);
     os->write_callback(os, osca->request_num_frames, osca->request_num_frames);
 
     return oboe::DataCallbackResult::Continue;

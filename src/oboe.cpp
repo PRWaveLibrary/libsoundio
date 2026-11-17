@@ -4,8 +4,10 @@
 
 #include "oboe.h"
 
+#include <ranges>
+
 #include "soundio_private.h"
-#include "util.h"
+#include "util/logger.hpp"
 
 // static const int OUTPUT_ELEMENT = 0;
 // static const int INPUT_ELEMENT = 1;
@@ -34,25 +36,25 @@ static enum SoundIoDeviceAim aims[] = {
  * @param si SoundIoPrivate 的 shared_ptr
  * @return int 返回 0 表示成功构建
  */
-static int refresh_devices(std::shared_ptr<SoundIoPrivate>& si)
+static int refresh_devices(const std::shared_ptr<SoundIoPrivate>& si)
 {
     SoundIoOboe& sio = si->backend_data->oboe;
-
-    std::unique_ptr<SoundIoDevicesInfo> devices_info = std::make_unique<SoundIoDevicesInfo>();
+    auto devices_info = std::make_unique<SoundIoDevicesInfo>();
 
     devices_info->default_output_index = 0;
     devices_info->default_input_index = 0;
 
-    for (int aim_i = 0; aim_i < std::size(aims); aim_i += 1)
+    for (const auto aim: aims)
     {
-        enum SoundIoDeviceAim aim = aims[aim_i];
-        std::shared_ptr<SoundIoDevicePrivate> dev = std::make_shared<SoundIoDevicePrivate>();
+        auto dev = std::make_shared<SoundIoDevicePrivate>();
 
         dev->soundio = si;
         dev->is_raw = false;
         dev->aim = aim;
         dev->name = aim == SoundIoDeviceAimInput ? L"Oboe Input" : L"Oboe Output";
         dev->id = aim == SoundIoDeviceAimInput ? L"Oboe Input Device" : L"Oboe Output Device";
+        dev->container_id = L"Oboe";
+        dev->is_default = true;
 
         dev->formats.push_back(SoundIoFormatFloat32LE);
 
@@ -100,14 +102,14 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate>& si)
     return 0;
 }
 
-// static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
-// {
-//     SoundIoOboe& sio = si->backend_data->oboe;
-//     std::unique_lock lock(sio.mutex->get());
-//     sio.shutdown_err = err;
-//     sio.cond->signal(&lock);
-//     si->on_events_signal(si);
-// }
+static void shutdown_backend(const std::shared_ptr<SoundIoPrivate>& si, int err)
+{
+    SoundIoOboe& sio = si->backend_data->oboe;
+    std::unique_lock lock(sio.mutex->get());
+    sio.shutdown_err = err;
+    sio.cond->signal(&lock);
+    si->on_events_signal(si);
+}
 
 
 /**
@@ -118,10 +120,9 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate>& si)
  * @param si SoundIoPrivate 实例引用
  * @param wait 指定是否采用阻塞模式一直等待 device 有效或报错
  */
-static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
+static void my_flush_events(const std::shared_ptr<SoundIoPrivate>& si, bool wait)
 {
-    std::shared_ptr<SoundIo> soundio = si;
-    SoundIoOboe& sio = si->backend_data->oboe;
+    auto& sio = si->backend_data->oboe;
 
     bool change = false;
     bool cb_shutdown = false;
@@ -149,11 +150,11 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
 
     if (cb_shutdown)
     {
-        soundio->on_backend_disconnect(soundio, sio.shutdown_err);
+        si->on_backend_disconnect(si, sio.shutdown_err);
     }
     else if (change)
     {
-        soundio->on_devices_change(soundio);
+        si->on_devices_change(si);
     }
 }
 
@@ -163,7 +164,7 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
  * 
  * @param si 当前 SoundIoPrivate 的指针
  */
-static void flush_events_oboe(std::shared_ptr<SoundIoPrivate> si)
+static void flush_events_oboe(const std::shared_ptr<SoundIoPrivate>& si)
 {
     my_flush_events(si, false);
 }
@@ -173,7 +174,7 @@ static void flush_events_oboe(std::shared_ptr<SoundIoPrivate> si)
  * 
  * @param si 当前 SoundIoPrivate 的指针
  */
-static void wait_events_oboe(std::shared_ptr<SoundIoPrivate> si)
+static void wait_events_oboe(const std::shared_ptr<SoundIoPrivate>& si)
 {
     my_flush_events(si, true);
 }
@@ -183,29 +184,40 @@ static void wait_events_oboe(std::shared_ptr<SoundIoPrivate> si)
  * 
  * 监听 device_scan_queued 与 stop_token 并做出相应的设备加载反应。
  * 
+ * @param token
  * @param arg 传递给 thread 的携带类型为 SoundIoPrivate 的通用指针
  */
-static void device_thread_run(const std::stop_token& token, std::shared_ptr<void> arg)
+static void device_thread_run(const std::stop_token& token, const std::shared_ptr<void>& arg)
 {
-    std::shared_ptr<SoundIoPrivate> si = std::static_pointer_cast<SoundIoPrivate>(arg);
-    SoundIoOboe& sio = si->backend_data->oboe;
+    const auto& si = std::static_pointer_cast<SoundIoPrivate>(arg);
+    auto& sio = si->backend_data->oboe;
 
-    std::unique_lock lock(sio.scan_devices_mutex->get());
 
     while (!token.stop_requested())
     {
-        if (sio.device_scan_queued.load())
         {
-            sio.device_scan_queued.store(false);
-            lock.unlock();
+            std::unique_lock lock(sio.scan_devices_mutex->get());
 
-            refresh_devices(si);
-            flush_events_oboe(si);
+            sio.scan_devices_cond->wait(&lock, [&]
+            {
+                return sio.device_scan_queued.load(std::memory_order_acquire);
+            });
 
-            lock.lock();
-            continue;
+            if (token.stop_requested())
+            {
+                break;
+            }
+
+            sio.device_scan_queued.store(false, std::memory_order_release);
         }
-        sio.scan_devices_cond->wait(&lock);
+
+        if (const int err = refresh_devices(si))
+        {
+            shutdown_backend(si, err);
+            break;
+        }
+
+        flush_events_oboe(si);
     }
 }
 
@@ -214,9 +226,9 @@ static void device_thread_run(const std::stop_token& token, std::shared_ptr<void
  * 
  * @param si 根系统私有存储指针
  */
-static void wakeup_oboe(std::shared_ptr<SoundIoPrivate> si)
+static void wakeup_oboe(const std::shared_ptr<SoundIoPrivate>& si)
 {
-    SoundIoOboe& sio = si->backend_data->oboe;
+    const auto& sio = si->backend_data->oboe;
     std::unique_lock lock(sio.mutex->get());
     sio.cond->signal(&lock);
 }
@@ -228,10 +240,9 @@ static void wakeup_oboe(std::shared_ptr<SoundIoPrivate> si)
  * 
  * @param si 系统存储引用指针
  */
-static void force_device_scan_oboe(std::shared_ptr<SoundIoPrivate> si)
+static void force_device_scan_oboe(const std::shared_ptr<SoundIoPrivate>& si)
 {
-    SoundIoOboe& sio = si->backend_data->oboe;
-
+    auto& sio = si->backend_data->oboe;
     std::unique_lock lock(sio.scan_devices_mutex->get());
 
     sio.have_devices_flag.store(false);
@@ -245,10 +256,10 @@ static void force_device_scan_oboe(std::shared_ptr<SoundIoPrivate> si)
  * @param si Backend root 节点状态
  * @param os 即将销毁的单独的 output stream 私有变量
  */
-static void outstream_destroy_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static void outstream_destroy_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     LOGI(L"destroy oboe outstream");
-    SoundIoOutStreamOboe& oso = os->backend_data.oboe;
+    auto& oso = os->backend_data.oboe;
     oso.audio_stream = nullptr;
     oso.callback = nullptr;
     oso.error_callback = nullptr;
@@ -272,22 +283,21 @@ void OboeStreamDeleter::operator()(oboe::AudioStream* stream) const
  * @param os SoundIoOutStreamPrivate 的 shared_ptr
  * @return int 成功返回 0
  */
-static int outstream_open_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_open_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     LOGI(L"open oboe outstream");
-    SoundIoOutStreamOboe& oso = os->backend_data.oboe;
-    std::shared_ptr<SoundIoOutStream> outstream = os;
-    std::shared_ptr<SoundIoDevice> device = outstream->device;
+    auto& oso = os->backend_data.oboe;
+    const auto& device = os->device;
 
-    std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(device);
-    std::shared_ptr<SoundIoDeviceOboe> sdo = dev->backend_data.oboe;
+    const auto dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(device);
+    const auto& sdo = dev->backend_data.oboe;
 
-    if (outstream->software_latency == 0.0)
+    if (os->software_latency == 0.0)
     {
-        outstream->software_latency = device->software_latency_current;
+        os->software_latency = device->software_latency_current;
     }
 
-    outstream->software_latency = soundio_double_clamp(device->software_latency_min, outstream->software_latency, device->software_latency_max);
+    os->software_latency = std::clamp(os->software_latency, device->software_latency_min, device->software_latency_max);
 
     // Allocate the callback object on the heap
     oso.callback = std::make_unique<oboe_callback>(os);
@@ -298,7 +308,7 @@ static int outstream_open_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_p
             ->setUsage(oboe::Usage::Game)
             ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
             ->setFormat(oboe::AudioFormat::Float)
-            ->setChannelCount(outstream->layout.channel_count)
+            ->setChannelCount(os->layout.channel_count)
             ->setSampleRateConversionQuality(oboe::SampleRateConversionQuality::Medium)
             ->setDataCallback(oso.callback.get())
             ->setErrorCallback(oso.error_callback.get());
@@ -314,16 +324,16 @@ static int outstream_open_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_p
     oso.audio_stream = std::unique_ptr<oboe::AudioStream, OboeStreamDeleter>(raw_stream);
     raw_stream = nullptr;
 
-    outstream->sample_rate = oso.audio_stream->getSampleRate();
-    outstream->bytes_per_frame = oso.audio_stream->getBytesPerFrame();
-    outstream->bytes_per_sample = oso.audio_stream->getBytesPerSample();
+    os->sample_rate = oso.audio_stream->getSampleRate();
+    os->bytes_per_frame = oso.audio_stream->getBytesPerFrame();
+    os->bytes_per_sample = oso.audio_stream->getBytesPerSample();
     sdo->latency_frames = oso.audio_stream->getBufferSizeInFrames();
     if (sdo->latency_frames <= 0)
     {
         sdo->latency_frames = oso.audio_stream->getBufferCapacityInFrames();
     }
 
-    oso.hardware_latency = static_cast<double>(sdo->latency_frames) / outstream->sample_rate;
+    oso.hardware_latency = static_cast<double>(sdo->latency_frames) / os->sample_rate;
     os->backend_data.oboe.volume = 1;
     os->paused = false;
     return 0;
@@ -339,10 +349,10 @@ static int outstream_open_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_p
  * @param pause 传入 true 则表示暂停, false 意味着开始或恢复
  * @return int 成功返回 0，底层调用失败则报错
  */
-static int outstream_pause_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause)
+static int outstream_pause_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, bool pause)
 {
-    SoundIoOutStreamOboe& osca = os->backend_data.oboe;
-    std::unique_ptr<oboe::AudioStream, OboeStreamDeleter>& stream = osca.audio_stream;
+    auto& osca = os->backend_data.oboe;
+    const auto& stream = osca.audio_stream;
     os->paused = false;
     oboe::Result result;
     if (pause)
@@ -409,7 +419,7 @@ static int outstream_pause_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_
  * @param os 操作的目标 stream 对象
  * @return int 成功返回 0
  */
-static int outstream_start_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_start_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     return outstream_pause_oboe(si, os, false);
 }
@@ -426,7 +436,7 @@ static int outstream_start_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_
  * @param frame_count 希望写入的具体 frame 量
  * @return int 返回 0 提供正常响应
  */
-static int outstream_begin_write_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, struct SoundIoChannelArea** out_areas, int* frame_count)
+static int outstream_begin_write_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, struct SoundIoChannelArea** out_areas, int* frame_count)
 {
     std::shared_ptr<SoundIoOutStream> outstream = os;
     SoundIoOutStreamOboe& oso = os->backend_data.oboe;
@@ -452,7 +462,7 @@ static int outstream_begin_write_oboe(std::shared_ptr<SoundIoPrivate> si, std::s
  * @param os 正在操作的 Stream 指针
  * @return int 结束响应总是返回 0
  */
-static int outstream_end_write_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_end_write_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     os->backend_data.oboe.buffer_index += 1;
     return 0;
@@ -467,7 +477,7 @@ static int outstream_end_write_oboe(std::shared_ptr<SoundIoPrivate> si, std::sha
  * @param os 指定清空的 output stream 指针
  * @return int 返回不兼容错误代码
  */
-static int outstream_clear_buffer_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_clear_buffer_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     return SoundIoErrorIncompatibleBackend;
 }
@@ -482,7 +492,7 @@ static int outstream_clear_buffer_oboe(std::shared_ptr<SoundIoPrivate> si, std::
  * @param out_latency 返回出来的总滞后秒数
  * @return int 始终执行成功并返回 0
  */
-static int outstream_get_latency_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, double* out_latency)
+static int outstream_get_latency_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, double* out_latency)
 {
     SoundIoOutStreamOboe& oso = os->backend_data.oboe;
 
@@ -513,7 +523,7 @@ static int outstream_get_latency_oboe(std::shared_ptr<SoundIoPrivate> si, std::s
  * @param volume 需要分配的增益尺度 (float)
  * @return int 返回 0
  */
-static int outstream_set_volume_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, float volume)
+static int outstream_set_volume_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, float volume)
 {
     os->volume = volume;
     return 0;
@@ -529,32 +539,32 @@ static int outstream_set_volume_oboe(std::shared_ptr<SoundIoPrivate> si, std::sh
  * @param is 被实例化的 input stream 句柄
  * @return int 返回错误代码
  */
-static int instream_open_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_open_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
     return SoundIoErrorBackendUnavailable;
 }
 
-static int instream_pause_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, bool pause)
+static int instream_pause_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is, bool pause)
 {
     return SoundIoErrorBackendUnavailable;
 }
 
-static int instream_start_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_start_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
     return SoundIoErrorBackendUnavailable;
 }
 
-static int instream_begin_read_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, struct SoundIoChannelArea** out_areas, int* frame_count)
+static int instream_begin_read_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is, struct SoundIoChannelArea** out_areas, int* frame_count)
 {
     return SoundIoErrorBackendUnavailable;
 }
 
-static int instream_end_read_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_end_read_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
     return SoundIoErrorBackendUnavailable;
 }
 
-static int instream_get_latency_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, double* out_latency)
+static int instream_get_latency_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is, double* out_latency)
 {
     return SoundIoErrorBackendUnavailable;
 }
@@ -566,7 +576,7 @@ static int instream_get_latency_oboe(std::shared_ptr<SoundIoPrivate> si, std::sh
  * @param si 当前的系统状态节点指针
  * @param is 需要被解绑析构处理的对应 input stream 对象
  */
-static void instream_destroy_oboe(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static void instream_destroy_oboe(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
 }
 
@@ -578,17 +588,18 @@ static void instream_destroy_oboe(std::shared_ptr<SoundIoPrivate> si, std::share
  * 
  * @param si 全局顶层的 SoundIoPrivate 指针引用
  */
-static void destroy_oboe(std::shared_ptr<SoundIoPrivate> si)
+static void destroy_oboe(const std::shared_ptr<SoundIoPrivate>& si)
 {
     LOGI(L"destroy oboe");
     SoundIoOboe& sio = si->backend_data->oboe;
 
     if (sio.thread)
     {
-        std::unique_lock lock(sio.scan_devices_mutex->get());
         sio.thread->request_stop();
-        sio.scan_devices_cond->signal(&lock);
-        lock.unlock();
+        {
+            std::unique_lock lock(sio.scan_devices_mutex->get());
+            sio.scan_devices_cond->signal(&lock);
+        }
 
         sio.thread = nullptr;
     }
@@ -598,7 +609,15 @@ static void destroy_oboe(std::shared_ptr<SoundIoPrivate> si)
     sio.scan_devices_cond = nullptr;
     sio.scan_devices_mutex = nullptr;
 
-    outstream_destroy_oboe(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
+    for (const auto& weak_os: si->outstreams | std::ranges::views::values)
+    {
+        if (const auto os = weak_os.lock())
+        {
+            outstream_destroy_oboe(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(os));
+        }
+    }
+
+    si->ClearOutStreams();
 }
 
 /**
@@ -609,7 +628,7 @@ static void destroy_oboe(std::shared_ptr<SoundIoPrivate> si)
  * @param si 全局的 SoundIoPrivate 类型封装
  * @return int 操作状态或者缺乏对应内存的无关联错误代码
  */
-int soundio_oboe_init(std::shared_ptr<SoundIoPrivate> si)
+int soundio_oboe_init(const std::shared_ptr<SoundIoPrivate>& si)
 {
     SoundIoOboe& sio = si->backend_data->oboe;
 
