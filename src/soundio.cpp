@@ -498,11 +498,12 @@ int soundio_outstream_end_write(const std::shared_ptr<SoundIoOutStream>& outstre
 
 static void default_outstream_error_callback(const std::shared_ptr<SoundIoOutStream>& os, int err)
 {
-    LOGE(L"libsoundio: %ls", soundio_strerror(err));
+    LOGE(L"libsoundio error: %ls", soundio_strerror(err));
 }
 
 static void default_underflow_callback(const std::shared_ptr<SoundIoOutStream>& outstream)
 {
+    LOGE(L"libsoundio underflow: %ls", outstream->device->name.c_str());
 }
 
 std::shared_ptr<SoundIoOutStream> soundio_outstream_create(const std::shared_ptr<SoundIoDevice>& device)

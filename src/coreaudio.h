@@ -29,27 +29,12 @@ struct SoundIoDeviceCoreAudio
 
 // SOUNDIO_MAKE_LIST_STRUCT(AudioDeviceID, SoundIoListAudioDeviceID, SOUNDIO_LIST_STATIC)
 
+/// 所有回调的 userdata（refCon）都是对应对象的裸指针：
+///   * 设备级/全局 listener  → SoundIoPrivate*
+///   * 渲染/采集/overload 回调 → 对应 stream 的 SoundIo*StreamPrivate*
+/// 需要 shared_ptr 时统一用 enable_shared_from_this 还原（无额外成员、无生命周期约定）
 struct CoreAudioCallback
 {
-    std::weak_ptr<SoundIoOutStreamPrivate> out_stream;
-    std::weak_ptr<SoundIoInStreamPrivate> in_stream;
-    std::weak_ptr<SoundIoPrivate> si;
-
-    OSStatus devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]);
-
-    OSStatus service_restarted(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]);
-
-    OSStatus outstream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]);
-
-    OSStatus instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]) const;
-
-    OSStatus write_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList* io_data);
-
-    OSStatus read_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames, AudioBufferList* io_data);
-
-
-    void unsubscribe_device_listeners() const;
-
     static OSStatus on_devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data);
 
     static OSStatus on_service_restarted(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data);
@@ -69,7 +54,6 @@ struct CoreAudioCallback
 
 struct SoundIoCoreAudio
 {
-    std::unique_ptr<CoreAudioCallback> callback = std::make_unique<CoreAudioCallback>();
     std::unique_ptr<SoundIoOsMutex> mutex;
     std::unique_ptr<SoundIoOsCond> cond;
     std::unique_ptr<SoundIoOsThread> thread = nullptr;

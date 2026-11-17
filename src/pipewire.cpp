@@ -1910,9 +1910,12 @@ static void destroy_pipewire(const std::shared_ptr<SoundIoPrivate>& si)
     siw.scan_devices_mutex = nullptr;
     siw.mutex = nullptr;
 
-    for (const auto& os: si->outstreams | std::ranges::views::values)
+    for (const auto& weak_os: si->outstreams | std::ranges::views::values)
     {
-        outstream_destroy_pipewire(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(os));
+        if (const auto os = weak_os.lock())
+        {
+            outstream_destroy_pipewire(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(os));
+        }
     }
 
     si->ClearOutStreams();

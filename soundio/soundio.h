@@ -459,7 +459,7 @@ struct SoundIoDevice
 };
 
 /// The size of this struct is not part of the API or ABI.
-struct SoundIoOutStream
+struct SoundIoOutStream : public std::enable_shared_from_this<SoundIoOutStream>
 {
     virtual ~SoundIoOutStream() = default;
 
@@ -599,7 +599,7 @@ struct SoundIoOutStream
 };
 
 /// The size of this struct is not part of the API or ABI.
-struct SoundIoInStream
+struct SoundIoInStream : public std::enable_shared_from_this<SoundIoInStream>
 {
     virtual ~SoundIoInStream() = default;
 
@@ -688,7 +688,7 @@ struct SoundIoInStream
 
 
 /// The size of this struct is not part of the API or ABI.
-struct SoundIo
+struct SoundIo : public std::enable_shared_from_this<SoundIo>
 {
     virtual ~SoundIo() = default;
 
@@ -696,7 +696,10 @@ struct SoundIo
     void* userdata;
 
     std::shared_ptr<SoundIoOutStream> default_out_stream = {};
-    std::unordered_map<std::wstring, std::shared_ptr<SoundIoOutStream>> outstreams = {};
+    /// 已打开的 outstream 注册表，key = device->id。
+    /// 存**弱引用**：生命周期由宿主自己持有（本项目是 RendererState 的 OutStreamContext），
+    /// libsoundio 只用它找回已打开的流（destroy 时能 Stop/Dispose 掉底层 AU）。
+    std::unordered_map<std::wstring, std::weak_ptr<SoundIoOutStream>> outstreams = {};
 
     /// 主声卡已经混好的累计帧数，多声卡时钟偏移补偿的时间轴基准。
     /// 只由 master 的 write_callback 推进。
