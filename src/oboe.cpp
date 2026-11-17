@@ -127,26 +127,28 @@ static void my_flush_events(const std::shared_ptr<SoundIoPrivate>& si, bool wait
     bool change = false;
     bool cb_shutdown = false;
 
-    std::unique_lock lock(sio.mutex->get());
+    {
+        std::unique_lock lock(sio.mutex->get());
 
-    // block until have devices
-    while (wait || (!sio.have_devices_flag.load() && !sio.shutdown_err))
-    {
-        sio.cond->wait(&lock);
-        wait = false;
-    }
+        if (wait)
+        {
+            sio.cond->wait(&lock, [&]
+            {
+                return sio.have_devices_flag.load(std::memory_order_acquire) || sio.shutdown_err;
+            });
+        }
 
-    if (sio.shutdown_err && !sio.emitted_shutdown_cb)
-    {
-        sio.emitted_shutdown_cb = true;
-        cb_shutdown = true;
+        if (sio.shutdown_err && !sio.emitted_shutdown_cb)
+        {
+            sio.emitted_shutdown_cb = true;
+            cb_shutdown = true;
+        }
+        else if (sio.ready_devices_info)
+        {
+            si->safe_devices_info = std::move(sio.ready_devices_info);
+            change = true;
+        }
     }
-    else if (sio.ready_devices_info)
-    {
-        si->safe_devices_info = std::move(sio.ready_devices_info);
-        change = true;
-    }
-    lock.unlock();
 
     if (cb_shutdown)
     {

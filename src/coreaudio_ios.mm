@@ -140,27 +140,28 @@ static void my_flush_events(const std::shared_ptr<SoundIoPrivate>& si, bool wait
     bool change = false;
     bool cb_shutdown = false;
 
-    std::unique_lock lock(sica.mutex->get());
-
-    // block until have devices
-    while (wait || (!sica.have_devices_flag.load() && !sica.shutdown_err))
     {
-        sica.cond->wait(&lock);
-        wait = false;
-    }
+        std::unique_lock lock(sica.mutex->get());
 
-    if (sica.shutdown_err && !sica.emitted_shutdown_cb)
-    {
-        sica.emitted_shutdown_cb = true;
-        cb_shutdown = true;
-    }
-    else if (sica.ready_devices_info)
-    {
-        si->safe_devices_info = std::move(sica.ready_devices_info);
-        change = true;
-    }
+        if (wait)
+        {
+            sica.cond->wait(&lock, [&]
+            {
+                return sica.have_devices_flag.load(std::memory_order_acquire) || sica.shutdown_err;
+            });
+        }
 
-    lock.unlock();
+        if (sica.shutdown_err && !sica.emitted_shutdown_cb)
+        {
+            sica.emitted_shutdown_cb = true;
+            cb_shutdown = true;
+        }
+        else if (sica.ready_devices_info)
+        {
+            si->safe_devices_info = std::move(sica.ready_devices_info);
+            change = true;
+        }
+    }
 
     if (cb_shutdown)
     {
