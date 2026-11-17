@@ -27,8 +27,6 @@ struct CoreAudioInstanceDeleter
 };
 
 
-/// 所有回调的 userdata（refCon）都是对应 stream 的裸指针，
-/// 需要 shared_ptr 时用 enable_shared_from_this 还原（与 coreaudio.cpp 一致）
 struct CoreAudioCallback
 {
 #ifdef __OBJC__

@@ -1079,7 +1079,8 @@ static int set_playback_route(const std::shared_ptr<SoundIoPrivate>& si){
  * 
  * @param si 初始化并设定好的系统级根指针状态
  */
-int soundio_coreaudio_init(const std::shared_ptr<SoundIoPrivate>& si) {
+int soundio_coreaudio_init(const std::shared_ptr<SoundIoPrivate>& si) 
+{
     auto& sica = si->backend_data->coreaudio_ios;
 
     sica.have_devices_flag.store(false);
