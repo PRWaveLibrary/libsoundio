@@ -258,12 +258,12 @@ static int outstream_start_dummy(const std::shared_ptr<SoundIoPrivate>& si, cons
     return 0;
 }
 
-static int outstream_begin_write_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, SoundIoChannelArea** out_areas, const int frame_count)
+static int outstream_begin_write_dummy(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, SoundIoChannelArea** out_areas, int* out_frame_count)
 {
     const auto& outstream = os;
     auto& osd = os->backend_data.dummy;
 
-    if (frame_count > osd.frames_left)
+    if (*out_frame_count > osd.frames_left)
         return SoundIoErrorInvalid;
 
     char* write_ptr = osd.ring_buffer->write_ptr();
@@ -273,7 +273,7 @@ static int outstream_begin_write_dummy(const std::shared_ptr<SoundIoPrivate>& si
         osd.areas[ch].step = outstream->bytes_per_frame;
     }
 
-    osd.write_frame_count = frame_count;
+    osd.write_frame_count = *out_frame_count;
     *out_areas = osd.areas;
     return 0;
 }

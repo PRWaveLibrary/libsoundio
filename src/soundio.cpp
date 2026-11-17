@@ -478,14 +478,14 @@ void soundio_force_device_scan(const std::shared_ptr<SoundIo>& soundio)
     si->force_device_scan(si);
 }
 
-int soundio_outstream_begin_write(const std::shared_ptr<SoundIoOutStream>& outstream, SoundIoChannelArea** areas, const int* frame_count)
+int soundio_outstream_begin_write(const std::shared_ptr<SoundIoOutStream>& outstream, SoundIoChannelArea** areas, int* frame_count)
 {
     const auto& soundio = outstream->device->soundio.lock();
     const auto& si = std::dynamic_pointer_cast<SoundIoPrivate>(soundio);
     const auto& os = std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(outstream);
     if (*frame_count <= 0)
         return SoundIoErrorInvalid;
-    return si->outstream_begin_write(si, os, areas, *frame_count);
+    return si->outstream_begin_write(si, os, areas, frame_count);
 }
 
 int soundio_outstream_end_write(const std::shared_ptr<SoundIoOutStream>& outstream)

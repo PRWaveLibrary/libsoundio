@@ -19,7 +19,7 @@ struct SoundIoPrivate;
 struct SoundIoOutStreamPrivate;
 struct SoundIoInStreamPrivate;
 
-int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si);
+int soundio_coreaudio_init(const std::shared_ptr<SoundIoPrivate>& si);
 
 struct SoundIoDeviceCoreAudio
 {
@@ -28,31 +28,6 @@ struct SoundIoDeviceCoreAudio
 };
 
 // SOUNDIO_MAKE_LIST_STRUCT(AudioDeviceID, SoundIoListAudioDeviceID, SOUNDIO_LIST_STATIC)
-
-struct CoreAudioCallback;
-
-struct SoundIoCoreAudio
-{
-    std::unique_ptr<CoreAudioCallback> callback = std::make_unique<CoreAudioCallback>();
-    std::unique_ptr<SoundIoOsMutex> mutex;
-    std::unique_ptr<SoundIoOsCond> cond;
-    std::unique_ptr<SoundIoOsThread> thread = nullptr;
-
-    // this one is ready to be read with flush_events. protected by mutex
-    std::unique_ptr<struct SoundIoDevicesInfo> ready_devices_info;
-    std::atomic<bool> have_devices_flag{false};
-
-    std::unique_ptr<SoundIoOsCond> scan_devices_cond;
-    std::unique_ptr<SoundIoOsMutex> scan_devices_mutex;
-
-    std::vector<AudioDeviceID> registered_listeners;
-
-    std::atomic<bool> device_scan_queued{false};
-    std::atomic<bool> service_restarted{false};
-    int shutdown_err;
-    bool emitted_shutdown_cb;
-};
-
 
 struct CoreAudioCallback
 {
@@ -89,9 +64,30 @@ struct CoreAudioCallback
     static OSStatus read_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
                                   AudioBufferList* io_data);
 
-    static void unsubscribe_device_listeners(std::shared_ptr<SoundIoPrivate> si);
+    static void unsubscribe_device_listeners(const std::shared_ptr<SoundIoPrivate>& si);
 };
 
+struct SoundIoCoreAudio
+{
+    std::unique_ptr<CoreAudioCallback> callback = std::make_unique<CoreAudioCallback>();
+    std::unique_ptr<SoundIoOsMutex> mutex;
+    std::unique_ptr<SoundIoOsCond> cond;
+    std::unique_ptr<SoundIoOsThread> thread = nullptr;
+
+    // this one is ready to be read with flush_events. protected by mutex
+    std::unique_ptr<struct SoundIoDevicesInfo> ready_devices_info;
+    std::atomic_bool have_devices_flag{false};
+
+    std::unique_ptr<SoundIoOsCond> scan_devices_cond;
+    std::unique_ptr<SoundIoOsMutex> scan_devices_mutex;
+
+    std::vector<AudioDeviceID> registered_listeners;
+
+    std::atomic_bool device_scan_queued{false};
+    std::atomic_bool service_restarted{false};
+    std::atomic_int32_t shutdown_err;
+    std::atomic_bool emitted_shutdown_cb;
+};
 
 struct SoundIoOutStreamCoreAudio
 {
@@ -108,6 +104,7 @@ struct SoundIoOutStreamCoreAudio
 struct SoundIoInStreamCoreAudio
 {
     AudioComponentInstance instance;
+    //CoreAudioy
     std::unique_ptr<AudioBufferList, decltype(&std::free)> buffer_list{nullptr, std::free};
     int frames_left;
     double hardware_latency;

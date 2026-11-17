@@ -1094,7 +1094,7 @@ SOUNDIO_EXPORT int soundio_outstream_start(const std::shared_ptr<SoundIoOutStrea
 /// * #SoundIoErrorIncompatibleDevice - in rare cases it might just now
 ///   be discovered that the device uses non-byte-aligned access, in which
 ///   case this error code is returned.
-SOUNDIO_EXPORT int soundio_outstream_begin_write(const std::shared_ptr<SoundIoOutStream>& outstream, struct SoundIoChannelArea** areas, const int* frame_count);
+SOUNDIO_EXPORT int soundio_outstream_begin_write(const std::shared_ptr<SoundIoOutStream>& outstream, struct SoundIoChannelArea** areas, int* frame_count);
 
 /// Commits the write that you began with ::soundio_outstream_begin_write.
 /// You must call this function only from the SoundIoOutStream::write_callback thread context.

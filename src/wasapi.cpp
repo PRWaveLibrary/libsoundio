@@ -2200,15 +2200,15 @@ static int outstream_start_wasapi(const std::shared_ptr<SoundIoPrivate>& si, con
  * @param si SoundIoPrivate 的 shared_ptr
  * @param os SoundIoOutStreamPrivate 的 shared_ptr
  * @param out_areas 返回被成功映射的音频数据区域通道 layout
- * @param frame_count 希望写入的 frame 数量
+ * @param out_frame_count 希望写入的 frame 数量
  * @return int 成功返回 0
  */
-static int outstream_begin_write_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, SoundIoChannelArea** out_areas, const int frame_count)
+static int outstream_begin_write_wasapi(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, SoundIoChannelArea** out_areas, int* out_frame_count)
 {
     auto& osw = os->backend_data.wasapi;
     HRESULT hr;
 
-    osw.write_frame_count = frame_count;
+    osw.write_frame_count = *out_frame_count;
 
 
     char* data;

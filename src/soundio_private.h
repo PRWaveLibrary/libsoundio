@@ -210,7 +210,7 @@ struct SoundIoPrivate : public SoundIo
 
     int (*outstream_start)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&);
 
-    int (*outstream_begin_write)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&, SoundIoChannelArea** out_areas, int frame_count);
+    int (*outstream_begin_write)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&, SoundIoChannelArea** out_areas, int* out_frame_count);
 
     int (*outstream_end_write)(const std::shared_ptr<SoundIoPrivate>&, const std::shared_ptr<SoundIoOutStreamPrivate>&);
 

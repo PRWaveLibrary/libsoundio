@@ -1469,7 +1469,7 @@ static int outstream_start_pipewire(const std::shared_ptr<SoundIoPrivate>& si, c
     return SoundIoErrorNone;
 }
 
-static int outstream_begin_write_pipewire(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, SoundIoChannelArea** out_areas, const int frame_count)
+static int outstream_begin_write_pipewire(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, SoundIoChannelArea** out_areas, int* out_frame_count)
 {
     auto& osw = os->backend_data.pipe_wire;
     auto* impl = osw.stream;
@@ -1480,7 +1480,7 @@ static int outstream_begin_write_pipewire(const std::shared_ptr<SoundIoPrivate>&
 
     const int bytes_per_frame = impl->bytes_per_frame;
     const int capacity_frames = static_cast<std::int32_t>(impl->ring_buffer->capacity()) / bytes_per_frame;
-    int frames = frame_count;
+    int frames = *out_frame_count;
     int free_frames = static_cast<std::int32_t>(impl->ring_buffer->free_count()) / bytes_per_frame;
     if (frames > free_frames)
     {
@@ -1498,6 +1498,7 @@ static int outstream_begin_write_pipewire(const std::shared_ptr<SoundIoPrivate>&
         osw.areas[ch].step = bytes_per_frame;
     }
     *out_areas = osw.areas;
+    *out_frame_count = frames;
     return SoundIoErrorNone;
 }
 

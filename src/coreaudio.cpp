@@ -9,13 +9,14 @@
 #include "soundio_private.h"
 
 #include <cassert>
+#include <ranges>
+
 #include "util.h"
+#include "util/logger.hpp"
+#include "util/malloc_util.h"
 
-static const int OUTPUT_ELEMENT = 0;
-static const int INPUT_ELEMENT = 1;
-
-#define ERROR_LOG(msg) \
-printf("%s:%d: [ERROR] %s\n", __FILE__, __LINE__, msg)
+static constexpr int OUTPUT_ELEMENT = 0;
+static constexpr int INPUT_ELEMENT = 1;
 
 static AudioObjectPropertyAddress device_listen_props[] = {
         {kAudioDevicePropertyDeviceHasChanged, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain},
@@ -46,10 +47,10 @@ static enum SoundIoDeviceAim aims[] =
  * 
  * 当设备列表发生更改时触发。
  */
-OSStatus CoreAudioCallback::devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[])
+OSStatus CoreAudioCallback::devices_changed(const AudioObjectID in_object_id, std::uint32_t in_number_addresses, const AudioObjectPropertyAddress in_addresses[]) // NOLINT
 {
     LOGI(L"on devices changed %u", in_object_id);
-    std::shared_ptr<SoundIoPrivate> s = si.lock();
+    const auto s = si.lock();
     if (s == nullptr)
     {
         return noErr;
@@ -64,14 +65,14 @@ OSStatus CoreAudioCallback::devices_changed(AudioObjectID in_object_id, UInt32 i
  * 
  * 通常在系统层级 daemon crash 并自动拉起时被调用。
  */
-OSStatus CoreAudioCallback::service_restarted(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[])
+OSStatus CoreAudioCallback::service_restarted(const AudioObjectID in_object_id, std::uint32_t in_number_addresses, const AudioObjectPropertyAddress in_addresses[]) // NOLINT
 {
-    std::shared_ptr<SoundIoPrivate> s = si.lock();
+    const auto s = si.lock();
     if (s == nullptr)
     {
         return noErr;
     }
-    SoundIoCoreAudio& sica = s->backend_data->coreaudio;
+    auto& sica = s->backend_data->coreaudio;
 
     sica.service_restarted.store(true);
     sica.scan_devices_cond->signal(nullptr);
@@ -82,9 +83,9 @@ OSStatus CoreAudioCallback::service_restarted(AudioObjectID in_object_id, UInt32
 /**
  * @brief 处理由于 hardware 负担过重引起的 stream 超载信息回调
  */
-OSStatus CoreAudioCallback::outstream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[])
+OSStatus CoreAudioCallback::outstream_device_overload(const AudioObjectID in_object_id, std::uint32_t in_number_addresses, const AudioObjectPropertyAddress in_addresses[]) // NOLINT
 {
-    std::shared_ptr<SoundIoOutStreamPrivate> os = out_stream.lock();
+    const auto os = out_stream.lock();
     if (os == nullptr)
     {
         return noErr;
@@ -98,22 +99,22 @@ OSStatus CoreAudioCallback::outstream_device_overload(AudioObjectID in_object_id
  */
 void CoreAudioCallback::unsubscribe_device_listeners() const
 {
-    std::shared_ptr<SoundIoPrivate> s = si.lock();
+    const auto s = si.lock();
     if (s == nullptr)
     {
         return;
     }
 
-    SoundIoCoreAudio& sica = s->backend_data->coreaudio;
+    auto& sica = s->backend_data->coreaudio;
 
     for (AudioDeviceID device_id: sica.registered_listeners)
     {
         for (auto& device_listen_prop: device_listen_props)
         {
-            OSStatus os_err = AudioObjectRemovePropertyListener(device_id, &device_listen_prop, on_devices_changed, s->backend_data->coreaudio.callback.get());
+            const OSStatus os_err = AudioObjectRemovePropertyListener(device_id, &device_listen_prop, on_devices_changed, s->backend_data->coreaudio.callback.get());
             if (os_err != noErr)
             {
-                ERROR_LOG(std::to_string(os_err).c_str());
+                LOGE(L"unsubscribe_device_listeners err: %d", os_err);
             }
         }
     }
@@ -123,55 +124,52 @@ void CoreAudioCallback::unsubscribe_device_listeners() const
 /**
  * @brief 将基于 C 的回调传递给对应的 C++ instance devices_changed 方法处理
  */
-OSStatus CoreAudioCallback::on_devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data)
+OSStatus CoreAudioCallback::on_devices_changed(const AudioObjectID in_object_id, const std::uint32_t in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data) // NOLINT
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
+    auto* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->devices_changed(in_object_id, in_number_addresses, in_addresses);
 }
 
 /**
  * @brief 将基于 C 的回调传递给对应的 C++ instance service_restarted 处理
  */
-OSStatus CoreAudioCallback::on_service_restarted(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data)
+OSStatus CoreAudioCallback::on_service_restarted(const AudioObjectID in_object_id, const std::uint32_t in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data) // NOLINT
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
+    auto* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->service_restarted(in_object_id, in_number_addresses, in_addresses);
 }
 
 /**
  * @brief 触发 C++ 层级的 outstream_device_overload 调用处理
  */
-OSStatus CoreAudioCallback::on_outstream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[],
-                                                         void* in_client_data)
+OSStatus CoreAudioCallback::on_outstream_device_overload(const AudioObjectID in_object_id, const std::uint32_t in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data) // NOLINT
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
+    auto* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->outstream_device_overload(in_object_id, in_number_addresses, in_addresses);
 }
 
 /**
  * @brief 触发实例化对象本身的 instream_device_overload
  */
-OSStatus CoreAudioCallback::on_instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[],
-                                                        void* in_client_data)
+OSStatus CoreAudioCallback::on_instream_device_overload(const AudioObjectID in_object_id, const std::uint32_t in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data) // NOLINT
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(in_client_data);
+    auto* callback = static_cast<CoreAudioCallback*>(in_client_data);
     return callback->instream_device_overload(in_object_id, in_number_addresses, in_addresses);
 }
 
 /**
  * @brief CoreAudio AudioUnit 的渲染钩子，用于转发布局请求到 write_callback_ca
  */
-OSStatus CoreAudioCallback::write_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number,
-                                           UInt32 in_number_frames, AudioBufferList* io_data)
+OSStatus CoreAudioCallback::write_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, const std::uint32_t in_bus_number, const std::uint32_t in_number_frames, AudioBufferList* io_data) // NOLINT
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(userdata);
+    auto* callback = static_cast<CoreAudioCallback*>(userdata);
     return callback->write_callback_ca(io_action_flags, in_time_stamp, in_bus_number, in_number_frames, io_data);
 }
 
 /**
  * @brief 解除挂载的 listeners
  */
-void CoreAudioCallback::unsubscribe_device_listeners(std::shared_ptr<SoundIoPrivate> si)
+void CoreAudioCallback::unsubscribe_device_listeners(const std::shared_ptr<SoundIoPrivate>& si)
 {
     si->backend_data->coreaudio.callback->unsubscribe_device_listeners();
 }
@@ -364,7 +362,7 @@ static enum SoundIoChannelId from_channel_descr(const AudioChannelDescription* d
 // See https://developer.apple.com/library/mac/documentation/MusicAudio/Reference/CoreAudioDataTypesRef/#//apple_ref/doc/constant_group/Audio_Channel_Layout_Tags
 // Possible Errors:
 // * SoundIoErrorIncompatibleDevice
-// This does not handle all the possible layout enum values and it does not
+// This does not handle all the possible layout enum values, and it does not
 // handle channel bitmaps.
 static int from_coreaudio_layout(const AudioChannelLayout* ca_layout, struct SoundIoChannelLayout* layout)
 {
@@ -372,7 +370,7 @@ static int from_coreaudio_layout(const AudioChannelLayout* ca_layout, struct Sou
     {
         case kAudioChannelLayoutTag_UseChannelDescriptions:
         {
-            layout->channel_count = soundio_int_min(SOUNDIO_MAX_CHANNELS, static_cast<int32_t>(ca_layout->mNumberChannelDescriptions));
+            layout->channel_count = std::min(SOUNDIO_MAX_CHANNELS, static_cast<int32_t>(ca_layout->mNumberChannelDescriptions));
             for (int i = 0; i < layout->channel_count; i += 1)
             {
                 layout->channels[i] = from_channel_descr(&ca_layout->mChannelDescriptions[i]);
@@ -504,7 +502,7 @@ struct RefreshDevices
 {
     std::shared_ptr<SoundIoPrivate> si;
     std::unique_ptr<SoundIoDevicesInfo> devices_info;
-    UInt32 devices_size;
+    std::uint32_t devices_size;
     std::vector<AudioObjectID> device_ids;
     std::wstring device_name;
     std::shared_ptr<SoundIoDevice> device;
@@ -527,15 +525,15 @@ static void deinit_refresh_devices(struct RefreshDevices* rd)
     rd->device_uid.clear();
 }
 
+
 /**
  * @brief 全局刷新设备状态，与 CoreAudio framework 进行同步和轮询
  */
-static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
+static int refresh_devices(const std::shared_ptr<SoundIoPrivate>& si)
 {
-    std::shared_ptr<SoundIo> soundio = si;
-    struct SoundIoCoreAudio& sica = si->backend_data->coreaudio;
+    auto& sica = si->backend_data->coreaudio;
 
-    UInt32 io_size = 0;
+    std::uint32_t io_size = 0;
     OSStatus os_err = 0;
     int err = 0;
 
@@ -546,8 +544,8 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
     rd.devices_info = std::make_unique<SoundIoDevicesInfo>();
 
-    AudioObjectPropertyAddress prop_address = {kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
-    os_err = AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &prop_address, 0, nullptr, &io_size);
+    AudioObjectPropertyAddress devicesProp = {kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+    os_err = AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &devicesProp, 0, nullptr, &io_size);
     if (os_err != noErr)
     {
         deinit_refresh_devices(&rd);
@@ -557,35 +555,30 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
     AudioObjectID default_input_id;
     AudioObjectID default_output_id;
 
-    UInt32 device_count = io_size / sizeof(AudioObjectID);
+    std::uint32_t device_count = io_size / sizeof(AudioObjectID);
 
     rd.device_ids.clear();
     // get default device
     if (device_count > 0)
     {
         rd.devices_size = io_size;
-        auto* system_devices = new AudioObjectID[device_count];
-        os_err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &prop_address, 0, nullptr, &io_size, system_devices);
+        auto system_devices = std::make_unique<AudioObjectID[]>(device_count);
+        os_err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &devicesProp, 0, nullptr, &io_size, system_devices.get());
         if (os_err != noErr)
         {
-            delete[] system_devices;
-            system_devices = nullptr;
             deinit_refresh_devices(&rd);
             return SoundIoErrorOpeningDevice;
         }
 
-        for (UInt32 i = 0; i < device_count; i += 1)
+        for (std::uint32_t i = 0; i < device_count; i += 1)
         {
             rd.device_ids.push_back(system_devices[i]);
         }
 
-
-        delete[] system_devices;
-        system_devices = nullptr;
-
         io_size = sizeof(AudioObjectID);
-        prop_address.mSelector = kAudioHardwarePropertyDefaultInputDevice;
-        os_err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &prop_address, 0, nullptr, &io_size, &default_input_id);
+
+        AudioObjectPropertyAddress defaultInputProp = {kAudioHardwarePropertyDefaultInputDevice, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+        os_err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &defaultInputProp, 0, nullptr, &io_size, &default_input_id);
         if (os_err != noErr)
         {
             deinit_refresh_devices(&rd);
@@ -593,8 +586,9 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         }
 
         io_size = sizeof(AudioObjectID);
-        prop_address.mSelector = kAudioHardwarePropertyDefaultOutputDevice;
-        os_err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &prop_address, 0, nullptr, &io_size, &default_output_id);
+        AudioObjectPropertyAddress defaultOutputProp = {kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+        os_err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &defaultOutputProp, 0, nullptr, &io_size, &default_output_id);
+
         if (os_err != noErr)
         {
             deinit_refresh_devices(&rd);
@@ -617,13 +611,11 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         }
 
         sica.registered_listeners.push_back(device_id);
-        prop_address.mSelector = kAudioObjectPropertyName;
-        prop_address.mScope = kAudioObjectPropertyScopeGlobal;
-        prop_address.mElement = kAudioObjectPropertyElementMain;
         io_size = sizeof(CFStringRef);
         CFStringRef buf;
+        AudioObjectPropertyAddress getNameProp = {kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
 
-        os_err = AudioObjectGetPropertyData(device_id, &prop_address, 0, nullptr, &io_size, &buf);
+        os_err = AudioObjectGetPropertyData(device_id, &getNameProp, 0, nullptr, &io_size, &buf);
         if (os_err != noErr)
         {
             deinit_refresh_devices(&rd);
@@ -634,11 +626,9 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
         CFRelease(buf);
         buf = nullptr;
 
-        prop_address.mSelector = kAudioDevicePropertyDeviceUID;
-        prop_address.mScope = kAudioObjectPropertyScopeGlobal;
-        prop_address.mElement = kAudioObjectPropertyElementMain;
         io_size = sizeof(CFStringRef);
-        os_err = AudioObjectGetPropertyData(device_id, &prop_address, 0, nullptr, &io_size, &buf);
+        AudioObjectPropertyAddress getUidProp = {kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+        os_err = AudioObjectGetPropertyData(device_id, &getUidProp, 0, nullptr, &io_size, &buf);
         if (os_err != noErr)
         {
             deinit_refresh_devices(&rd);
@@ -654,22 +644,18 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             SoundIoDeviceAim aim = aims[aim_i];
 
             io_size = 0;
-            prop_address.mSelector = kAudioDevicePropertyStreamConfiguration;
-            prop_address.mScope = aim_to_scope(aim);
-            prop_address.mElement = kAudioObjectPropertyElementMain;
-            os_err = AudioObjectGetPropertyDataSize(device_id, &prop_address, 0, nullptr, &io_size);
+            AudioObjectPropertyAddress configProp = {kAudioDevicePropertyStreamConfiguration, static_cast<AudioObjectPropertyScope>(aim_to_scope(aim)), kAudioObjectPropertyElementMain};
+            os_err = AudioObjectGetPropertyDataSize(device_id, &configProp, 0, nullptr, &io_size);
             if (os_err != noErr)
             {
                 deinit_refresh_devices(&rd);
                 return SoundIoErrorOpeningDevice;
             }
 
-            std::unique_ptr<AudioBufferList, decltype(&std::free)> buffer_list = std::unique_ptr<AudioBufferList, decltype(&std::free)>(
-                    static_cast<AudioBufferList*>(malloc(io_size)), std::free);
-            os_err = AudioObjectGetPropertyData(device_id, &prop_address, 0, nullptr, &io_size, buffer_list.get());
+            auto buffer_list = std::unique_ptr<AudioBufferList, decltype(&std::free)>(static_cast<AudioBufferList*>(soundio_malloc(io_size)), std::free);
+            os_err = AudioObjectGetPropertyData(device_id, &configProp, 0, nullptr, &io_size, buffer_list.get());
             if (os_err != noErr)
             {
-                buffer_list = nullptr;
                 deinit_refresh_devices(&rd);
                 return SoundIoErrorOpeningDevice;
             }
@@ -680,41 +666,36 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
                 channel_count += static_cast<int32_t>(buffer_list->mBuffers[i].mNumberChannels);
             }
 
-            buffer_list = nullptr;
-
             if (channel_count <= 0)
             {
                 continue;
             }
 
-            std::shared_ptr<SoundIoDevicePrivate> dev = std::make_shared<SoundIoDevicePrivate>();
-            std::shared_ptr<SoundIoDeviceCoreAudio> dca = dev->backend_data.coreaudio;
+            const auto dev = std::make_shared<SoundIoDevicePrivate>();
+            const auto dca = dev->backend_data.coreaudio;
 
             dca->device_id = device_id;
             assert(!rd.device);
             rd.device = dev;
-            rd.device->soundio = soundio;
+            rd.device->soundio = si;
             rd.device->is_raw = false;
             rd.device->aim = aim;
             rd.device->id = rd.device_uid;
             rd.device->name = rd.device_name;
 
-            prop_address.mSelector = kAudioDevicePropertyPreferredChannelLayout;
-            prop_address.mScope = aim_to_scope(aim);
-            prop_address.mElement = kAudioObjectPropertyElementMain;
-
-            os_err = AudioObjectGetPropertyDataSize(device_id, &prop_address, 0, nullptr, &io_size);
+            AudioObjectPropertyAddress channel_prop = {kAudioDevicePropertyPreferredChannelLayout, static_cast<AudioObjectPropertyScope>(aim_to_scope(aim)), kAudioObjectPropertyElementMain};
+            os_err = AudioObjectGetPropertyDataSize(device_id, &channel_prop, 0, nullptr, &io_size);
 
             if (os_err == noErr)
             {
-                std::unique_ptr<AudioChannelLayout, decltype(&std::free)> layout_buf(static_cast<AudioChannelLayout*>(std::malloc(io_size)), std::free);
+                auto layout_buf = std::unique_ptr<AudioChannelLayout, decltype(&std::free)>(static_cast<AudioChannelLayout*>(soundio_malloc(io_size)), std::free);
 
                 if (!layout_buf)
                 {
                     deinit_refresh_devices(&rd);
                     return SoundIoErrorNoMem;
                 }
-                os_err = AudioObjectGetPropertyData(device_id, &prop_address, 0, nullptr, &io_size, layout_buf.get());
+                os_err = AudioObjectGetPropertyData(device_id, &channel_prop, 0, nullptr, &io_size, layout_buf.get());
                 if (os_err != noErr)
                 {
                     deinit_refresh_devices(&rd);
@@ -730,7 +711,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
             if (all_channels_invalid(&rd.device->current_layout))
             {
-                const SoundIoChannelLayout* guessed_layout = soundio_channel_layout_get_default(channel_count);
+                const auto* guessed_layout = soundio_channel_layout_get_default(channel_count);
                 if (guessed_layout)
                 {
                     rd.device->current_layout = *guessed_layout;
@@ -744,12 +725,11 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             rd.device->formats.push_back(SoundIoFormatFloat32LE);
             rd.device->formats.push_back(SoundIoFormatFloat64LE);
 
-            prop_address.mSelector = kAudioDevicePropertyNominalSampleRate;
-            prop_address.mScope = aim_to_scope(aim);
-            prop_address.mElement = kAudioObjectPropertyElementMain;
+
+            AudioObjectPropertyAddress sample_prop = {kAudioDevicePropertyNominalSampleRate, static_cast<AudioObjectPropertyScope>(aim_to_scope(aim)), kAudioObjectPropertyElementMain};
             io_size = sizeof(double);
             double value;
-            os_err = AudioObjectGetPropertyData(device_id, &prop_address, 0, nullptr, &io_size, &value);
+            os_err = AudioObjectGetPropertyData(device_id, &sample_prop, 0, nullptr, &io_size, &value);
 
             if (os_err != noErr)
             {
@@ -770,15 +750,13 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             // nominal sample rate, AudioUnitRender returns an error.
             if (aim == SoundIoDeviceAimInput)
             {
-                SoundIoSampleRateRange range = SoundIoSampleRateRange{rd.device->sample_rate_current, rd.device->sample_rate_current};
+                auto range = SoundIoSampleRateRange{rd.device->sample_rate_current, rd.device->sample_rate_current};
                 rd.device->sample_rates.push_back(range);
             }
             else
             {
-                prop_address.mSelector = kAudioDevicePropertyAvailableNominalSampleRates;
-                prop_address.mScope = aim_to_scope(aim);
-                prop_address.mElement = kAudioObjectPropertyElementMain;
-                os_err = AudioObjectGetPropertyDataSize(device_id, &prop_address, 0, nullptr, &io_size);
+                AudioObjectPropertyAddress sampleRatesProp = {kAudioDevicePropertyAvailableNominalSampleRates, static_cast<AudioObjectPropertyScope>(aim_to_scope(aim)), kAudioObjectPropertyElementMain};
+                os_err = AudioObjectGetPropertyDataSize(device_id, &sampleRatesProp, 0, nullptr, &io_size);
 
                 if (os_err != noErr)
                 {
@@ -786,17 +764,16 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
                     return SoundIoErrorOpeningDevice;
                 }
 
-                UInt32 avr_array_len = io_size / sizeof(AudioValueRange);
-                std::unique_ptr<AudioValueRange[], decltype(&std::free)> avr_buf = std::unique_ptr<AudioValueRange[], decltype(&std::free)>(
-                        static_cast<AudioValueRange*>(std::malloc(io_size)), std::free);
+                std::uint32_t avr_array_len = io_size / sizeof(AudioValueRange);
+                auto avr_buf = std::make_unique<AudioValueRange[]>(avr_array_len);
 
                 if (!avr_buf)
                 {
                     deinit_refresh_devices(&rd);
                     return SoundIoErrorNoMem;
                 }
-
-                if ((os_err = AudioObjectGetPropertyData(device_id, &prop_address, 0, nullptr, &io_size, avr_buf.get())))
+                os_err = AudioObjectGetPropertyData(device_id, &sampleRatesProp, 0, nullptr, &io_size, avr_buf.get());
+                if (os_err != noErr)
                 {
                     deinit_refresh_devices(&rd);
                     return SoundIoErrorOpeningDevice;
@@ -808,12 +785,11 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
                 }
             }
 
-            prop_address.mSelector = kAudioDevicePropertyBufferFrameSize;
-            prop_address.mScope = aim_to_scope(aim);
-            prop_address.mElement = kAudioObjectPropertyElementMain;
-            io_size = sizeof(UInt32);
-            UInt32 buffer_frame_size;
-            if ((os_err = AudioObjectGetPropertyData(device_id, &prop_address, 0, nullptr, &io_size, &buffer_frame_size)))
+            AudioObjectPropertyAddress frameSizeProp = {kAudioDevicePropertyBufferFrameSize, static_cast<AudioObjectPropertyScope>(aim_to_scope(aim)), kAudioObjectPropertyElementMain};
+            io_size = sizeof(std::uint32_t);
+            std::uint32_t buffer_frame_size;
+            os_err = AudioObjectGetPropertyData(device_id, &frameSizeProp, 0, nullptr, &io_size, &buffer_frame_size);
+            if (os_err != noErr)
             {
                 deinit_refresh_devices(&rd);
                 return SoundIoErrorOpeningDevice;
@@ -821,13 +797,10 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
             rd.device->software_latency_current = static_cast<double>(buffer_frame_size) / rd.device->sample_rate_current;
 
-            prop_address.mSelector = kAudioDevicePropertyBufferFrameSizeRange;
-            prop_address.mScope = aim_to_scope(aim);
-            prop_address.mElement = kAudioObjectPropertyElementMain;
-
+            AudioObjectPropertyAddress frameSizeRangeProp = {kAudioDevicePropertyBufferFrameSizeRange, static_cast<AudioObjectPropertyScope>(aim_to_scope(aim)), kAudioObjectPropertyElementMain};
             io_size = sizeof(AudioValueRange);
             AudioValueRange avr;
-            os_err = AudioObjectGetPropertyData(device_id, &prop_address, 0, nullptr, &io_size, &avr);
+            os_err = AudioObjectGetPropertyData(device_id, &frameSizeRangeProp, 0, nullptr, &io_size, &avr);
             if (os_err != noErr)
             {
                 deinit_refresh_devices(&rd);
@@ -837,11 +810,10 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
             rd.device->software_latency_min = avr.mMinimum / rd.device->sample_rate_current;
             rd.device->software_latency_max = avr.mMaximum / rd.device->sample_rate_current;
 
-            prop_address.mSelector = kAudioDevicePropertyLatency;
-            prop_address.mScope = aim_to_scope(aim);
-            prop_address.mElement = kAudioObjectPropertyElementMain;
-            io_size = sizeof(UInt32);
-            if ((os_err = AudioObjectGetPropertyData(device_id, &prop_address, 0, nullptr, &io_size, &dca->latency_frames)))
+            AudioObjectPropertyAddress latencyProp = {kAudioDevicePropertyLatency, static_cast<AudioObjectPropertyScope>(aim_to_scope(aim)), kAudioObjectPropertyElementMain};
+            io_size = sizeof(std::uint32_t);
+            os_err = AudioObjectGetPropertyData(device_id, &latencyProp, 0, nullptr, &io_size, &dca->latency_frames);
+            if (os_err != noErr)
             {
                 deinit_refresh_devices(&rd);
                 return SoundIoErrorOpeningDevice;
@@ -854,6 +826,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
                 if (device_id == default_output_id)
                 {
                     rd.devices_info->default_output_index = static_cast<int>(device_list->size());
+                    rd.device->is_default = true;
                 }
             }
             else
@@ -863,6 +836,7 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
                 if (device_id == default_input_id)
                 {
                     rd.devices_info->default_input_index = static_cast<int>(device_list->size());
+                    rd.device->is_default = true;
                 }
             }
 
@@ -873,12 +847,14 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 
     rd.ok = true;
 
-    std::unique_lock lock(sica.mutex->get());
 
-    sica.ready_devices_info = std::move(rd.devices_info);
-    sica.have_devices_flag.store(true);
-    sica.cond->signal(&lock);
-    si->on_events_signal(si);
+    {
+        std::unique_lock lock(sica.mutex->get());
+        sica.ready_devices_info = std::move(rd.devices_info);
+        sica.cond->signal(&lock);
+        sica.have_devices_flag.store(true, std::memory_order_release);
+        si->on_events_signal(si);
+    }
 
     deinit_refresh_devices(&rd);
 
@@ -888,12 +864,12 @@ static int refresh_devices(std::shared_ptr<SoundIoPrivate> si)
 /**
  * @brief 响应故障进而卸下后端设备并通告主程序断开消息
  */
-static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
+static void shutdown_backend(const std::shared_ptr<SoundIoPrivate>& si, int err)
 {
-    SoundIoCoreAudio& sica = si->backend_data->coreaudio;
+    auto& sica = si->backend_data->coreaudio;
     std::unique_lock lock(sica.mutex->get());
 
-    sica.shutdown_err = err;
+    sica.shutdown_err.store(err, std::memory_order_release);
     sica.cond->signal(&lock);
     si->on_events_signal(si);
 }
@@ -901,38 +877,38 @@ static void shutdown_backend(std::shared_ptr<SoundIoPrivate> si, int err)
 /**
  * @brief 拉取在 device 操作上抛出的 event 队列，处理 disconnect 及 devices_change signals
  */
-static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
+static void my_flush_events(const std::shared_ptr<SoundIoPrivate>& si, bool wait)
 {
-    SoundIoCoreAudio& sica = si->backend_data->coreaudio;
+    auto& sica = si->backend_data->coreaudio;
 
     bool change = false;
     bool cb_shutdown = false;
 
-    std::unique_lock lock(sica.mutex->get());
-
-    // block until have devices
-    while (wait || (!sica.have_devices_flag.load() && !sica.shutdown_err))
     {
-        sica.cond->wait(&lock);
-        wait = false;
-    }
+        std::unique_lock lock(sica.mutex->get());
+        if (wait)
+        {
+            sica.cond->wait(&lock, [&]
+            {
+                return sica.have_devices_flag.load(std::memory_order_acquire) || sica.shutdown_err.load(std::memory_order_acquire);
+            });
+        }
 
-    if (sica.shutdown_err && !sica.emitted_shutdown_cb)
-    {
-        sica.emitted_shutdown_cb = true;
-        cb_shutdown = true;
+        if (sica.shutdown_err.load(std::memory_order_acquire) && !sica.emitted_shutdown_cb.load(std::memory_order_acquire))
+        {
+            sica.emitted_shutdown_cb.store(true, std::memory_order_release);
+            cb_shutdown = true;
+        }
+        else if (sica.ready_devices_info)
+        {
+            si->safe_devices_info = std::move(sica.ready_devices_info);
+            change = true;
+        }
     }
-    else if (sica.ready_devices_info)
-    {
-        si->safe_devices_info = std::move(sica.ready_devices_info);
-        change = true;
-    }
-
-    lock.unlock();
 
     if (cb_shutdown)
     {
-        si->on_backend_disconnect(si, sica.shutdown_err);
+        si->on_backend_disconnect(si, sica.shutdown_err.load(std::memory_order_acquire));
     }
     else if (change)
     {
@@ -943,7 +919,7 @@ static void my_flush_events(std::shared_ptr<SoundIoPrivate>& si, bool wait)
 /**
  * @brief 执行非阻塞刷新 CA events 接口
  */
-static void flush_events_ca(std::shared_ptr<SoundIoPrivate> si)
+static void flush_events_ca(const std::shared_ptr<SoundIoPrivate>& si)
 {
     my_flush_events(si, false);
 }
@@ -951,7 +927,7 @@ static void flush_events_ca(std::shared_ptr<SoundIoPrivate> si)
 /**
  * @brief 执行强阻塞挂起用于截获 CA events
  */
-static void wait_events_ca(std::shared_ptr<SoundIoPrivate> si)
+static void wait_events_ca(const std::shared_ptr<SoundIoPrivate>& si)
 {
     my_flush_events(si, true);
 }
@@ -959,9 +935,9 @@ static void wait_events_ca(std::shared_ptr<SoundIoPrivate> si)
 /**
  * @brief 主动给 thread 派发结束阻塞挂起的 cond signal 
  */
-static void wakeup_ca(std::shared_ptr<SoundIoPrivate> si)
+static void wakeup_ca(const std::shared_ptr<SoundIoPrivate>& si)
 {
-    SoundIoCoreAudio& sica = si->backend_data->coreaudio;
+    auto& sica = si->backend_data->coreaudio;
     std::unique_lock lock(sica.mutex->get());
     sica.cond->signal(&lock);
 }
@@ -969,11 +945,11 @@ static void wakeup_ca(std::shared_ptr<SoundIoPrivate> si)
 /**
  * @brief 强制触发 background 开始检索和处理设备的列表改动
  */
-static void force_device_scan_ca(std::shared_ptr<SoundIoPrivate> si)
+static void force_device_scan_ca(const std::shared_ptr<SoundIoPrivate>& si)
 {
-    SoundIoCoreAudio& sica = si->backend_data->coreaudio;
-    sica.device_scan_queued.store(true);
-    sica.have_devices_flag.store(false);
+    auto& sica = si->backend_data->coreaudio;
+    sica.device_scan_queued.store(true, std::memory_order_release);
+    sica.have_devices_flag.store(false, std::memory_order_release);
 
     std::unique_lock scan_lock(sica.scan_devices_mutex->get());
     sica.scan_devices_cond->signal(&scan_lock);
@@ -982,51 +958,61 @@ static void force_device_scan_ca(std::shared_ptr<SoundIoPrivate> si)
 /**
  * @brief CoreAudio devices 检测 background thread 执行框架
  */
-static void device_thread_run(const std::stop_token& token, std::shared_ptr<void> arg)
+static void device_thread_run(const std::stop_token& token, const std::shared_ptr<void>& arg)
 {
-    std::shared_ptr<SoundIoPrivate> si = std::static_pointer_cast<SoundIoPrivate>(arg);
-    SoundIoCoreAudio& sica = si->backend_data->coreaudio;
-
-    std::unique_lock lock(sica.scan_devices_mutex->get());
+    const auto si = std::static_pointer_cast<SoundIoPrivate>(arg);
+    auto& sica = si->backend_data->coreaudio;
+    int err = SoundIoErrorNone;
 
     while (!token.stop_requested())
     {
-        if (sica.service_restarted.load())
         {
-            shutdown_backend(si, SoundIoErrorBackendDisconnected);
-            break;
-        }
-        if (sica.device_scan_queued.exchange(false))
-        {
-            lock.unlock();
-            if (int err = refresh_devices(si))
+            std::unique_lock lock(sica.scan_devices_mutex->get());
+            sica.scan_devices_cond->wait(&lock, [&]
             {
-                shutdown_backend(si, err);
-                lock.lock();
+                return token.stop_requested() || sica.service_restarted.load(std::memory_order_acquire) || sica.device_scan_queued.load(std::memory_order_acquire);
+            });
+
+            if (token.stop_requested())
+            {
                 break;
             }
-            flush_events_ca(si);
-            lock.lock();
-            continue;
-        }
 
-        sica.scan_devices_cond->wait(&lock);
+            if (sica.service_restarted.load(std::memory_order_acquire))
+            {
+                err = SoundIoErrorBackendDisconnected;
+                break;
+            }
+
+            sica.device_scan_queued.store(false, std::memory_order_release);
+        }
+        err = refresh_devices(si);
+        if (err != SoundIoErrorNone)
+        {
+            break;
+        }
+        flush_events_ca(si);
     }
-    lock.unlock();
+
+    if (err != SoundIoErrorNone)
+    {
+        shutdown_backend(si, err);
+    }
+
 }
 
 /**
  * @brief 彻底撤解 output unit 和解除其对外接口封装对象的依赖
  */
-static void outstream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static void outstream_destroy_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     LOGI(L"destroy core audio outstream");
     si->backend_data->coreaudio.callback->out_stream.reset();
-    SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
-    std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(os->device);
-    auto dca = dev->backend_data.coreaudio;
+    auto& osca = os->backend_data.coreaudio;
+    const auto dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(os->device);
+    const auto dca = dev->backend_data.coreaudio;
 
-    AudioObjectPropertyAddress prop_address = {kAudioDeviceProcessorOverload, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+    auto prop_address = AudioObjectPropertyAddress{kAudioDeviceProcessorOverload, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
     AudioObjectRemovePropertyListener(dca->device_id, &prop_address, CoreAudioCallback::on_outstream_device_overload, si->backend_data->coreaudio.callback.get());
 
     if (osca.instance)
@@ -1040,16 +1026,15 @@ static void outstream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared
 /**
  * @brief 具体将框架层缓冲映射交由 user callback 的 CoreAudio implementation 过程实现
  */
-OSStatus CoreAudioCallback::write_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
-                                              AudioBufferList* io_data)
+OSStatus CoreAudioCallback::write_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, std::uint32_t in_bus_number, const std::uint32_t in_number_frames, AudioBufferList* io_data) //NOLINT
 {
-    std::shared_ptr<SoundIoOutStreamPrivate> os = out_stream.lock();
+    const auto os = out_stream.lock();
     if (!os)
     {
-        ERROR_LOG("os is nullptr!\n");
+        LOGE(L"os is nullptr!");
         return noErr;
     }
-    SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
+    auto& osca = os->backend_data.coreaudio;
 
     osca.io_data = io_data;
     osca.buffer_index = 0;
@@ -1102,12 +1087,12 @@ static int set_ca_desc(enum SoundIoFormat fmt, AudioStreamBasicDescription* desc
  * @param os 输出流上下文封装
  * @return int 成功则返回 0
  */
-static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_open_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     LOGI(L"open core audio outstream");
-    SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
-    std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(os->device);
-    std::shared_ptr<SoundIoDeviceCoreAudio> dca = dev->backend_data.coreaudio;
+    auto& osca = os->backend_data.coreaudio;
+    const auto dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(os->device);
+    const auto dca = dev->backend_data.coreaudio;
     si->backend_data->coreaudio.callback->out_stream = os;
 
     if (os->software_latency == 0.0)
@@ -1115,15 +1100,15 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
         os->software_latency = dev->software_latency_current;
     }
 
-    os->software_latency = soundio_double_clamp(dev->software_latency_min, os->software_latency, dev->software_latency_max);
+    os->software_latency = std::clamp(os->software_latency, dev->software_latency_min, dev->software_latency_max);
 
-    AudioComponentDescription desc = {};
+    auto desc = AudioComponentDescription{};
     desc.componentType = kAudioUnitType_Output;
     desc.componentSubType = kAudioUnitSubType_HALOutput;
     desc.componentManufacturer = kAudioUnitManufacturer_Apple;
 
     // 查找组件
-    AudioComponent component = AudioComponentFindNext(nullptr, &desc);
+    const auto component = AudioComponentFindNext(nullptr, &desc);
     if (!component)
     {
         LOGE(L"AudioComponent not found.");
@@ -1132,7 +1117,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
     }
 
     // 实例音频单元
-    OSStatus os_err = AudioComponentInstanceNew(component, &osca.instance);
+    auto os_err = AudioComponentInstanceNew(component, &osca.instance);
     if (os_err != noErr)
     {
         LOGE(L"AudioComponentInstanceNew failed.");
@@ -1148,10 +1133,10 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
         return SoundIoErrorOpeningDevice;
     }
 
-    AudioStreamBasicDescription format = {};
+    auto format = AudioStreamBasicDescription{};
     format.mSampleRate = os->sample_rate;
     format.mFormatID = kAudioFormatLinearPCM;
-    int err = set_ca_desc(os->format, &format);
+    const int err = set_ca_desc(os->format, &format);
     if (err)
     {
         LOGE(L"set_ca_desc failed.");
@@ -1177,7 +1162,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
         return SoundIoErrorIncompatibleDevice;
     }
 
-    AURenderCallbackStruct render_callback = {CoreAudioCallback::write_callback, si->backend_data->coreaudio.callback.get()};
+    const AURenderCallbackStruct render_callback = {CoreAudioCallback::write_callback, si->backend_data->coreaudio.callback.get()};
     os_err = AudioUnitSetProperty(osca.instance, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, OUTPUT_ELEMENT, &render_callback, sizeof(AURenderCallbackStruct));
     if (os_err != noErr)
     {
@@ -1186,9 +1171,9 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
         return SoundIoErrorOpeningDevice;
     }
 
-    AudioObjectPropertyAddress prop_address = {kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeInput, OUTPUT_ELEMENT};
-    UInt32 buffer_frame_size = os->software_latency * os->sample_rate;
-    os_err = AudioObjectSetPropertyData(dca->device_id, &prop_address, 0, nullptr, sizeof(UInt32), &buffer_frame_size);
+    auto prop_address = AudioObjectPropertyAddress{kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeInput, OUTPUT_ELEMENT};
+    const auto buffer_frame_size = static_cast<std::uint32_t>(os->software_latency * os->sample_rate);
+    os_err = AudioObjectSetPropertyData(dca->device_id, &prop_address, 0, nullptr, sizeof(std::uint32_t), &buffer_frame_size);
     if (os_err != noErr)
     {
         LOGE(L"Set buffer frame size %d failed.", buffer_frame_size);
@@ -1206,7 +1191,8 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
         outstream_destroy_ca(si, os);
         return SoundIoErrorOpeningDevice;
     }
-    os_err = AudioUnitGetParameter(osca.instance, kHALOutputParam_Volume, kAudioUnitScope_Global, 0, &os->volume);
+    auto volume = 0.0f;
+    os_err = AudioUnitGetParameter(osca.instance, kHALOutputParam_Volume, kAudioUnitScope_Global, 0, &volume);
     if (os_err != noErr)
     {
         LOGE(L"Set volume failed.");
@@ -1214,6 +1200,7 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
         return SoundIoErrorOpeningDevice;
     }
 
+    os->volume.store(volume, std::memory_order_release);
     osca.hardware_latency = dca->latency_frames / static_cast<double>(os->sample_rate);
     os->paused = false;
     return 0;
@@ -1222,10 +1209,10 @@ static int outstream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
 /**
  * @brief 通过 AudioOutputUnitStop 达到停止 output 目标数据的处理，反之则开始
  */
-static int outstream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, bool pause)
+static int outstream_pause_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, bool pause)
 {
     os->paused = pause;
-    SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
+    const auto& osca = os->backend_data.coreaudio;
     OSStatus os_err;
     if (pause)
     {
@@ -1250,7 +1237,7 @@ static int outstream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_pt
 /**
  * @brief 触发 stream 首播，包装了底层 pause 的逻辑控制
  */
-static int outstream_start_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_start_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     return outstream_pause_ca(si, os, false);
 }
@@ -1258,23 +1245,24 @@ static int outstream_start_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_pt
 /**
  * @brief 在回调阶段通过将内存 layout 推给 out_areas 给应用进行后续填入准备
  */
-static int outstream_begin_write_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, struct SoundIoChannelArea** out_areas, int* frame_count)
+static int outstream_begin_write_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, SoundIoChannelArea** out_areas,
+                                    int* out_frame_count)
 {
-    SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
+    auto& osca = os->backend_data.coreaudio;
     if (osca.buffer_index >= osca.io_data->mNumberBuffers)
     {
         return SoundIoErrorInvalid;
     }
 
-    if (*frame_count != osca.frames_left)
+    if (*out_frame_count != osca.frames_left)
     {
         return SoundIoErrorInvalid;
     }
 
-    AudioBuffer* audio_buffer = &osca.io_data->mBuffers[osca.buffer_index];
+    auto* audio_buffer = &osca.io_data->mBuffers[osca.buffer_index];
     assert(audio_buffer->mNumberChannels == os->layout.channel_count);
-    osca.write_frame_count = audio_buffer->mDataByteSize / os->bytes_per_frame;
-    *frame_count = osca.write_frame_count;
+    osca.write_frame_count = static_cast<std::int32_t>(audio_buffer->mDataByteSize) / os->bytes_per_frame;
+    *out_frame_count = osca.write_frame_count;
     assert((audio_buffer->mDataByteSize % os->bytes_per_frame) == 0);
     for (int ch = 0; ch < os->layout.channel_count; ch += 1)
     {
@@ -1288,9 +1276,9 @@ static int outstream_begin_write_ca(std::shared_ptr<SoundIoPrivate> si, std::sha
 /**
  * @brief 数据填充完成时确认并提交缓冲段游标
  */
-static int outstream_end_write_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_end_write_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
-    SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
+    auto& osca = os->backend_data.coreaudio;
     osca.buffer_index += 1;
     osca.frames_left -= osca.write_frame_count;
     assert(osca.frames_left >= 0);
@@ -1300,7 +1288,7 @@ static int outstream_end_write_ca(std::shared_ptr<SoundIoPrivate> si, std::share
 /**
  * @brief Backend 阻挡对清空缓存 buffer 的请求
  */
-static int outstream_clear_buffer_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os)
+static int outstream_clear_buffer_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os)
 {
     return SoundIoErrorIncompatibleBackend;
 }
@@ -1308,10 +1296,10 @@ static int outstream_clear_buffer_ca(std::shared_ptr<SoundIoPrivate> si, std::sh
 /**
  * @brief 从系统取 latency，包括 hardware latency 和 system 提供的值
  */
-static int outstream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os,
+static int outstream_get_latency_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os,
                                     double* out_latency)
 {
-    SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
+    const auto& osca = os->backend_data.coreaudio;
     *out_latency = osca.hardware_latency;
     return 0;
 }
@@ -1319,10 +1307,10 @@ static int outstream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::sha
 /**
  * @brief 映射音量更改给 CoreAudio device 的 master/channel scope
  */
-static int outstream_set_volume_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoOutStreamPrivate> os, float volume)
+static int outstream_set_volume_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoOutStreamPrivate>& os, float volume)
 {
-    SoundIoOutStreamCoreAudio& osca = os->backend_data.coreaudio;
-    OSStatus os_err = AudioUnitSetParameter(osca.instance, kHALOutputParam_Volume, kAudioUnitScope_Global, 0, volume, 0);
+    const auto& osca = os->backend_data.coreaudio;
+    const OSStatus os_err = AudioUnitSetParameter(osca.instance, kHALOutputParam_Volume, kAudioUnitScope_Global, 0, volume, 0);
     if (os_err != noErr)
     {
         return SoundIoErrorIncompatibleDevice;
@@ -1334,9 +1322,9 @@ static int outstream_set_volume_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
 /**
  * @brief 回调转发系统麦克风等 Input overload 过载告警
  */
-OSStatus CoreAudioCallback::instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]) const
+OSStatus CoreAudioCallback::instream_device_overload(const AudioObjectID in_object_id, std::uint32_t in_number_addresses, const AudioObjectPropertyAddress in_addresses[]) const //NOLINT
 {
-    std::shared_ptr<SoundIoInStreamPrivate> is = in_stream.lock();
+    const auto is = in_stream.lock();
     if (is == nullptr)
     {
         return noErr;
@@ -1350,14 +1338,14 @@ OSStatus CoreAudioCallback::instream_device_overload(AudioObjectID in_object_id,
 /**
  * @brief 对 HAL 层销毁 instream 并终止系统级 AU 单元服务
  */
-static void instream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static void instream_destroy_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
     si->backend_data->coreaudio.callback->in_stream.reset();
-    struct SoundIoInStreamCoreAudio& isca = is->backend_data.coreaudio;
-    std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(is->device);
-    std::shared_ptr<SoundIoDeviceCoreAudio> dca = dev->backend_data.coreaudio;
+    auto& isca = is->backend_data.coreaudio;
+    const auto dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(is->device);
+    const auto dca = dev->backend_data.coreaudio;
 
-    AudioObjectPropertyAddress prop_address = {kAudioDeviceProcessorOverload, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+    auto prop_address = AudioObjectPropertyAddress{kAudioDeviceProcessorOverload, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
     AudioObjectRemovePropertyListener(dca->device_id, &prop_address, CoreAudioCallback::on_instream_device_overload, si->backend_data->coreaudio.callback.get());
 
     if (isca.instance)
@@ -1373,34 +1361,39 @@ static void instream_destroy_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_
 /**
  * @brief Instream (捕捉/录音) 期间被系统填充数据触发的 handler entry
  */
-OSStatus CoreAudioCallback::read_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number,
-                                          UInt32 in_number_frames,
+OSStatus CoreAudioCallback::read_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, //NOLINT
+                                          const AudioTimeStamp* in_time_stamp,
+                                          const std::uint32_t in_bus_number,
+                                          const std::uint32_t in_number_frames,
                                           AudioBufferList* io_data)
 {
-    CoreAudioCallback* callback = static_cast<CoreAudioCallback*>(userdata);
+    auto* callback = static_cast<CoreAudioCallback*>(userdata);
     return callback->read_callback_ca(io_action_flags, in_time_stamp, in_bus_number, in_number_frames, io_data);
 }
 
 /**
  * @brief 获取渲染数据提供给应用程序提取 input stream 内容
  */
-OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
+OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags* io_action_flags, //NOLINT
+                                             const AudioTimeStamp* in_time_stamp,
+                                             const std::uint32_t in_bus_number,
+                                             const std::uint32_t in_number_frames,
                                              AudioBufferList* io_data)
 {
-    auto is = in_stream.lock();
+    const auto is = in_stream.lock();
     if (is == nullptr)
     {
         return noErr;
     }
 
-    SoundIoInStreamCoreAudio& isca = is->backend_data.coreaudio;
+    auto& isca = is->backend_data.coreaudio;
 
     for (int i = 0; i < isca.buffer_list->mNumberBuffers; i++)
     {
         isca.buffer_list->mBuffers[i].mData = nullptr;
     }
 
-    OSStatus os_err = AudioUnitRender(isca.instance, io_action_flags, in_time_stamp, in_bus_number, in_number_frames, isca.buffer_list.get());
+    const OSStatus os_err = AudioUnitRender(isca.instance, io_action_flags, in_time_stamp, in_bus_number, in_number_frames, isca.buffer_list.get());
     if (os_err != noErr)
     {
         is->error_callback(is, SoundIoErrorStreaming);
@@ -1409,7 +1402,7 @@ OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags* io_acti
 
     if (isca.buffer_list->mNumberBuffers == 1)
     {
-        AudioBuffer* audio_buffer = &isca.buffer_list->mBuffers[0];
+        auto* audio_buffer = &isca.buffer_list->mBuffers[0];
         assert(audio_buffer->mNumberChannels == is->layout.channel_count);
         assert(audio_buffer->mDataByteSize == in_number_frames * is->bytes_per_frame);
         for (int ch = 0; ch < is->layout.channel_count; ch += 1)
@@ -1423,7 +1416,7 @@ OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags* io_acti
         assert(isca.buffer_list->mNumberBuffers == is->layout.channel_count);
         for (int ch = 0; ch < is->layout.channel_count; ch += 1)
         {
-            AudioBuffer* audio_buffer = &isca.buffer_list->mBuffers[ch];
+            auto* audio_buffer = &isca.buffer_list->mBuffers[ch];
             assert(audio_buffer->mDataByteSize == in_number_frames * is->bytes_per_sample);
             isca.areas[ch].ptr = static_cast<char*>(audio_buffer->mData);
             isca.areas[ch].step = is->bytes_per_sample;
@@ -1439,13 +1432,13 @@ OSStatus CoreAudioCallback::read_callback_ca(AudioUnitRenderActionFlags* io_acti
 /**
  * @brief 解析 macOS DefaultInputDevice 并建立 Input Unit AudioComponent
  */
-static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_open_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
     si->backend_data->coreaudio.callback->in_stream = is;
-    SoundIoInStreamCoreAudio& isca = is->backend_data.coreaudio;
-    std::shared_ptr<SoundIoDevicePrivate> dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(is->device);
-    std::shared_ptr<SoundIoDeviceCoreAudio> dca = dev->backend_data.coreaudio;
-    UInt32 io_size;
+    auto& isca = is->backend_data.coreaudio;
+    const auto dev = std::dynamic_pointer_cast<SoundIoDevicePrivate>(is->device);
+    const auto dca = dev->backend_data.coreaudio;
+    std::uint32_t io_size;
     OSStatus os_err;
 
     if (is->software_latency == 0.0)
@@ -1453,40 +1446,42 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
         is->software_latency = dev->software_latency_current;
     }
 
-    is->software_latency = soundio_double_clamp(dev->software_latency_min, is->software_latency, dev->software_latency_max);
+    is->software_latency = std::clamp(is->software_latency, dev->software_latency_min, dev->software_latency_max);
 
 
-    AudioObjectPropertyAddress prop_address;
+    auto prop_address = AudioObjectPropertyAddress{};
     prop_address.mSelector = kAudioDevicePropertyStreamConfiguration;
     prop_address.mScope = kAudioObjectPropertyScopeInput;
     prop_address.mElement = kAudioObjectPropertyElementMain;
     io_size = 0;
-    if ((os_err = AudioObjectGetPropertyDataSize(dca->device_id, &prop_address, 0, nullptr, &io_size)))
+    os_err = AudioObjectGetPropertyDataSize(dca->device_id, &prop_address, 0, nullptr, &io_size);
+    if (os_err != noErr)
     {
         instream_destroy_ca(si, is);
         return SoundIoErrorOpeningDevice;
     }
 
-    isca.buffer_list = std::unique_ptr<AudioBufferList, decltype(&std::free)>(static_cast<AudioBufferList*>(malloc(io_size)), &std::free);
+    isca.buffer_list.reset(static_cast<AudioBufferList*>(soundio_malloc(io_size)));
     if (!isca.buffer_list)
     {
         instream_destroy_ca(si, is);
         return SoundIoErrorNoMem;
     }
 
-    if ((os_err = AudioObjectGetPropertyData(dca->device_id, &prop_address, 0, nullptr, &io_size, isca.buffer_list.get())))
+    os_err = AudioObjectGetPropertyData(dca->device_id, &prop_address, 0, nullptr, &io_size, isca.buffer_list.get());
+    if (os_err != noErr)
     {
         instream_destroy_ca(si, is);
         return SoundIoErrorOpeningDevice;
     }
 
 
-    AudioComponentDescription desc = {0};
+    auto desc = AudioComponentDescription{};
     desc.componentType = kAudioUnitType_Output;
     desc.componentSubType = kAudioUnitSubType_HALOutput;
     desc.componentManufacturer = kAudioUnitManufacturer_Apple;
 
-    AudioComponent component = AudioComponentFindNext(nullptr, &desc);
+    const auto component = AudioComponentFindNext(nullptr, &desc);
     if (!component)
     {
         instream_destroy_ca(si, is);
@@ -1507,8 +1502,8 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
         return SoundIoErrorOpeningDevice;
     }
 
-    UInt32 enable_io = 1;
-    os_err = AudioUnitSetProperty(isca.instance, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, INPUT_ELEMENT, &enable_io, sizeof(UInt32));
+    auto enable_io = static_cast<std::uint32_t>(1);
+    os_err = AudioUnitSetProperty(isca.instance, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, INPUT_ELEMENT, &enable_io, sizeof(std::uint32_t));
     if (os_err != noErr)
     {
         instream_destroy_ca(si, is);
@@ -1516,7 +1511,7 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
     }
 
     enable_io = 0;
-    os_err = AudioUnitSetProperty(isca.instance, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, OUTPUT_ELEMENT, &enable_io, sizeof(UInt32));
+    os_err = AudioUnitSetProperty(isca.instance, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, OUTPUT_ELEMENT, &enable_io, sizeof(std::uint32_t));
     if (os_err != noErr)
     {
         instream_destroy_ca(si, is);
@@ -1530,7 +1525,7 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
     }
 
 
-    AudioStreamBasicDescription format = {0};
+    auto format = AudioStreamBasicDescription{};
     format.mSampleRate = is->sample_rate;
     format.mFormatID = kAudioFormatLinearPCM;
     format.mBytesPerPacket = is->bytes_per_frame;
@@ -1538,7 +1533,7 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
     format.mBytesPerFrame = is->bytes_per_frame;
     format.mChannelsPerFrame = is->layout.channel_count;
 
-    int err = set_ca_desc(is->format, &format);
+    const int err = set_ca_desc(is->format, &format);
     if (err != SoundIoErrorNone)
     {
         instream_destroy_ca(si, is);
@@ -1551,7 +1546,7 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
         return SoundIoErrorOpeningDevice;
     }
 
-    AURenderCallbackStruct input_callback = {CoreAudioCallback::read_callback, si->backend_data->coreaudio.callback.get()};
+    const AURenderCallbackStruct input_callback = {CoreAudioCallback::read_callback, si->backend_data->coreaudio.callback.get()};
     os_err = AudioUnitSetProperty(isca.instance, kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Output, INPUT_ELEMENT, &input_callback, sizeof(AURenderCallbackStruct));
     if (os_err != noErr)
     {
@@ -1563,8 +1558,8 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
     prop_address.mSelector = kAudioDevicePropertyBufferFrameSize;
     prop_address.mScope = kAudioObjectPropertyScopeOutput;
     prop_address.mElement = INPUT_ELEMENT;
-    UInt32 buffer_frame_size = static_cast<UInt32>(is->software_latency) * is->sample_rate;
-    os_err = AudioObjectSetPropertyData(dca->device_id, &prop_address, 0, nullptr, sizeof(UInt32), &buffer_frame_size);
+    const auto buffer_frame_size = static_cast<std::uint32_t>(is->software_latency) * is->sample_rate;
+    os_err = AudioObjectSetPropertyData(dca->device_id, &prop_address, 0, nullptr, sizeof(std::uint32_t), &buffer_frame_size);
     if (os_err != noErr)
     {
         instream_destroy_ca(si, is);
@@ -1588,9 +1583,9 @@ static int instream_open_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<
 /**
  * @brief 调用 AudioOutputUnit (Input Scope) 的停止操作
  */
-static int instream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, bool pause)
+static int instream_pause_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is, bool pause)
 {
-    SoundIoInStreamCoreAudio& isca = is->backend_data.coreaudio;
+    const auto& isca = is->backend_data.coreaudio;
     OSStatus os_err;
     if (pause)
     {
@@ -1615,7 +1610,7 @@ static int instream_pause_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
 /**
  * @brief 绑定读数据回调引用并通知底端开启 capture 过程
  */
-static int instream_start_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_start_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
     return instream_pause_ca(si, is, false);
 }
@@ -1623,11 +1618,11 @@ static int instream_start_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr
 /**
  * @brief 请求系统内存并绑定指针地址给 instream 以供 app 截获麦克风等设备音频数据
  */
-static int instream_begin_read_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, struct SoundIoChannelArea** out_areas, int* frame_count)
+static int instream_begin_read_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is, SoundIoChannelArea** out_areas, int* out_frame_count) //NOLINT
 {
-    SoundIoInStreamCoreAudio& isca = is->backend_data.coreaudio;
+    auto& isca = is->backend_data.coreaudio;
 
-    if (*frame_count != isca.frames_left)
+    if (*out_frame_count != isca.frames_left)
     {
         return SoundIoErrorInvalid;
     }
@@ -1639,9 +1634,9 @@ static int instream_begin_read_ca(std::shared_ptr<SoundIoPrivate> si, std::share
 /**
  * @brief 完成读取标记，准备让出当前区域
  */
-static int instream_end_read_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is)
+static int instream_end_read_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is)
 {
-    struct SoundIoInStreamCoreAudio* isca = &is->backend_data.coreaudio;
+    auto* isca = &is->backend_data.coreaudio;
     isca->frames_left = 0;
     return 0;
 }
@@ -1649,9 +1644,9 @@ static int instream_end_read_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_
 /**
  * @brief 评估 macOS 设备的音频捕捉 latency 时间差
  */
-static int instream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shared_ptr<SoundIoInStreamPrivate> is, double* out_latency)
+static int instream_get_latency_ca(const std::shared_ptr<SoundIoPrivate>& si, const std::shared_ptr<SoundIoInStreamPrivate>& is, double* out_latency)
 {
-    SoundIoInStreamCoreAudio& isca = is->backend_data.coreaudio;
+    const auto& isca = is->backend_data.coreaudio;
     *out_latency = isca.hardware_latency;
     return 0;
 }
@@ -1660,15 +1655,13 @@ static int instream_get_latency_ca(std::shared_ptr<SoundIoPrivate> si, std::shar
 /**
  * @brief 通知退出背景更新进程并解除各类全局 system observers 的订阅
  */
-static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
+static void destroy_ca(const std::shared_ptr<SoundIoPrivate>& si)
 {
     LOGI(L"destroy core audio");
 
-    SoundIoCoreAudio& sica = si->backend_data->coreaudio;
+    auto& sica = si->backend_data->coreaudio;
 
-    soundio_outstream_destroy(si->outstream);
-
-    AudioObjectPropertyAddress prop_address = {kAudioHardwarePropertyDefaultInputDevice, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+    auto prop_address = AudioObjectPropertyAddress{kAudioHardwarePropertyDefaultInputDevice, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
     AudioObjectRemovePropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si->backend_data->coreaudio.callback.get());
 
     prop_address.mSelector = kAudioHardwarePropertyDevices;
@@ -1685,10 +1678,11 @@ static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
 
     if (sica.thread)
     {
-        std::unique_lock lock(sica.scan_devices_mutex->get());
-        sica.thread->request_stop();
-        sica.scan_devices_cond->signal(&lock);
-        lock.unlock();
+        {
+            std::unique_lock lock(sica.scan_devices_mutex->get());
+            sica.thread->request_stop();
+            sica.scan_devices_cond->signal(&lock);
+        }
         sica.thread = nullptr;
     }
 
@@ -1700,7 +1694,13 @@ static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
 
     sica.ready_devices_info = nullptr;
 
-    outstream_destroy_ca(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(si->outstream));
+    for (const auto& os: si->outstreams | std::ranges::views::values)
+    {
+        outstream_destroy_ca(si, std::dynamic_pointer_cast<SoundIoOutStreamPrivate>(os));
+    }
+
+    si->ClearOutStreams();
+
 }
 
 /**
@@ -1711,9 +1711,9 @@ static void destroy_ca(std::shared_ptr<SoundIoPrivate> si)
  * @param si libsoundio backend instances
  * @return int 成功返回 0，无内存报告则报错
  */
-int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si)
+int soundio_coreaudio_init(const std::shared_ptr<SoundIoPrivate>& si)
 {
-    SoundIoCoreAudio& sica = si->backend_data->coreaudio;
+    auto& sica = si->backend_data->coreaudio;
     sica.callback->si = si;
     int err;
 
@@ -1749,7 +1749,7 @@ int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si)
         return SoundIoErrorNoMem;
     }
 
-    AudioObjectPropertyAddress prop_address = {kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+    auto prop_address = AudioObjectPropertyAddress{kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
     err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &prop_address, CoreAudioCallback::on_devices_changed, si->backend_data->coreaudio.callback.get());
     if (err != noErr)
     {
