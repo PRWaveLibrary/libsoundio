@@ -33,12 +33,12 @@
  * streams have been destroyed.
  */
 
-#import <AVFoundation/AVFoundation.h>
-#import <objc/runtime.h>
-#import <atomic>
+#include <AVFoundation/AVFoundation.h>
+#include <objc/runtime.h>
+#include <atomic>
 
 #include "oc_method_swizzling.h"
-#include "logger/logger.hpp"
+#include "util/logger.hpp"
 
 // ---------------------------------------------------------------------------
 // Internal state

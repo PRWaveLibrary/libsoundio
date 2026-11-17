@@ -19,7 +19,7 @@ struct SoundIoDevicesInfo;
 struct SoundIoOutStreamPrivate;
 struct SoundIoInStreamPrivate;
 
-int soundio_coreaudio_init(std::shared_ptr<SoundIoPrivate> si);
+int soundio_coreaudio_init(const std::shared_ptr<SoundIoPrivate>& si);
 
 struct CoreAudioInstanceDeleter
 {
@@ -27,53 +27,21 @@ struct CoreAudioInstanceDeleter
 };
 
 
+/// 所有回调的 userdata（refCon）都是对应 stream 的裸指针，
+/// 需要 shared_ptr 时用 enable_shared_from_this 还原（与 coreaudio.cpp 一致）
 struct CoreAudioCallback
 {
-    std::weak_ptr<SoundIoOutStreamPrivate> out_stream;
-    std::weak_ptr<SoundIoInStreamPrivate> in_stream;
-    std::weak_ptr<SoundIoPrivate> si;
-
-    //    OSStatus devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]);
-    //
-    //    OSStatus service_restarted(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]);
-    //
-    //    OSStatus outstream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]);
-    //
-    //    OSStatus instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[]) const;
-
-    OSStatus write_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
-                               AudioBufferList* io_data);
-
-    OSStatus read_callback_ca(AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
-                              AudioBufferList* io_data);
 #ifdef __OBJC__
-    void on_notification_ca(NSNotification* note);
-    static void on_notification(NSNotification* note,std::shared_ptr<SoundIoPrivate> si);
-    
-    void on_route_notification_ca(NSNotification* note);
-    static void on_route_notification(NSNotification* note,std::shared_ptr<SoundIoPrivate> si);
+    static void on_notification(NSNotification* note, const std::shared_ptr<SoundIoPrivate>& si);
+
+    static void on_route_notification(NSNotification* note, const std::shared_ptr<SoundIoPrivate>& si);
 #endif
-
-    //    void unsubscribe_device_listeners() const;
-
-    //    static OSStatus on_devices_changed(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data);
-    //
-    //    static OSStatus on_service_restarted(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data);
-    //
-    //    static OSStatus on_outstream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data);
-    //
-    //    static OSStatus on_instream_device_overload(AudioObjectID in_object_id, UInt32 in_number_addresses, const AudioObjectPropertyAddress in_addresses[], void* in_client_data);
 
     static OSStatus write_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
                                    AudioBufferList* io_data);
 
     static OSStatus read_callback(void* userdata, AudioUnitRenderActionFlags* io_action_flags, const AudioTimeStamp* in_time_stamp, UInt32 in_bus_number, UInt32 in_number_frames,
                                   AudioBufferList* io_data);
-
-    
-    
-    
-    //    static void unsubscribe_device_listeners(std::shared_ptr<SoundIoPrivate> si);
 };
 
 struct SoundIoDeviceCoreAudioIOS
@@ -83,7 +51,6 @@ struct SoundIoDeviceCoreAudioIOS
 
 struct SoundIoCoreAudioIOS
 {
-    std::unique_ptr<CoreAudioCallback> callback = std::make_unique<CoreAudioCallback>();
     std::unique_ptr<SoundIoOsMutex> mutex;
     std::unique_ptr<SoundIoOsCond> cond;
     std::unique_ptr<SoundIoOsThread> thread = nullptr;
